@@ -1,0 +1,15 @@
+{
+  "name": "recipe-aggregator",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w packages/shared",
+    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json"
+  },
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  }
+}
