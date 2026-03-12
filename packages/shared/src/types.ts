@@ -22,6 +22,7 @@ export interface Recipe {
   cook_time: number | null;
   created_at: string;
   updated_at: string;
+  tags?: Tag[];
 }
 
 export interface Tag {

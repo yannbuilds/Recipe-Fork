@@ -1,32 +1,52 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe } from '@recipe-aggregator/shared';
+import type { Recipe, Tag } from '@recipe-aggregator/shared';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchRecipe() {
-      const { data, error } = await supabase
-        .from('recipes')
-        .select('*')
-        .eq('id', id!)
-        .single();
+      const [recipeResult, tagsResult] = await Promise.all([
+        supabase.from('recipes').select('*').eq('id', id!).single(),
+        supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', id!),
+      ]);
 
-      if (error) {
-        setError(error.message);
+      if (recipeResult.error) {
+        setError(recipeResult.error.message);
       } else {
-        setRecipe(data as Recipe);
+        setRecipe(recipeResult.data as Recipe);
       }
+
+      if (!tagsResult.error && tagsResult.data) {
+        const tagList = tagsResult.data
+          .map((rt: any) => rt.tags)
+          .filter(Boolean) as Tag[];
+        setTags(tagList);
+      }
+
       setLoading(false);
     }
 
     fetchRecipe();
   }, [id]);
+
+  async function handleDelete() {
+    if (!window.confirm('Are you sure you want to delete this recipe?')) return;
+
+    const { error } = await supabase.from('recipes').delete().eq('id', id!);
+    if (error) {
+      setError(error.message);
+    } else {
+      navigate('/');
+    }
+  }
 
   if (loading) {
     return <p className="text-center text-gray-500 py-12">Loading recipe...</p>;
@@ -50,12 +70,28 @@ export default function RecipeDetail() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
-        <Link
-          to="/"
-          className="inline-flex items-center text-blue-600 hover:underline text-sm"
-        >
-          &larr; Back to recipes
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            to="/"
+            className="inline-flex items-center text-blue-600 hover:underline text-sm"
+          >
+            &larr; Back to recipes
+          </Link>
+          <div className="flex gap-3">
+            <Link
+              to={`/recipe/${id}/edit`}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Edit
+            </Link>
+            <button
+              onClick={handleDelete}
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
 
         {recipe.image_url && (
           <img
@@ -71,6 +107,19 @@ export default function RecipeDetail() {
             <p className="text-gray-600">{recipe.description}</p>
           )}
         </div>
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-block bg-blue-100 text-blue-700 text-sm px-3 py-1 rounded-full"
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-6 text-sm text-gray-500">
           {recipe.prep_time != null && <span>Prep: {recipe.prep_time}m</span>}

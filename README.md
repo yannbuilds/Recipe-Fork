@@ -129,6 +129,7 @@ recipe-aggregator/
 - [ ] Show success/error state in popup
 
 ### Phase 5 – Polish
+- [ ] Replace the browser confirm dialog on recipe delete with a styled modal component that matches the app's design
 - [ ] Responsive design for mobile browsers
 - [ ] Image handling (save images to Supabase Storage)
 - [ ] Favourites / rating system

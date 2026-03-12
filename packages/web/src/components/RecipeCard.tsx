@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import type { Recipe } from '@recipe-aggregator/shared';
+import type { Recipe, Tag } from '@recipe-aggregator/shared';
 
 interface RecipeCardProps {
   recipe: Recipe;
+  tags?: Tag[];
 }
 
-export default function RecipeCard({ recipe }: RecipeCardProps) {
+export default function RecipeCard({ recipe, tags }: RecipeCardProps) {
   return (
     <Link
       to={`/recipe/${recipe.id}`}
@@ -28,6 +29,18 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
           {recipe.cook_time != null && <span>Cook: {recipe.cook_time}m</span>}
           {recipe.servings != null && <span>Serves {recipe.servings}</span>}
         </div>
+        {tags && tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full"
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </Link>
   );

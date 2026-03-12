@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import RecipeList from './pages/RecipeList';
 import RecipeDetail from './pages/RecipeDetail';
+import RecipeForm from './pages/RecipeForm';
 
 function App() {
   return (
@@ -17,7 +18,9 @@ function App() {
         <main className="max-w-5xl mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<RecipeList />} />
+            <Route path="/new" element={<RecipeForm />} />
             <Route path="/recipe/:id" element={<RecipeDetail />} />
+            <Route path="/recipe/:id/edit" element={<RecipeForm />} />
           </Routes>
         </main>
       </div>
