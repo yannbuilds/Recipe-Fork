@@ -16,14 +16,14 @@ All clients share the same backend (Supabase). No custom API layer needed – ea
 
 ## Tech Stack
 
-| Layer          | Technology              | Why                                                    |
-| -------------- | ----------------------- | ------------------------------------------------------ |
-| Database + API | Supabase (free tier)    | Postgres DB with auto-generated API, auth, and hosting |
-| Web App        | React + TypeScript      | Component-based, transfers to React Native later       |
-| Chrome Ext     | TypeScript + Supabase   | Lightweight popup that saves recipes to the same DB    |
-| AI Parsing     | Claude API              | Extracts structured recipe data from any webpage       |
-| Monorepo       | npm workspaces          | Keeps everything in one repo with shared code          |
-| Styling        | Tailwind CSS            | Utility-first, fast to prototype                       |
+| Layer          | Technology            | Why                                                    |
+| -------------- | --------------------- | ------------------------------------------------------ |
+| Database + API | Supabase (free tier)  | Postgres DB with auto-generated API, auth, and hosting |
+| Web App        | React + TypeScript    | Component-based, transfers to React Native later       |
+| Chrome Ext     | TypeScript + Supabase | Lightweight popup that saves recipes to the same DB    |
+| AI Parsing     | Claude API            | Extracts structured recipe data from any webpage       |
+| Monorepo       | npm workspaces        | Keeps everything in one repo with shared code          |
+| Styling        | Tailwind CSS          | Utility-first, fast to prototype                       |
 
 ## Project Structure
 
@@ -68,20 +68,20 @@ recipe-aggregator/
 
 ### `recipes` table
 
-| Column       | Type        | Notes                                      |
-| ------------ | ----------- | ------------------------------------------ |
-| id           | uuid        | Primary key, auto-generated                |
-| title        | text        | Recipe name                                |
-| description  | text        | Short summary (nullable)                   |
-| ingredients  | jsonb       | Array of { item, quantity, unit }          |
-| steps        | jsonb       | Array of { order, instruction }            |
-| source_url   | text        | Original URL where the recipe was found    |
-| image_url    | text        | Recipe image URL (nullable)                |
-| servings     | integer     | Number of servings (nullable)              |
-| prep_time    | integer     | Prep time in minutes (nullable)            |
-| cook_time    | integer     | Cook time in minutes (nullable)            |
-| created_at   | timestamptz | Auto-set on insert                         |
-| updated_at   | timestamptz | Auto-updated on change                     |
+| Column      | Type        | Notes                                   |
+| ----------- | ----------- | --------------------------------------- |
+| id          | uuid        | Primary key, auto-generated             |
+| title       | text        | Recipe name                             |
+| description | text        | Short summary (nullable)                |
+| ingredients | jsonb       | Array of { item, quantity, unit }       |
+| steps       | jsonb       | Array of { order, instruction }         |
+| source_url  | text        | Original URL where the recipe was found |
+| image_url   | text        | Recipe image URL (nullable)             |
+| servings    | integer     | Number of servings (nullable)           |
+| prep_time   | integer     | Prep time in minutes (nullable)         |
+| cook_time   | integer     | Cook time in minutes (nullable)         |
+| created_at  | timestamptz | Auto-set on insert                      |
+| updated_at  | timestamptz | Auto-updated on change                  |
 
 ### `tags` table
 
@@ -92,35 +92,39 @@ recipe-aggregator/
 
 ### `recipe_tags` table (join table)
 
-| Column    | Type | Notes               |
-| --------- | ---- | ------------------- |
-| recipe_id | uuid | FK → recipes.id     |
-| tag_id    | uuid | FK → tags.id        |
+| Column    | Type | Notes           |
+| --------- | ---- | --------------- |
+| recipe_id | uuid | FK → recipes.id |
+| tag_id    | uuid | FK → tags.id    |
 
 ## Build Phases
 
 ### Phase 1 – Foundation
+
 - [x] Create README
-- [ ] Initialise monorepo with npm workspaces
-- [ ] Set up shared package with Supabase client and TypeScript types
-- [ ] Create Supabase project and database schema (recipes, tags, recipe_tags)
-- [ ] Seed the database with 2–3 sample recipes for testing
+- [x] Initialise monorepo with npm workspaces
+- [x] Set up shared package with Supabase client and TypeScript types
+- [x] Create Supabase project and database schema (recipes, tags, recipe_tags)
+- [x] Seed the database with 2–3 sample recipes for testing
 
 ### Phase 2 – Web App (Read)
-- [ ] Scaffold React app with Vite
-- [ ] Build RecipeList page – fetch and display all recipes
-- [ ] Build RecipeDetail page – show full recipe with ingredients and steps
-- [ ] Add basic routing (home → recipe detail)
-- [ ] Style with Tailwind CSS
+
+- [x] Scaffold React app with Vite
+- [x] Build RecipeList page – fetch and display all recipes
+- [x] Build RecipeDetail page – show full recipe with ingredients and steps
+- [x] Add basic routing (home → recipe detail)
+- [x] Style with Tailwind CSS
 
 ### Phase 3 – Web App (Write)
-- [ ] Add a form to manually create a recipe
-- [ ] Add edit functionality for existing recipes
-- [ ] Add delete with confirmation
-- [ ] Add tagging (create tags, assign to recipes, filter by tag)
-- [ ] Add search (by title and ingredients)
+
+- [x] Add a form to manually create a recipe
+- [x] Add edit functionality for existing recipes
+- [x] Add delete with confirmation
+- [x] Add tagging (create tags, assign to recipes, filter by tag)
+- [x] Add search (by title and ingredients)
 
 ### Phase 4 – Chrome Extension
+
 - [ ] Scaffold Chrome extension (manifest v3)
 - [ ] Build popup UI with "Save Recipe" button
 - [ ] Content script to grab page HTML
@@ -129,6 +133,7 @@ recipe-aggregator/
 - [ ] Show success/error state in popup
 
 ### Phase 5 – Polish
+
 - [ ] Replace the browser confirm dialog on recipe delete with a styled modal component that matches the app's design
 - [ ] Responsive design for mobile browsers
 - [ ] Image handling (save images to Supabase Storage)
@@ -137,12 +142,14 @@ recipe-aggregator/
 - [ ] Auth (if sharing with Dafne later)
 
 ### Phase 6 – Mobile App (Future)
+
 - [ ] React Native app using the shared package
 - [ ] Same Supabase connection, same data
 
 ## Setup
 
 ### Prerequisites
+
 - Node.js 18+
 - npm 9+
 - A Supabase account (free tier – https://supabase.com)
@@ -163,6 +170,7 @@ CLAUDE_API_KEY=your-claude-api-key  # Only needed for Phase 4
 Track what you learn each session here.
 
 ### Session 1 – [date]
+
 -
 -
 -
