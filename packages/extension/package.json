@@ -2,7 +2,17 @@
   "name": "@recipe-aggregator/extension",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc -b && vite build"
+  },
   "dependencies": {
     "@recipe-aggregator/shared": "*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "typescript": "~5.7.0",
+    "vite": "^6.2.0"
   }
 }

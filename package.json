@@ -8,6 +8,8 @@
     "build:shared": "npm run build -w packages/shared",
     "dev:web": "npm run dev -w packages/web",
     "build:web": "npm run build -w packages/web",
+    "dev:extension": "npm run dev -w packages/extension",
+    "build:extension": "npm run build -w packages/extension",
     "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json"
   },
   "engines": {

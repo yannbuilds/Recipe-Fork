@@ -1,7 +1,7 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import RecipeList from './pages/RecipeList';
-import RecipeDetail from './pages/RecipeDetail';
-import RecipeForm from './pages/RecipeForm';
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import RecipeList from "./pages/RecipeList";
+import RecipeDetail from "./pages/RecipeDetail";
+import RecipeForm from "./pages/RecipeForm";
 
 function App() {
   return (
@@ -10,7 +10,7 @@ function App() {
         <header className="bg-white shadow-sm">
           <div className="max-w-5xl mx-auto px-4 py-6">
             <Link to="/">
-              <h1 className="text-3xl font-bold text-gray-900">Recipe Aggregator</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Recipe Fork</h1>
             </Link>
           </div>
         </header>

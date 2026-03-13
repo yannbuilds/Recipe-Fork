@@ -13,7 +13,7 @@ export default function RecipeList() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
-  const [activeTagId, setActiveTagId] = useState<string | null>(null);
+  const [activeTagIds, setActiveTagIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +46,9 @@ export default function RecipeList() {
     fetchData();
   }, []);
 
+  const usedTagIds = new Set(recipeTags.map((rt) => rt.tag_id));
+  const usedTags = tags.filter((t) => usedTagIds.has(t.id));
+
   function getTagsForRecipe(recipeId: string): Tag[] {
     const tagIds = recipeTags
       .filter((rt) => rt.recipe_id === recipeId)
@@ -54,8 +57,10 @@ export default function RecipeList() {
   }
 
   const filteredRecipes = recipes.filter((r) => {
-    if (activeTagId && !recipeTags.some((rt) => rt.recipe_id === r.id && rt.tag_id === activeTagId)) {
-      return false;
+    if (activeTagIds.size > 0) {
+      const recipeTagIds = recipeTags.filter((rt) => rt.recipe_id === r.id).map((rt) => rt.tag_id);
+      const hasAllTags = [...activeTagIds].every((tagId) => recipeTagIds.includes(tagId));
+      if (!hasAllTags) return false;
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -84,14 +89,21 @@ export default function RecipeList() {
         </Link>
       </div>
 
-      {tags.length > 0 && (
+      {usedTags.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
-          {tags.map((tag) => (
+          {usedTags.map((tag) => (
             <button
               key={tag.id}
-              onClick={() => setActiveTagId(activeTagId === tag.id ? null : tag.id)}
+              onClick={() =>
+                setActiveTagIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(tag.id)) next.delete(tag.id);
+                  else next.add(tag.id);
+                  return next;
+                })
+              }
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                activeTagId === tag.id
+                activeTagIds.has(tag.id)
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}

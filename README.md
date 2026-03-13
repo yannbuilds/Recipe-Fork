@@ -1,4 +1,4 @@
-# Recipe Aggregator
+# Recipe Fork
 
 A personal recipe management system with a web app for browsing and organising recipes, and a Chrome extension for saving recipes from any website using AI-powered parsing.
 
