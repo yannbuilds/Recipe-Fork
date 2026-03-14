@@ -15,6 +15,7 @@ export default function RecipeForm() {
   const [cookTime, setCookTime] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     { item: '', quantity: '', unit: '', category: '' },
   ]);
@@ -53,6 +54,7 @@ export default function RecipeForm() {
         setCookTime(recipe.cook_time != null ? String(recipe.cook_time) : '');
         setSourceUrl(recipe.source_url ?? '');
         setImageUrl(recipe.image_url ?? '');
+        setVideoUrl(recipe.video_url ?? '');
         setIngredients(
           recipe.ingredients.length > 0
             ? recipe.ingredients.map((ing) => ({ ...ing, category: ing.category ?? '' }))
@@ -179,6 +181,7 @@ export default function RecipeForm() {
       prep_time: prepTime ? Number(prepTime) : null,
       cook_time: cookTime ? Number(cookTime) : null,
       source_url: sourceUrl.trim() || '',
+      video_url: videoUrl.trim() || null,
       image_url: imageUrl.trim() || null,
       ingredients: filteredIngredients,
       steps: filteredSteps,
@@ -317,7 +320,7 @@ export default function RecipeForm() {
           </div>
 
           {/* URLs */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>Source URL</label>
               <input
@@ -336,6 +339,16 @@ export default function RecipeForm() {
                 onChange={(e) => setImageUrl(e.target.value)}
                 className={inputClass}
                 placeholder="https://..."
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Video URL</label>
+              <input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                className={inputClass}
+                placeholder="https://youtube.com/..."
               />
             </div>
           </div>

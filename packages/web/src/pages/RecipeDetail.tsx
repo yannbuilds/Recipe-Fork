@@ -217,6 +217,28 @@ export default function RecipeDetail() {
           )}
         </section>
 
+        {recipe.video_url && (() => {
+          const match = recipe.video_url!.match(
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
+          );
+          const videoId = match?.[1];
+          if (!videoId) return null;
+          return (
+            <section className="space-y-3">
+              <h2 className="text-xl font-semibold text-gray-900">Video</h2>
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                <iframe
+                  className="absolute inset-0 w-full h-full rounded-lg"
+                  src={`https://www.youtube.com/embed/${videoId}`}
+                  title={`${recipe.title} video`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </section>
+          );
+        })()}
+
         {recipe.source_url && (
           <a
             href={recipe.source_url}
