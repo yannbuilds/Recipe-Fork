@@ -67,6 +67,36 @@ export default function RecipeDetail() {
 
   const sortedSteps = [...recipe.steps].sort((a, b) => a.order - b.order);
 
+  // Group ingredients by category, preserving order
+  const hasIngredientCategories = recipe.ingredients.some((ing) => ing.category);
+  const ingredientGroups: { category: string; items: typeof recipe.ingredients }[] = [];
+  if (hasIngredientCategories) {
+    for (const ing of recipe.ingredients) {
+      const cat = ing.category || '';
+      const existing = ingredientGroups.find((g) => g.category === cat);
+      if (existing) {
+        existing.items.push(ing);
+      } else {
+        ingredientGroups.push({ category: cat, items: [ing] });
+      }
+    }
+  }
+
+  // Group steps by category, preserving order
+  const hasStepCategories = sortedSteps.some((s) => s.category);
+  const stepGroups: { category: string; items: typeof sortedSteps }[] = [];
+  if (hasStepCategories) {
+    for (const step of sortedSteps) {
+      const cat = step.category || '';
+      const existing = stepGroups.find((g) => g.category === cat);
+      if (existing) {
+        existing.items.push(step);
+      } else {
+        stepGroups.push({ category: cat, items: [step] });
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
@@ -129,22 +159,62 @@ export default function RecipeDetail() {
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-gray-900">Ingredients</h2>
-          <ul className="list-disc list-inside space-y-1 text-gray-700">
-            {recipe.ingredients.map((ing, i) => (
-              <li key={i}>
-                {ing.quantity} {ing.unit} {ing.item}
-              </li>
-            ))}
-          </ul>
+          {hasIngredientCategories ? (
+            <div className="space-y-4">
+              {ingredientGroups.map((group) => (
+                <div key={group.category}>
+                  {group.category && (
+                    <h3 className="font-bold text-gray-800 uppercase tracking-wide text-sm mb-1">
+                      {group.category}:
+                    </h3>
+                  )}
+                  <ul className="list-disc list-inside space-y-1 text-gray-700">
+                    {group.items.map((ing, i) => (
+                      <li key={i}>
+                        {ing.quantity} {ing.unit} {ing.item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ul className="list-disc list-inside space-y-1 text-gray-700">
+              {recipe.ingredients.map((ing, i) => (
+                <li key={i}>
+                  {ing.quantity} {ing.unit} {ing.item}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-gray-900">Steps</h2>
-          <ol className="list-decimal list-inside space-y-2 text-gray-700">
-            {sortedSteps.map((step) => (
-              <li key={step.order}>{step.instruction}</li>
-            ))}
-          </ol>
+          {hasStepCategories ? (
+            <div className="space-y-4">
+              {stepGroups.map((group) => (
+                <div key={group.category}>
+                  {group.category && (
+                    <h3 className="font-bold text-gray-800 uppercase tracking-wide text-sm mb-1">
+                      {group.category}:
+                    </h3>
+                  )}
+                  <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                    {group.items.map((step, i) => (
+                      <li key={i}>{step.instruction}</li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ol className="list-decimal list-inside space-y-2 text-gray-700">
+              {sortedSteps.map((step) => (
+                <li key={step.order}>{step.instruction}</li>
+              ))}
+            </ol>
+          )}
         </section>
 
         {recipe.source_url && (

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/add-beef-recipe.mjs)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node scripts/add-goan-fish-curry.mjs)",
+      "Bash(node scripts/update-recipe-categories.mjs)"
+    ]
+  }
+}

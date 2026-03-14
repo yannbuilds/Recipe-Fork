@@ -16,10 +16,10 @@ export default function RecipeForm() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([
-    { item: '', quantity: '', unit: '' },
+    { item: '', quantity: '', unit: '', category: '' },
   ]);
   const [steps, setSteps] = useState<Step[]>([
-    { order: 1, instruction: '' },
+    { order: 1, instruction: '', category: '' },
   ]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -55,13 +55,13 @@ export default function RecipeForm() {
         setImageUrl(recipe.image_url ?? '');
         setIngredients(
           recipe.ingredients.length > 0
-            ? recipe.ingredients
-            : [{ item: '', quantity: '', unit: '' }],
+            ? recipe.ingredients.map((ing) => ({ ...ing, category: ing.category ?? '' }))
+            : [{ item: '', quantity: '', unit: '', category: '' }],
         );
         setSteps(
           recipe.steps.length > 0
-            ? [...recipe.steps].sort((a, b) => a.order - b.order)
-            : [{ order: 1, instruction: '' }],
+            ? [...recipe.steps].sort((a, b) => a.order - b.order).map((s) => ({ ...s, category: s.category ?? '' }))
+            : [{ order: 1, instruction: '', category: '' }],
         );
       }
 
@@ -115,7 +115,9 @@ export default function RecipeForm() {
   }
 
   function addIngredient() {
-    setIngredients([...ingredients, { item: '', quantity: '', unit: '' }]);
+    // Carry over the category from the last ingredient for convenience
+    const lastCategory = ingredients.length > 0 ? ingredients[ingredients.length - 1].category : '';
+    setIngredients([...ingredients, { item: '', quantity: '', unit: '', category: lastCategory }]);
   }
 
   function removeIngredient(index: number) {
@@ -129,17 +131,18 @@ export default function RecipeForm() {
   }
 
   function addStep() {
-    setSteps([...steps, { order: steps.length + 1, instruction: '' }]);
+    const lastCategory = steps.length > 0 ? steps[steps.length - 1].category : '';
+    setSteps([...steps, { order: steps.length + 1, instruction: '', category: lastCategory }]);
   }
 
   function removeStep(index: number) {
     const updated = steps.filter((_, i) => i !== index);
-    setSteps(updated.map((s, i) => ({ ...s, order: i + 1 })));
+    setSteps(updated.map((s, i) => ({ ...s, order: i + 1, category: s.category })));
   }
 
-  function updateStep(index: number, instruction: string) {
+  function updateStep(index: number, field: 'instruction' | 'category', value: string) {
     const updated = [...steps];
-    updated[index] = { ...updated[index], instruction };
+    updated[index] = { ...updated[index], [field]: value };
     setSteps(updated);
   }
 
@@ -154,10 +157,20 @@ export default function RecipeForm() {
 
     setSubmitting(true);
 
-    const filteredIngredients = ingredients.filter((ing) => ing.item.trim());
+    const filteredIngredients = ingredients
+      .filter((ing) => ing.item.trim())
+      .map((ing) => {
+        const clean: Ingredient = { item: ing.item, quantity: ing.quantity, unit: ing.unit };
+        if (ing.category?.trim()) clean.category = ing.category.trim();
+        return clean;
+      });
     const filteredSteps = steps
       .filter((s) => s.instruction.trim())
-      .map((s, i) => ({ ...s, order: i + 1 }));
+      .map((s, i) => {
+        const clean: Step = { order: i + 1, instruction: s.instruction };
+        if (s.category?.trim()) clean.category = s.category.trim();
+        return clean;
+      });
 
     const recipeData = {
       title: title.trim(),
@@ -377,6 +390,13 @@ export default function RecipeForm() {
               <div key={i} className="flex gap-2 items-start">
                 <input
                   type="text"
+                  value={ing.category ?? ''}
+                  onChange={(e) => updateIngredient(i, 'category', e.target.value)}
+                  className="w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="Category"
+                />
+                <input
+                  type="text"
                   value={ing.quantity}
                   onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
                   className="w-16 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -421,9 +441,16 @@ export default function RecipeForm() {
             {steps.map((step, i) => (
               <div key={i} className="flex gap-2 items-start">
                 <span className="text-sm text-gray-500 pt-2 w-6 text-right">{step.order}.</span>
+                <input
+                  type="text"
+                  value={step.category ?? ''}
+                  onChange={(e) => updateStep(i, 'category', e.target.value)}
+                  className="w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="Category"
+                />
                 <textarea
                   value={step.instruction}
-                  onChange={(e) => updateStep(i, e.target.value)}
+                  onChange={(e) => updateStep(i, 'instruction', e.target.value)}
                   className={inputClass + ' flex-1'}
                   rows={2}
                   placeholder={`Step ${step.order}`}

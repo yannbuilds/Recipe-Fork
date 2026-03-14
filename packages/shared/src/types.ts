@@ -2,11 +2,13 @@ export interface Ingredient {
   item: string;
   quantity: string;
   unit: string;
+  category?: string;
 }
 
 export interface Step {
   order: number;
   instruction: string;
+  category?: string;
 }
 
 export interface Recipe {
