@@ -125,8 +125,8 @@ recipe-aggregator/
 
 ### Phase 4 – Chrome Extension
 
-- [ ] Scaffold Chrome extension (manifest v3)
-- [ ] Build popup UI with "Save Recipe" button
+- [x] Scaffold Chrome extension (manifest v3)
+- [x] Build popup UI with "Save Recipe" button
 - [ ] Content script to grab page HTML
 - [ ] Send HTML to Claude API for structured recipe extraction
 - [ ] Save parsed recipe to Supabase
