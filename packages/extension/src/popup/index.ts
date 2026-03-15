@@ -1,4 +1,5 @@
 import { extractRecipe } from "../lib/groq";
+import { supabase } from "@recipe-aggregator/shared";
 
 // DOM references
 let saveBtn: HTMLButtonElement;
@@ -34,7 +35,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
       <div class="status-area">
         <div id="status-loading" class="status-loading">
           <div class="spinner"></div>
-          <span class="status-message">Parsing recipe…</span>
+          <span class="status-message">Reading recipe…</span>
         </div>
         <div id="status-success" class="status-success">
           <span>✓</span>
@@ -42,13 +43,13 @@ function render(tab: chrome.tabs.Tab | undefined) {
         </div>
         <div id="status-error" class="status-error">
           <span>✕</span>
-          <span class="status-message">Something went wrong.</span>
+          <span class="status-message">Couldn't save this recipe.</span>
           <button class="retry-link" id="retry-btn">Retry</button>
         </div>
       </div>
 
       <footer class="popup-footer">
-        <a href="http://localhost:5173" target="_blank">Open Recipe Fork ↗</a>
+        <a id="footer-link" href="http://localhost:5173" target="_blank">Open Recipe Fork ↗</a>
       </footer>
     </div>
   `;
@@ -106,7 +107,7 @@ async function handleSaveRecipe() {
     return;
   }
 
-  showLoading("Reading page…");
+  showLoading("Reading recipe…");
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, {
@@ -114,26 +115,35 @@ async function handleSaveRecipe() {
     });
 
     if (!response?.html) {
-      showError("No content found on this page.");
+      showError("No recipe content found on this page.");
       return;
     }
 
-    console.log("[Recipe Fork] Got page HTML", {
-      url: response.url,
-      title: response.title,
-      htmlLength: response.html.length,
-    });
-
-    showLoading("Parsing recipe…");
+    showLoading("Saving recipe…");
 
     const recipe = await extractRecipe(response.html, response.url);
-    console.log("[Recipe Fork] Parsed recipe", recipe);
 
-    // TODO: Next task — save recipe to Supabase
-    showSuccess("Recipe parsed!");
+    const { data, error: saveError } = await supabase
+      .from("recipes")
+      .insert(recipe)
+      .select("id")
+      .single();
+
+    if (saveError || !data) {
+      throw new Error(saveError?.message ?? "Failed to save recipe.");
+    }
+
+    // Update footer link to point to the saved recipe
+    const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
+    if (footerLink) {
+      footerLink.href = `http://localhost:5173/recipe/${data.id}`;
+      footerLink.textContent = "View in Recipe Fork ↗";
+    }
+
+    showSuccess("Recipe saved!");
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Something went wrong.";
+      err instanceof Error ? err.message : "Couldn't save this recipe.";
     showError(message);
   }
 }
