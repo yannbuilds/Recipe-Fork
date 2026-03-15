@@ -39,7 +39,7 @@ Rules:
 - Times should be in minutes (convert hours to minutes).
 - Look for structured data (JSON-LD) first, then fall back to page content.
 - For video_url: check the "[Video URLs found on page]" section first — if present, use the first URL. Also check JSON-LD "video" field. Return a full YouTube watch URL (https://www.youtube.com/watch?v=...) or null if no video exists.
-- For tags: suggest 3–8 lowercase tags that describe the recipe. Include relevant cuisine (e.g. "indian", "italian", "mexican"), protein (e.g. "chicken", "beef", "tofu"), meal type (e.g. "dinner", "dessert", "snack", "breakfast"), dietary info (e.g. "vegetarian", "gluten-free"), or cooking method (e.g. "grilled", "one-pot", "slow-cooker"). Keep tags short, all lowercase, no duplicates.
+- For tags: suggest 3–5 lowercase tags. Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
 
 /**
