@@ -4,7 +4,16 @@
       "Bash(node scripts/add-beef-recipe.mjs)",
       "mcp__Claude_Preview__preview_start",
       "Bash(node scripts/add-goan-fish-curry.mjs)",
-      "Bash(node scripts/update-recipe-categories.mjs)"
+      "Bash(node scripts/update-recipe-categories.mjs)",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension\" -type f -name \"*.json\" -o -name \"*.js\" -o -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.html\" -o -name \"*.css\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/src\" -type f)",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/shared/src\" -type f)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension\" -maxdepth 1 -name \"*.json\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension\" -maxdepth 1 -name \"vite*\")",
+      "Bash(npm run:*)",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension\" -type f -name \"*.css\" -o -name \"*.json\" -o -name \"*.ts\" -o -name \"*.html\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src\" -type f)"
     ]
   }
 }

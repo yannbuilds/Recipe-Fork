@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["chrome"],
+    "types": ["chrome", "vite/client"],
     "noEmit": true
   },
   "include": ["src"]

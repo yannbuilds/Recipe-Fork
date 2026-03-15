@@ -1,3 +1,5 @@
+import { extractRecipe } from "../lib/groq";
+
 // DOM references
 let saveBtn: HTMLButtonElement;
 let statusLoading: HTMLElement;
@@ -91,16 +93,49 @@ function resetStatus() {
   statusError.classList.remove("visible");
 }
 
-// Placeholder save handler — tasks 3-6 will implement the full flow:
-// 1. Content script grabs page HTML
-// 2. Send HTML to Claude API for structured extraction
-// 3. Save parsed recipe to Supabase
-// 4. Show success/error state
+// Save handler — grabs page HTML via content script, then will send to Claude API
 async function handleSaveRecipe() {
-  showLoading("Parsing recipe…");
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
 
-  // TODO: Implement in tasks 3-6
-  console.log("[Recipe Fork] Save recipe clicked — not yet implemented");
+  // Guard against non-web pages
+  if (!tab?.id || !tab.url || !/^https?:\/\//.test(tab.url)) {
+    showError("Can't save recipes from this page.");
+    return;
+  }
+
+  showLoading("Reading page…");
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "GET_PAGE_HTML",
+    });
+
+    if (!response?.html) {
+      showError("No content found on this page.");
+      return;
+    }
+
+    console.log("[Recipe Fork] Got page HTML", {
+      url: response.url,
+      title: response.title,
+      htmlLength: response.html.length,
+    });
+
+    showLoading("Parsing recipe…");
+
+    const recipe = await extractRecipe(response.html, response.url);
+    console.log("[Recipe Fork] Parsed recipe", recipe);
+
+    // TODO: Next task — save recipe to Supabase
+    showSuccess("Recipe parsed!");
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Something went wrong.";
+    showError(message);
+  }
 }
 
 // Initialise popup
