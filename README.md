@@ -127,10 +127,10 @@ recipe-aggregator/
 
 - [x] Scaffold Chrome extension (manifest v3)
 - [x] Build popup UI with "Save Recipe" button
-- [ ] Content script to grab page HTML
-- [ ] Send HTML to Claude API for structured recipe extraction
-- [ ] Save parsed recipe to Supabase
-- [ ] Show success/error state in popup
+- [x] Content script to grab page HTML
+- [x] Send HTML to Claude API for structured recipe extraction
+- [x] Save parsed recipe to Supabase
+- [x] Show success/error state in popup
 
 ### Phase 5 – Polish
 

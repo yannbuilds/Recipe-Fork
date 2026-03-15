@@ -27,7 +27,9 @@
       "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/package.json\")",
       "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages\" -name \"popup.css\" -o -name \"package.json\")",
       "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/package.json\")",
-      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/shared/package.json\")"
+      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/shared/package.json\")",
+      "WebSearch",
+      "WebFetch(domain:console.groq.com)"
     ]
   }
 }

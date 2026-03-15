@@ -1,4 +1,4 @@
-import { extractRecipe } from "../lib/groq";
+import { extractRecipe, type ExtractedRecipe } from "../lib/groq";
 import { supabase } from "@recipe-aggregator/shared";
 
 // DOM references
@@ -94,6 +94,40 @@ function resetStatus() {
   statusError.classList.remove("visible");
 }
 
+// Save AI-suggested tags to Supabase, reusing existing tags where possible
+async function saveTags(recipeId: string, tagNames: string[]) {
+  if (tagNames.length === 0) return;
+
+  const { data: existingTags } = await supabase
+    .from("tags")
+    .select("id, name");
+
+  const existingMap = new Map(
+    (existingTags ?? []).map((t: { id: string; name: string }) => [t.name, t.id]),
+  );
+
+  const tagIds: string[] = [];
+
+  for (const name of tagNames) {
+    if (existingMap.has(name)) {
+      tagIds.push(existingMap.get(name)!);
+    } else {
+      const { data } = await supabase
+        .from("tags")
+        .insert({ name })
+        .select("id")
+        .single();
+      if (data) tagIds.push(data.id);
+    }
+  }
+
+  if (tagIds.length > 0) {
+    await supabase.from("recipe_tags").insert(
+      tagIds.map((tag_id) => ({ recipe_id: recipeId, tag_id })),
+    );
+  }
+}
+
 // Save handler — grabs page HTML via content script, then will send to Claude API
 async function handleSaveRecipe() {
   const [tab] = await chrome.tabs.query({
@@ -121,7 +155,7 @@ async function handleSaveRecipe() {
 
     showLoading("Saving recipe…");
 
-    const recipe = await extractRecipe(response.html, response.url);
+    const { recipe, tagNames } = await extractRecipe(response.html, response.url);
 
     const { data, error: saveError } = await supabase
       .from("recipes")
@@ -132,6 +166,9 @@ async function handleSaveRecipe() {
     if (saveError || !data) {
       throw new Error(saveError?.message ?? "Failed to save recipe.");
     }
+
+    // Save auto-generated tags (non-blocking — don't fail the save if tags fail)
+    await saveTags(data.id, tagNames).catch(() => {});
 
     // Update footer link to point to the saved recipe
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
