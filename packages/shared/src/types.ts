@@ -13,6 +13,7 @@ export interface Step {
 
 export interface Recipe {
   id: string;
+  user_id: string;
   title: string;
   description: string | null;
   ingredients: Ingredient[];
@@ -23,6 +24,7 @@ export interface Recipe {
   servings: number | null;
   prep_time: number | null;
   cook_time: number | null;
+  is_favourite: boolean;
   created_at: string;
   updated_at: string;
   tags?: Tag[];
@@ -41,3 +43,24 @@ export interface RecipeTag {
 export type RecipeInsert = Omit<Recipe, 'id' | 'created_at' | 'updated_at'>;
 export type RecipeUpdate = Partial<RecipeInsert>;
 export type TagInsert = Omit<Tag, 'id'>;
+
+export interface MealPlan {
+  id: string;
+  user_id: string;
+  week_start: string;
+  checked_items: string[];
+  shopping_categories: Record<string, string>;
+  created_at: string;
+}
+
+export interface MealPlanRecipe {
+  id: string;
+  meal_plan_id: string;
+  recipe_id: string;
+  is_cooked: boolean;
+  added_at: string;
+}
+
+export interface MealPlanEntry extends MealPlanRecipe {
+  recipe: Recipe;
+}

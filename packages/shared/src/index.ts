@@ -8,4 +8,7 @@ export type {
   RecipeTag,
   Ingredient,
   Step,
+  MealPlan,
+  MealPlanRecipe,
+  MealPlanEntry,
 } from './types.js';

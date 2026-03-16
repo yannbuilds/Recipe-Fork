@@ -15,6 +15,7 @@ export default function RecipeList() {
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
   const [activeTagIds, setActiveTagIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +57,14 @@ export default function RecipeList() {
     return tags.filter((t) => tagIds.includes(t.id));
   }
 
+  function handleToggleFavourite(recipeId: string, newValue: boolean) {
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === recipeId ? { ...r, is_favourite: newValue } : r))
+    );
+  }
+
   const filteredRecipes = recipes.filter((r) => {
+    if (showFavouritesOnly && !r.is_favourite) return false;
     if (activeTagIds.size > 0) {
       const recipeTagIds = recipeTags.filter((rt) => rt.recipe_id === r.id).map((rt) => rt.tag_id);
       const hasAllTags = [...activeTagIds].every((tagId) => recipeTagIds.includes(tagId));
@@ -81,6 +89,29 @@ export default function RecipeList() {
           placeholder="Search recipes by title or ingredient..."
           className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         />
+        <button
+          onClick={() => setShowFavouritesOnly((prev) => !prev)}
+          className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-md border transition-colors ${
+            showFavouritesOnly
+              ? 'bg-red-50 border-red-300 text-red-500'
+              : 'bg-white border-gray-300 text-gray-400 hover:text-red-400 hover:border-red-200'
+          }`}
+          aria-label={showFavouritesOnly ? 'Show all recipes' : 'Show favourites only'}
+          title={showFavouritesOnly ? 'Show all recipes' : 'Show favourites only'}
+        >
+          <svg
+            width={20}
+            height={20}
+            viewBox="0 0 24 24"
+            fill={showFavouritesOnly ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
         <Link
           to="/new"
           className="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -128,7 +159,12 @@ export default function RecipeList() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredRecipes.map((recipe) => (
-          <RecipeCard key={recipe.id} recipe={recipe} tags={getTagsForRecipe(recipe.id)} />
+          <RecipeCard
+            key={recipe.id}
+            recipe={recipe}
+            tags={getTagsForRecipe(recipe.id)}
+            onToggleFavourite={handleToggleFavourite}
+          />
         ))}
       </div>
     </>

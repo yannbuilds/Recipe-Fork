@@ -1,24 +1,37 @@
 import { Link } from 'react-router-dom';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import FavouriteButton from './FavouriteButton';
 
 interface RecipeCardProps {
   recipe: Recipe;
   tags?: Tag[];
+  onToggleFavourite?: (recipeId: string, newValue: boolean) => void;
 }
 
-export default function RecipeCard({ recipe, tags }: RecipeCardProps) {
+export default function RecipeCard({ recipe, tags, onToggleFavourite }: RecipeCardProps) {
   return (
     <Link
       to={`/recipe/${recipe.id}`}
       className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
     >
-      {recipe.image_url && (
-        <img
-          src={recipe.image_url}
-          alt={recipe.title}
-          className="w-full h-48 object-cover"
-        />
-      )}
+      <div className="relative">
+        {recipe.image_url && (
+          <img
+            src={recipe.image_url}
+            alt={recipe.title}
+            className="w-full h-48 object-cover"
+          />
+        )}
+        {onToggleFavourite && (
+          <div className={`absolute ${recipe.image_url ? 'top-2 right-2' : 'top-2 right-2'}`}>
+            <FavouriteButton
+              recipeId={recipe.id}
+              isFavourite={recipe.is_favourite}
+              onToggle={(val) => onToggleFavourite(recipe.id, val)}
+            />
+          </div>
+        )}
+      </div>
       <div className="p-4 space-y-2">
         <h2 className="text-xl font-semibold text-gray-900">{recipe.title}</h2>
         {recipe.description && (

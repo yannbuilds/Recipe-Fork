@@ -2,14 +2,20 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
+import FavouriteButton from '../components/FavouriteButton';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [mealPlanMsg, setMealPlanMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchRecipe() {
@@ -38,14 +44,57 @@ export default function RecipeDetail() {
   }, [id]);
 
   async function handleDelete() {
-    if (!window.confirm('Are you sure you want to delete this recipe?')) return;
-
+    setShowDeleteModal(false);
     const { error } = await supabase.from('recipes').delete().eq('id', id!);
     if (error) {
       setError(error.message);
     } else {
       navigate('/');
     }
+  }
+
+  async function handleAddToMealPlan() {
+    if (!user || !id) return;
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    const weekStr = monday.toISOString().split('T')[0];
+
+    // Get or create plan
+    let { data: plan } = await supabase
+      .from('meal_plans')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('week_start', weekStr)
+      .maybeSingle();
+
+    if (!plan) {
+      const { data: created } = await supabase
+        .from('meal_plans')
+        .insert({ user_id: user.id, week_start: weekStr })
+        .select('id')
+        .single();
+      plan = created;
+    }
+
+    if (!plan) return;
+
+    const { error: insertErr } = await supabase
+      .from('meal_plan_recipes')
+      .insert({ meal_plan_id: plan.id, recipe_id: id });
+
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        setMealPlanMsg('Already in this week\'s meal plan');
+      } else {
+        setMealPlanMsg('Failed to add');
+      }
+    } else {
+      setMealPlanMsg('Added to this week\'s meal plan');
+    }
+    setTimeout(() => setMealPlanMsg(null), 3000);
   }
 
   if (loading) {
@@ -108,6 +157,12 @@ export default function RecipeDetail() {
             &larr; Back to recipes
           </Link>
           <div className="flex gap-3">
+            <button
+              onClick={handleAddToMealPlan}
+              className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              + Meal Plan
+            </button>
             <Link
               to={`/recipe/${id}/edit`}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -115,13 +170,19 @@ export default function RecipeDetail() {
               Edit
             </Link>
             <button
-              onClick={handleDelete}
+              onClick={() => setShowDeleteModal(true)}
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
             >
               Delete
             </button>
           </div>
         </div>
+
+        {mealPlanMsg && (
+          <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">
+            {mealPlanMsg}
+          </div>
+        )}
 
         {recipe.image_url && (
           <img
@@ -132,7 +193,15 @@ export default function RecipeDetail() {
         )}
 
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">{recipe.title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-gray-900">{recipe.title}</h1>
+            <FavouriteButton
+              recipeId={recipe.id}
+              isFavourite={recipe.is_favourite}
+              onToggle={(val) => setRecipe((prev) => prev ? { ...prev, is_favourite: val } : prev)}
+              size="md"
+            />
+          </div>
           {recipe.description && (
             <p className="text-gray-600">{recipe.description}</p>
           )}
@@ -151,7 +220,7 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        <div className="flex gap-6 text-sm text-gray-500">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
           {recipe.prep_time != null && <span>Prep: {recipe.prep_time}m</span>}
           {recipe.cook_time != null && <span>Cook: {recipe.cook_time}m</span>}
           {recipe.servings != null && <span>Serves {recipe.servings}</span>}
@@ -250,6 +319,15 @@ export default function RecipeDetail() {
           </a>
         )}
       </div>
+
+      <ConfirmModal
+        open={showDeleteModal}
+        title="Delete recipe"
+        message="Are you sure you want to delete this recipe? This can't be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteModal(false)}
+      />
     </div>
   );
 }

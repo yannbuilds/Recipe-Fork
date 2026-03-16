@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:web"],
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/jason/.nvm/versions/node/v20.19.6/bin:$PATH && npm run dev:web"],
       "port": 5173
     }
   ]

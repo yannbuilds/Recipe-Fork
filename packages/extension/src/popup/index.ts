@@ -7,7 +7,158 @@ let statusLoading: HTMLElement;
 let statusSuccess: HTMLElement;
 let statusError: HTMLElement;
 
-// Render the popup UI
+// Render the login form
+function renderLogin(root: HTMLElement) {
+  root.innerHTML = `
+    <div class="popup-container">
+      <header class="popup-header">
+        <div class="header-brand">
+          <img class="header-logo" src="../icons/icon48.png" alt="" />
+          <h1>Recipe Fork</h1>
+        </div>
+        <span class="header-version">v0.0.1</span>
+      </header>
+
+      <div class="login-card">
+        <h2 class="login-title">Sign in to save recipes</h2>
+
+        <div id="login-error" class="login-error"></div>
+
+        <input id="login-email" type="email" class="login-input" placeholder="Email" />
+        <input id="login-password" type="password" class="login-input" placeholder="Password" />
+
+        <button id="login-btn" class="save-button">Sign in</button>
+
+        <div class="login-divider">
+          <span>or continue with</span>
+        </div>
+
+        <div class="oauth-buttons">
+          <button id="oauth-google" class="oauth-btn">Google</button>
+          <button id="oauth-facebook" class="oauth-btn">Facebook</button>
+          <button id="oauth-apple" class="oauth-btn">Apple</button>
+        </div>
+
+        <p class="login-toggle">
+          Don't have an account?
+          <button id="toggle-signup" class="link-btn">Sign up</button>
+        </p>
+      </div>
+    </div>
+  `;
+
+  let isSignUp = false;
+
+  const emailInput = document.getElementById("login-email") as HTMLInputElement;
+  const passwordInput = document.getElementById("login-password") as HTMLInputElement;
+  const loginBtn = document.getElementById("login-btn") as HTMLButtonElement;
+  const errorEl = document.getElementById("login-error")!;
+  const toggleBtn = document.getElementById("toggle-signup")!;
+
+  function showLoginError(msg: string) {
+    errorEl.textContent = msg;
+    errorEl.style.display = "block";
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    isSignUp = !isSignUp;
+    loginBtn.textContent = isSignUp ? "Create account" : "Sign in";
+    toggleBtn.textContent = isSignUp ? "Sign in" : "Sign up";
+    const toggleLabel = toggleBtn.parentElement!;
+    toggleLabel.childNodes[0].textContent = isSignUp
+      ? "Already have an account? "
+      : "Don't have an account? ";
+    errorEl.style.display = "none";
+  });
+
+  loginBtn.addEventListener("click", async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) {
+      showLoginError("Enter your email and password.");
+      return;
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Please wait…";
+    errorEl.style.display = "none";
+
+    const { error } = isSignUp
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      showLoginError(error.message);
+      loginBtn.disabled = false;
+      loginBtn.textContent = isSignUp ? "Create account" : "Sign in";
+    } else {
+      // Re-init to show save UI
+      init();
+    }
+  });
+
+  // OAuth handlers
+  async function handleOAuth(provider: "google" | "facebook" | "apple") {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const redirectUrl = chrome.identity.getRedirectURL();
+
+      // Build the OAuth URL manually
+      const authUrl =
+        `${supabaseUrl}/auth/v1/authorize?provider=${provider}` +
+        `&redirect_to=${encodeURIComponent(redirectUrl)}`;
+
+      const responseUrl = await chrome.identity.launchWebAuthFlow({
+        url: authUrl,
+        interactive: true,
+      });
+
+      if (!responseUrl) {
+        showLoginError("Sign in was cancelled.");
+        return;
+      }
+
+      // Extract tokens from the URL hash fragment
+      const hashParams = new URLSearchParams(
+        responseUrl.includes("#") ? responseUrl.split("#")[1] : "",
+      );
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        showLoginError("Could not complete sign in. Please try again.");
+        return;
+      }
+
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) {
+        showLoginError(error.message);
+      } else {
+        init();
+      }
+    } catch (err) {
+      showLoginError(
+        err instanceof Error ? err.message : "OAuth sign in failed.",
+      );
+    }
+  }
+
+  document
+    .getElementById("oauth-google")!
+    .addEventListener("click", () => handleOAuth("google"));
+  document
+    .getElementById("oauth-facebook")!
+    .addEventListener("click", () => handleOAuth("facebook"));
+  document
+    .getElementById("oauth-apple")!
+    .addEventListener("click", () => handleOAuth("apple"));
+}
+
+// Render the popup UI (save mode)
 function render(tab: chrome.tabs.Tab | undefined) {
   const root = document.getElementById("root");
   if (!root) return;
@@ -50,6 +201,8 @@ function render(tab: chrome.tabs.Tab | undefined) {
 
       <footer class="popup-footer">
         <a id="footer-link" href="http://localhost:5173" target="_blank">Open Recipe Fork ↗</a>
+        <span class="footer-sep">·</span>
+        <button id="sign-out-btn" class="link-btn footer-link-btn">Sign out</button>
       </footer>
     </div>
   `;
@@ -62,7 +215,7 @@ function escapeHtml(str: string): string {
   return el.innerHTML;
 }
 
-// Status helpers — future tasks will call these from handleSaveRecipe
+// Status helpers
 function showLoading(message: string) {
   saveBtn.disabled = true;
   statusLoading.querySelector(".status-message")!.textContent = message;
@@ -141,6 +294,15 @@ async function handleSaveRecipe() {
     return;
   }
 
+  // Ensure we have a logged-in user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    showError("Not signed in. Please sign in first.");
+    return;
+  }
+
   showLoading("Reading recipe…");
 
   try {
@@ -159,7 +321,7 @@ async function handleSaveRecipe() {
 
     const { data, error: saveError } = await supabase
       .from("recipes")
-      .insert(recipe)
+      .insert({ ...recipe, user_id: user.id })
       .select("id")
       .single();
 
@@ -187,6 +349,20 @@ async function handleSaveRecipe() {
 
 // Initialise popup
 async function init() {
+  const root = document.getElementById("root");
+  if (!root) return;
+
+  // Check for existing session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    renderLogin(root);
+    return;
+  }
+
+  // User is authenticated — show save UI
   const [tab] = await chrome.tabs.query({
     active: true,
     currentWindow: true,
@@ -206,6 +382,11 @@ async function init() {
   document.getElementById("retry-btn")?.addEventListener("click", () => {
     resetStatus();
     handleSaveRecipe();
+  });
+
+  document.getElementById("sign-out-btn")?.addEventListener("click", async () => {
+    await supabase.auth.signOut();
+    init();
   });
 }
 

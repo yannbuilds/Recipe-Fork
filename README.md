@@ -134,14 +134,24 @@ recipe-aggregator/
 
 ### Phase 5 – Polish
 
-- [ ] Replace the browser confirm dialog on recipe delete with a styled modal component that matches the app's design
-- [ ] Responsive design for mobile browsers
-- [ ] Image handling (save images to Supabase Storage)
-- [ ] Favourites / rating system
-- [ ] Meal planning view (optional)
-- [ ] Auth (if sharing with Dafne later)
+- [x] Replace the browser confirm dialog on recipe delete with a styled modal component that matches the app's design
+- [x] Responsive design for mobile browsers
+- [cancelled] Image handling (save images to Supabase Storage)
+- [x] Favourites / rating system
+- [x] Meal planning view (optional)
+- [x] Auth – email/password sign-up/sign-in, protected routes, RLS policies, extension login UI
 
-### Phase 6 – Mobile App (Future)
+### Phase 6 – Deploy + OAuth
+
+- [ ] Choose hosting provider and deploy the web app (e.g. Vercel, Netlify, or VPS)
+- [ ] Set up a custom domain and point DNS
+- [ ] Update Supabase site URL and redirect URLs to use the new domain
+- [ ] Configure Google OAuth (Google Cloud Console + Supabase dashboard)
+- [ ] Configure Facebook OAuth (Meta Developer Console + Supabase dashboard)
+- [ ] Configure Apple OAuth (Apple Developer Console + Supabase dashboard)
+- [ ] Test all auth flows (email/password + 3 OAuth providers) on production
+
+### Phase 7 – Mobile App (Future)
 
 - [ ] React Native app using the shared package
 - [ ] Same Supabase connection, same data

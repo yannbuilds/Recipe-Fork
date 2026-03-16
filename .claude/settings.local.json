@@ -29,7 +29,11 @@
       "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/package.json\")",
       "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/shared/package.json\")",
       "WebSearch",
-      "WebFetch(domain:console.groq.com)"
+      "WebFetch(domain:console.groq.com)",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/pages/\")",
+      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/\")",
+      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/public/\")"
     ]
   }
 }

@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
+import { useAuth } from '../context/AuthContext';
 
 export default function RecipeForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
+  const { user } = useAuth();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -202,7 +204,7 @@ export default function RecipeForm() {
     } else {
       const { data, error: saveError } = await supabase
         .from('recipes')
-        .insert(recipeData)
+        .insert({ ...recipeData, user_id: user!.id })
         .select('id')
         .single();
       if (saveError || !data) {
@@ -213,14 +215,26 @@ export default function RecipeForm() {
       recipeId = data.id;
     }
 
-    // Sync tags: delete all existing, then insert selected
-    await supabase.from('recipe_tags').delete().eq('recipe_id', recipeId!);
+    // Sync tags: diff-based — only delete removed, only insert added
+    const { data: currentTagRows } = await supabase
+      .from('recipe_tags')
+      .select('tag_id')
+      .eq('recipe_id', recipeId!);
 
-    if (selectedTagIds.size > 0) {
-      const tagRows = Array.from(selectedTagIds).map((tag_id) => ({
-        recipe_id: recipeId!,
-        tag_id,
-      }));
+    const currentTagIds = new Set((currentTagRows ?? []).map((rt: any) => rt.tag_id));
+    const toRemove = [...currentTagIds].filter((id) => !selectedTagIds.has(id));
+    const toAdd = [...selectedTagIds].filter((id) => !currentTagIds.has(id));
+
+    if (toRemove.length > 0) {
+      await supabase
+        .from('recipe_tags')
+        .delete()
+        .eq('recipe_id', recipeId!)
+        .in('tag_id', toRemove);
+    }
+
+    if (toAdd.length > 0) {
+      const tagRows = toAdd.map((tag_id) => ({ recipe_id: recipeId!, tag_id }));
       const { error: tagError } = await supabase.from('recipe_tags').insert(tagRows);
       if (tagError) {
         setError(tagError.message);
@@ -286,7 +300,7 @@ export default function RecipeForm() {
           </div>
 
           {/* Time & Servings */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>Prep time (min)</label>
               <input
@@ -320,7 +334,7 @@ export default function RecipeForm() {
           </div>
 
           {/* URLs */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>Source URL</label>
               <input
@@ -400,12 +414,12 @@ export default function RecipeForm() {
           <fieldset className="space-y-3">
             <legend className="text-sm font-medium text-gray-700">Ingredients</legend>
             {ingredients.map((ing, i) => (
-              <div key={i} className="flex gap-2 items-start">
+              <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
                 <input
                   type="text"
                   value={ing.category ?? ''}
                   onChange={(e) => updateIngredient(i, 'category', e.target.value)}
-                  className="w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full sm:w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   placeholder="Category"
                 />
                 <input
@@ -452,19 +466,19 @@ export default function RecipeForm() {
           <fieldset className="space-y-3">
             <legend className="text-sm font-medium text-gray-700">Steps</legend>
             {steps.map((step, i) => (
-              <div key={i} className="flex gap-2 items-start">
+              <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
                 <span className="text-sm text-gray-500 pt-2 w-6 text-right">{step.order}.</span>
                 <input
                   type="text"
                   value={step.category ?? ''}
                   onChange={(e) => updateStep(i, 'category', e.target.value)}
-                  className="w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full sm:w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   placeholder="Category"
                 />
                 <textarea
                   value={step.instruction}
                   onChange={(e) => updateStep(i, 'instruction', e.target.value)}
-                  className={inputClass + ' flex-1'}
+                  className={inputClass + ' flex-1 min-w-0'}
                   rows={2}
                   placeholder={`Step ${step.order}`}
                 />
