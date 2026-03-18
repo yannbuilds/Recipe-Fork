@@ -49,13 +49,21 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-lg w-full max-w-lg mx-4 flex flex-col max-h-[80vh]"
+        className="rf-card w-full max-w-lg mx-4 flex flex-col max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b space-y-3">
+        <div className="p-4 space-y-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Add Recipe to Meal Plan</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
+              Add Recipe to Meal Plan
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-xl leading-none transition-colors"
+              style={{ color: 'var(--muted)' }}
+            >
+              &times;
+            </button>
           </div>
           <input
             ref={inputRef}
@@ -63,14 +71,16 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search recipes..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rf-input w-full"
           />
         </div>
 
         <div className="overflow-y-auto flex-1 p-2">
-          {loading && <p className="text-center text-gray-500 py-4">Loading...</p>}
+          {loading && (
+            <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>Loading...</p>
+          )}
           {!loading && filtered.length === 0 && (
-            <p className="text-center text-gray-500 py-4">No recipes found.</p>
+            <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>No recipes found.</p>
           )}
           {filtered.map((recipe) => {
             const alreadyAdded = existingRecipeIds.has(recipe.id);
@@ -79,20 +89,32 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
                 key={recipe.id}
                 disabled={alreadyAdded}
                 onClick={() => onAdd(recipe)}
-                className={`w-full text-left px-3 py-3 rounded-md flex items-center gap-3 transition-colors ${
-                  alreadyAdded
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:bg-blue-50 cursor-pointer'
+                className={`w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-colors ${
+                  alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                 }`}
+                style={!alreadyAdded ? {} : undefined}
+                onMouseEnter={(e) => {
+                  if (!alreadyAdded) (e.currentTarget as HTMLElement).style.background = 'var(--warm)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!alreadyAdded) (e.currentTarget as HTMLElement).style.background = '';
+                }}
               >
                 {recipe.image_url ? (
-                  <img src={recipe.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                  <img src={recipe.image_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
                 ) : (
-                  <div className="w-12 h-12 rounded bg-gray-100 shrink-0" />
+                  <div
+                    className="w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-lg"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                    }}
+                  >
+                    🍴
+                  </div>
                 )}
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{recipe.title}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="font-medium truncate" style={{ color: 'var(--text)' }}>{recipe.title}</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
                     {[
                       recipe.prep_time != null && `Prep: ${recipe.prep_time}m`,
                       recipe.cook_time != null && `Cook: ${recipe.cook_time}m`,
@@ -101,7 +123,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
                   </p>
                 </div>
                 {alreadyAdded && (
-                  <span className="ml-auto text-xs text-green-600 shrink-0">Added</span>
+                  <span className="ml-auto text-xs shrink-0" style={{ color: 'var(--green)' }}>Added</span>
                 )}
               </button>
             );

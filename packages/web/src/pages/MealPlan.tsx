@@ -5,29 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
 import { combineIngredients } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
-
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function formatWeekStart(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
-
-function formatWeekLabel(date: Date): string {
-  return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-function shiftWeek(date: Date, weeks: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + weeks * 7);
-  return d;
-}
+import { getMonday, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
+import { getIngredientEmoji, CATEGORY_EMOJI_MAP } from '../utils/ingredientEmojis';
 
 type Tab = 'meals' | 'shopping';
 
@@ -98,12 +77,13 @@ export default function MealPlan() {
   const uncookedEntries = entries.filter((e) => !e.is_cooked);
   const allIngredients = uncookedEntries.flatMap((e) => e.recipe?.ingredients || []);
   const combined = combineIngredients(allIngredients);
+  const cookedCount = entries.filter((e) => e.is_cooked).length;
+  const cookedPercentage = entries.length > 0 ? Math.round((cookedCount / entries.length) * 100) : 0;
 
   // Run categorisation when ingredients change
   useEffect(() => {
     if (!plan || combined.length === 0) return;
 
-    // Build a fingerprint to avoid re-running unnecessarily
     const fingerprint = `${plan.id}-${combined.map((c) => c.item).sort().join(',')}`;
     if (fingerprint === lastCategorisedRef.current) return;
 
@@ -125,11 +105,11 @@ export default function MealPlan() {
       setCategoryMap(updated);
       setCategorising(false);
 
-      // Persist to DB
-      await supabase
+      const { error } = await supabase
         .from('meal_plans')
         .update({ shopping_categories: updated })
         .eq('id', plan!.id);
+      if (error) console.error('Failed to persist shopping categories:', JSON.stringify(error));
     }
 
     runCategorise();
@@ -159,7 +139,9 @@ export default function MealPlan() {
         .from('meal_plans')
         .update({ checked_items: [...next] })
         .eq('id', plan.id)
-        .then(() => {});
+        .then(({ error }) => {
+          if (error) console.error('Failed to persist checked items:', JSON.stringify(error));
+        });
     }, 300);
   }
 
@@ -203,157 +185,409 @@ export default function MealPlan() {
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
 
   return (
-    <div className="space-y-6">
-      {/* Week navigator */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setWeekStart((prev) => shiftWeek(prev, -1))}
-          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-        >
-          &larr; Prev week
-        </button>
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-900">Meal Plan</h2>
-          <p className="text-sm text-gray-500">
-            Week of {formatWeekLabel(weekStart)}
-            {isCurrentWeek && <span className="ml-2 text-blue-600 font-medium">This week</span>}
-          </p>
+    <div className="space-y-5">
+      {/* ── Week navigator card ──────────────────────────── */}
+      <div
+        className="rf-card"
+        style={{ padding: '20px 24px', animation: 'fadeUp 0.4s ease both' }}
+      >
+        <div className="flex items-center justify-between">
+          {/* Prev week circular button */}
+          <button
+            onClick={() => setWeekStart((prev) => shiftWeek(prev, -1))}
+            className="flex items-center justify-center rounded-full transition-colors shrink-0"
+            style={{
+              width: 36,
+              height: 36,
+              border: '1px solid var(--border)',
+              color: 'var(--muted)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--green)';
+              e.currentTarget.style.color = 'var(--green)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--muted)';
+            }}
+          >
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+
+          <div className="text-center">
+            <h2 className="rf-heading text-xl font-bold" style={{ color: 'var(--text)' }}>
+              Meal Plan
+            </h2>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              Week of {formatWeekLabel(weekStart)}
+            </p>
+            {isCurrentWeek && (
+              <span
+                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
+                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
+              >
+                This week
+              </span>
+            )}
+          </div>
+
+          {/* Next week circular button */}
+          <button
+            onClick={() => setWeekStart((prev) => shiftWeek(prev, 1))}
+            className="flex items-center justify-center rounded-full transition-colors shrink-0"
+            style={{
+              width: 36,
+              height: 36,
+              border: '1px solid var(--border)',
+              color: 'var(--muted)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--green)';
+              e.currentTarget.style.color = 'var(--green)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--muted)';
+            }}
+          >
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
         </div>
-        <button
-          onClick={() => setWeekStart((prev) => shiftWeek(prev, 1))}
-          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-        >
-          Next week &rarr;
-        </button>
+
+        {/* Progress bar */}
+        {entries.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'var(--muted)' }}>
+              <span>{cookedCount} of {entries.length} cooked</span>
+              <span>{cookedPercentage}%</span>
+            </div>
+            <div
+              className="overflow-hidden"
+              style={{ height: 8, borderRadius: 9999, background: 'var(--warm)' }}
+            >
+              <div
+                className="rf-progress-fill"
+                style={{
+                  height: '100%',
+                  borderRadius: 9999,
+                  background: 'var(--green)',
+                  width: `${cookedPercentage}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+      {/* ── Tabs with count badges ───────────────────────── */}
+      <div className="rf-tabs" style={{ animation: 'fadeUp 0.4s ease 0.1s both' }}>
         <button
           onClick={() => setTab('meals')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            tab === 'meals' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
+          className={`rf-tab ${tab === 'meals' ? 'rf-tab-active' : ''}`}
         >
-          Meals ({entries.length})
+          Meals
+          <span
+            className="inline-flex items-center justify-center rounded-full ml-1.5"
+            style={{
+              minWidth: 20,
+              height: 20,
+              fontSize: 11,
+              fontWeight: 700,
+              background: tab === 'meals' ? 'var(--green)' : 'var(--border)',
+              color: tab === 'meals' ? '#fff' : 'var(--muted)',
+            }}
+          >
+            {entries.length}
+          </span>
         </button>
         <button
           onClick={() => setTab('shopping')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            tab === 'shopping' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
+          className={`rf-tab ${tab === 'shopping' ? 'rf-tab-active' : ''}`}
         >
-          Shopping List ({combined.length})
+          Shopping List
+          <span
+            className="inline-flex items-center justify-center rounded-full ml-1.5"
+            style={{
+              minWidth: 20,
+              height: 20,
+              fontSize: 11,
+              fontWeight: 700,
+              background: tab === 'shopping' ? 'var(--green)' : 'var(--border)',
+              color: tab === 'shopping' ? '#fff' : 'var(--muted)',
+            }}
+          >
+            {combined.length}
+          </span>
         </button>
       </div>
 
-      {loading && <p className="text-center text-gray-500 py-8">Loading...</p>}
+      {loading && (
+        <p className="text-center text-sm py-8" style={{ color: 'var(--muted)' }}>Loading...</p>
+      )}
 
-      {/* Meals tab */}
+      {/* ── Meals tab ────────────────────────────────────── */}
       {!loading && tab === 'meals' && (
         <div className="space-y-4">
           {entries.length === 0 && (
-            <p className="text-center text-gray-500 py-8">No meals planned for this week yet.</p>
+            <div
+              className="text-center py-16"
+              style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
+            >
+              <span className="block text-5xl">🍳</span>
+              <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+                No meals planned yet
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+                Add some recipes to plan your week.
+              </p>
+            </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {entries.map((entry) => (
+            {entries.map((entry, index) => (
               <div
                 key={entry.id}
-                className={`bg-white rounded-lg shadow-md overflow-hidden transition-opacity ${
-                  entry.is_cooked ? 'opacity-60' : ''
-                }`}
+                className="overflow-hidden"
+                style={{
+                  background: 'var(--card)',
+                  borderRadius: 'var(--radius)',
+                  boxShadow: 'var(--shadow-md)',
+                  opacity: entry.is_cooked ? 0.65 : 1,
+                  transition: 'opacity 0.3s, transform 0.2s',
+                  animation: 'fadeUp 0.4s ease both',
+                  animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
+                }}
               >
-                <div className="relative">
-                  {entry.recipe?.image_url && (
+                {/* Image area with overlays */}
+                <div className="relative" style={{ height: 160 }}>
+                  {entry.recipe?.image_url ? (
                     <img
                       src={entry.recipe.image_url}
                       alt={entry.recipe?.title}
-                      className="w-full h-36 object-cover"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
-                  )}
-                </div>
-                <div className="p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className={`font-semibold text-gray-900 ${entry.is_cooked ? 'line-through' : ''}`}>
-                      {entry.recipe?.title}
-                    </h3>
-                    <button
-                      onClick={() => handleRemove(entry.id)}
-                      className="text-gray-400 hover:text-red-500 text-lg leading-none shrink-0"
-                      title="Remove from meal plan"
+                  ) : (
+                    <div
+                      className="absolute inset-0 flex items-center justify-center text-3xl"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                      }}
                     >
-                      &times;
-                    </button>
+                      🍴
+                    </div>
+                  )}
+
+                  {/* Gradient scrim */}
+                  <div className="rf-scrim absolute inset-0" />
+
+                  {/* Remove button: frosted circle */}
+                  <button
+                    onClick={() => handleRemove(entry.id)}
+                    className="absolute top-2 right-2 flex items-center justify-center rounded-full rf-glass-dark text-white text-lg leading-none transition-colors"
+                    style={{ width: 28, height: 28 }}
+                    title="Remove from meal plan"
+                  >
+                    ×
+                  </button>
+
+                  {/* Cooked badge: top-left */}
+                  {entry.is_cooked && (
+                    <div
+                      className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                      style={{ background: 'var(--green)' }}
+                    >
+                      ✓ Cooked
+                    </div>
+                  )}
+
+                  {/* Title overlay: bottom, frosted glass */}
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <div className="rf-glass" style={{ borderRadius: 10, padding: '8px 12px' }}>
+                      <h3
+                        className={`rf-heading font-semibold text-sm ${entry.is_cooked ? 'line-through' : ''}`}
+                        style={{ color: 'var(--text)' }}
+                      >
+                        {entry.recipe?.title}
+                      </h3>
+                      <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                        {entry.recipe?.prep_time != null && <span>Prep: {entry.recipe.prep_time}m</span>}
+                        {entry.recipe?.cook_time != null && <span>Cook: {entry.recipe.cook_time}m</span>}
+                        {entry.recipe?.servings != null && <span>Serves {entry.recipe.servings}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    {entry.recipe?.prep_time != null && <span>Prep: {entry.recipe.prep_time}m</span>}
-                    {entry.recipe?.cook_time != null && <span>Cook: {entry.recipe.cook_time}m</span>}
-                    {entry.recipe?.servings != null && <span>Serves {entry.recipe.servings}</span>}
-                  </div>
+                </div>
+
+                {/* Cooked toggle button */}
+                <div style={{ padding: 12 }}>
                   <button
                     onClick={() => handleToggleCooked(entry.id)}
-                    className={`w-full text-center py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className="w-full text-center py-2 rounded-lg text-sm font-medium transition-colors"
+                    style={
                       entry.is_cooked
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                        ? { background: 'var(--green-light)', color: 'var(--green)' }
+                        : { background: 'var(--warm)', color: 'var(--muted)' }
+                    }
                   >
-                    {entry.is_cooked ? 'Cooked' : 'Mark as cooked'}
+                    {entry.is_cooked ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Cooked
+                      </span>
+                    ) : (
+                      'Mark as cooked'
+                    )}
                   </button>
                 </div>
               </div>
             ))}
           </div>
 
+          {/* Add recipe button */}
           <button
             onClick={() => setShowAddModal(true)}
-            className="w-full py-3 rounded-lg border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors text-sm font-medium"
+            className="w-full py-3 rounded-lg border-2 border-dashed text-sm font-medium transition-colors"
+            style={{
+              borderColor: 'var(--green)',
+              color: 'var(--green)',
+              animation: 'fadeUp 0.4s ease both',
+              animationDelay: `${Math.min(0.15 + entries.length * 0.05 + 0.05, 0.45)}s`,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--green-light)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
           >
             + Add Recipe
           </button>
         </div>
       )}
 
-      {/* Shopping list tab */}
+      {/* ── Shopping list tab ────────────────────────────── */}
       {!loading && tab === 'shopping' && (
         <div className="space-y-4">
+          {/* Empty state */}
           {combined.length === 0 && (
-            <p className="text-center text-gray-500 py-8">
-              {entries.length === 0
-                ? 'Add some meals to generate a shopping list.'
-                : 'All meals are marked as cooked.'}
-            </p>
+            <div
+              className="text-center py-16"
+              style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
+            >
+              <span className="block text-5xl">🛒</span>
+              <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+                {entries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+                {entries.length === 0
+                  ? 'Add some meals to generate a shopping list.'
+                  : 'All meals are marked as cooked — nothing to shop for.'}
+              </p>
+            </div>
+          )}
+
+          {/* Progress summary */}
+          {combined.length > 0 && (
+            <div
+              className="rf-card flex items-center justify-between"
+              style={{ padding: '14px 16px', animation: 'fadeUp 0.4s ease 0.15s both' }}
+            >
+              <span className="text-sm">
+                <span className="font-bold" style={{ color: 'var(--text)' }}>{checkedItems.size}</span>
+                <span style={{ color: 'var(--muted)' }}> of {combined.length} items ticked</span>
+              </span>
+            </div>
           )}
 
           {categorising && combined.length > 0 && (
-            <p className="text-center text-sm text-blue-600 py-2">Categorising ingredients...</p>
+            <p className="text-center text-sm py-2" style={{ color: 'var(--green)' }}>
+              Categorising ingredients...
+            </p>
           )}
 
-          {groupedByCategory.map((group) => (
-            <div key={group.category}>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {group.category}
-              </h3>
-              <div className="space-y-1">
-                {group.items.map((ing) => {
+          {/* Category groups */}
+          {groupedByCategory.map((group, groupIndex) => (
+            <div
+              key={group.category}
+              style={{
+                animation: 'fadeUp 0.4s ease both',
+                animationDelay: `${Math.min(0.2 + groupIndex * 0.05, 0.45)}s`,
+              }}
+            >
+              {/* Category header with emoji */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">{CATEGORY_EMOJI_MAP[group.category] || '🛒'}</span>
+                <h3
+                  className="text-xs font-bold uppercase tracking-wide"
+                  style={{ color: 'var(--muted)' }}
+                >
+                  {group.category}
+                </h3>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                  ({group.items.length})
+                </span>
+              </div>
+
+              {/* Items in a single card */}
+              <div className="rf-card overflow-hidden">
+                {group.items.map((ing, i) => {
                   const key = `${ing.item}-${ing.unit}`;
                   const checked = checkedItems.has(key);
                   return (
                     <label
                       key={key}
-                      className={`flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg shadow-sm cursor-pointer transition-opacity ${
-                        checked ? 'opacity-50' : ''
-                      }`}
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+                      style={{
+                        borderBottom: i < group.items.length - 1 ? '1px solid var(--border)' : 'none',
+                        opacity: checked ? 0.5 : 1,
+                        transition: 'opacity 0.3s, background 0.15s',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
+                      {/* Custom checkbox */}
+                      <div
+                        className="flex items-center justify-center shrink-0"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 6,
+                          border: '2px solid',
+                          borderColor: checked ? 'var(--green)' : 'var(--border)',
+                          background: checked ? 'var(--green)' : 'transparent',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {checked && (
+                          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleShoppingItem(key)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="sr-only"
                       />
-                      <span className={`text-sm ${checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                        {ing.quantity} {ing.unit} <span className="font-medium">{ing.item}</span>
+
+                      {/* Ingredient emoji */}
+                      <span
+                        className="flex items-center justify-center shrink-0 rounded-md text-sm"
+                        style={{ width: 28, height: 28, background: 'var(--warm)' }}
+                      >
+                        {getIngredientEmoji(ing.item)}
+                      </span>
+
+                      {/* Item text */}
+                      <span
+                        className={`flex-1 text-sm ${checked ? 'line-through' : ''}`}
+                        style={{ color: checked ? 'var(--muted)' : 'var(--text)' }}
+                      >
+                        {ing.quantity} {ing.unit}{' '}
+                        <span className="font-medium">{ing.item}</span>
                       </span>
                     </label>
                   );

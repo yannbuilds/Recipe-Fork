@@ -1,1 +1,192 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg: #e9ede4;
+    --card: #ffffff;
+    --green: #3f7358;
+    --green-light: #edf3ef;
+    --warm: #f0ece6;
+    --warm-dark: #e0d9d0;
+    --border: #ebebea;
+    --text: #1c1c1a;
+    --muted: #7a7a74;
+    --red: #d94f3a;
+    --radius: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  body {
+    background: var(--bg);
+    font-family: 'Nunito', sans-serif;
+    color: var(--text);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+.rd-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .rd-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Reusable input ────────────────────────────── */
+.rf-input {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rf-input::placeholder { color: var(--muted); }
+.rf-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(63,115,88,0.12);
+}
+
+/* ── Card ──────────────────────────────────────── */
+.rf-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Buttons ───────────────────────────────────── */
+.rf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.rf-btn-filled {
+  background: var(--green);
+  border: 1px solid var(--green);
+  color: #fff;
+}
+.rf-btn-filled:hover { opacity: 0.9; }
+.rf-btn-filled:disabled { opacity: 0.5; cursor: not-allowed; }
+.rf-btn-primary {
+  background: var(--card);
+  border: 1px solid var(--green);
+  color: var(--green);
+}
+.rf-btn-primary:hover { background: var(--green-light); }
+.rf-btn-secondary {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.rf-btn-secondary:hover { background: var(--warm); }
+.rf-btn-danger {
+  background: var(--card);
+  border: 1px solid #f5c6c0;
+  color: var(--red);
+}
+.rf-btn-danger:hover { background: #fef2f0; }
+
+/* ── Tags ──────────────────────────────────────── */
+.rf-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.rf-tag-active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+/* ── Tabs ──────────────────────────────────────── */
+.rf-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--warm);
+  border-radius: 10px;
+  padding: 4px;
+}
+.rf-tab {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+}
+.rf-tab:hover { color: var(--text); }
+.rf-tab-active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Helpers ───────────────────────────────────── */
+.rf-heading { font-family: 'Lora', serif; }
+input[type="checkbox"] { accent-color: var(--green); }
+
+/* ── Card hover upgrade ───────────────────────── */
+.rf-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.rf-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Frosted glass ────────────────────────────── */
+.rf-glass {
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.rf-glass-dark {
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Gradient scrim ───────────────────────────── */
+.rf-scrim {
+  background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 50%, transparent 100%);
+}
+
+/* ── Progress bar fill ────────────────────────── */
+.rf-progress-fill {
+  transition: width 0.4s ease;
+}
+

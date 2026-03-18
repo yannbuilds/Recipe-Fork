@@ -1,5 +1,5 @@
 import { extractRecipe, type ExtractedRecipe } from "../lib/groq";
-import { supabase } from "@recipe-aggregator/shared";
+import { supabase } from "../lib/supabase";
 
 // DOM references
 let saveBtn: HTMLButtonElement;
@@ -347,15 +347,55 @@ async function handleSaveRecipe() {
   }
 }
 
+/**
+ * Try to grab the Supabase session from the web app's localStorage
+ * via the content script. Returns the session if found, null otherwise.
+ */
+async function syncSessionFromWebApp() {
+  try {
+    // Find a tab running the web app
+    const tabs = await chrome.tabs.query({ url: "http://localhost/*" });
+    if (tabs.length === 0 || !tabs[0].id) return null;
+
+    const response = await chrome.tabs.sendMessage(tabs[0].id, {
+      type: "GET_SUPABASE_SESSION",
+    });
+
+    if (!response?.session) return null;
+
+    const parsed = JSON.parse(response.session);
+    const accessToken = parsed.access_token;
+    const refreshToken = parsed.refresh_token;
+
+    if (!accessToken || !refreshToken) return null;
+
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error || !data.session) return null;
+
+    return data.session;
+  } catch {
+    return null;
+  }
+}
+
 // Initialise popup
 async function init() {
   const root = document.getElementById("root");
   if (!root) return;
 
   // Check for existing session
-  const {
+  let {
     data: { session },
   } = await supabase.auth.getSession();
+
+  // If no session in chrome.storage.local, try syncing from the web app
+  if (!session) {
+    session = await syncSessionFromWebApp();
+  }
 
   if (!session) {
     renderLogin(root);

@@ -119,7 +119,6 @@ export default function RecipeForm() {
   }
 
   function addIngredient() {
-    // Carry over the category from the last ingredient for convenience
     const lastCategory = ingredients.length > 0 ? ingredients[ingredients.length - 1].category : '';
     setIngredients([...ingredients, { item: '', quantity: '', unit: '', category: lastCategory }]);
   }
@@ -247,53 +246,54 @@ export default function RecipeForm() {
   }
 
   if (loading) {
-    return <p className="text-center text-gray-500 py-12">Loading recipe...</p>;
+    return (
+      <p className="text-center text-sm py-12" style={{ color: 'var(--muted)' }}>
+        Loading recipe...
+      </p>
+    );
   }
 
-  const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
-  const inputClass =
-    'w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500';
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <Link
-          to={isEditing ? `/recipe/${id}` : '/'}
-          className="inline-flex items-center text-blue-600 hover:underline text-sm mb-6"
-        >
-          &larr; {isEditing ? 'Back to recipe' : 'Back to recipes'}
-        </Link>
+    <div className="mx-auto" style={{ maxWidth: 720, padding: '28px 24px 64px' }}>
+      <Link
+        to={isEditing ? `/recipe/${id}` : '/'}
+        className="inline-flex items-center text-sm mb-6 hover:underline"
+        style={{ color: 'var(--green)' }}
+      >
+        &larr; {isEditing ? 'Back to recipe' : 'Back to recipes'}
+      </Link>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">
-          {isEditing ? 'Edit Recipe' : 'New Recipe'}
-        </h1>
+      <h1 className="rf-heading text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>
+        {isEditing ? 'Edit Recipe' : 'New Recipe'}
+      </h1>
 
-        {error && (
-          <p className="text-red-600 text-sm mb-4">{error}</p>
-        )}
+      {error && (
+        <p className="text-sm mb-4" style={{ color: 'var(--red)' }}>{error}</p>
+      )}
 
+      <div className="rf-card" style={{ padding: 24 }}>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Title */}
           <div>
-            <label className={labelClass}>
-              Title <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
+              Title <span style={{ color: 'var(--red)' }}>*</span>
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className={inputClass}
+              className="rf-input w-full"
               placeholder="Recipe title"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className={labelClass}>Description</label>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className={inputClass}
+              className="rf-input w-full"
               rows={3}
               placeholder="Brief description"
             />
@@ -302,33 +302,33 @@ export default function RecipeForm() {
           {/* Time & Servings */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Prep time (min)</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Prep time (min)</label>
               <input
                 type="number"
                 min={0}
                 value={prepTime}
                 onChange={(e) => setPrepTime(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
               />
             </div>
             <div>
-              <label className={labelClass}>Cook time (min)</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Cook time (min)</label>
               <input
                 type="number"
                 min={0}
                 value={cookTime}
                 onChange={(e) => setCookTime(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
               />
             </div>
             <div>
-              <label className={labelClass}>Servings</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Servings</label>
               <input
                 type="number"
                 min={1}
                 value={servings}
                 onChange={(e) => setServings(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
               />
             </div>
           </div>
@@ -336,32 +336,32 @@ export default function RecipeForm() {
           {/* URLs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Source URL</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Source URL</label>
               <input
                 type="url"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
                 placeholder="https://..."
               />
             </div>
             <div>
-              <label className={labelClass}>Image URL</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Image URL</label>
               <input
                 type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
                 placeholder="https://..."
               />
             </div>
             <div>
-              <label className={labelClass}>Video URL</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Video URL</label>
               <input
                 type="url"
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                className={inputClass}
+                className="rf-input w-full"
                 placeholder="https://youtube.com/..."
               />
             </div>
@@ -369,18 +369,14 @@ export default function RecipeForm() {
 
           {/* Tags */}
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-gray-700">Tags</legend>
+            <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Tags</legend>
             <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => (
                 <button
                   key={tag.id}
                   type="button"
                   onClick={() => toggleTag(tag.id)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                    selectedTagIds.has(tag.id)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className={`rf-tag cursor-pointer ${selectedTagIds.has(tag.id) ? 'rf-tag-active' : ''}`}
                 >
                   {tag.name}
                 </button>
@@ -397,13 +393,13 @@ export default function RecipeForm() {
                     handleAddNewTag();
                   }
                 }}
-                className={inputClass}
+                className="rf-input w-full"
                 placeholder="New tag name"
               />
               <button
                 type="button"
                 onClick={handleAddNewTag}
-                className="shrink-0 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                className="rf-btn rf-btn-secondary shrink-0"
               >
                 Add Tag
               </button>
@@ -412,41 +408,42 @@ export default function RecipeForm() {
 
           {/* Ingredients */}
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-gray-700">Ingredients</legend>
+            <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Ingredients</legend>
             {ingredients.map((ing, i) => (
               <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
                 <input
                   type="text"
                   value={ing.category ?? ''}
                   onChange={(e) => updateIngredient(i, 'category', e.target.value)}
-                  className="w-full sm:w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="rf-input w-full sm:w-28 shrink-0"
                   placeholder="Category"
                 />
                 <input
                   type="text"
                   value={ing.quantity}
                   onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
-                  className="w-16 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="rf-input w-16 shrink-0"
                   placeholder="Qty"
                 />
                 <input
                   type="text"
                   value={ing.unit}
                   onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
-                  className="w-20 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="rf-input w-20 shrink-0"
                   placeholder="Unit"
                 />
                 <input
                   type="text"
                   value={ing.item}
                   onChange={(e) => updateIngredient(i, 'item', e.target.value)}
-                  className="flex-1 min-w-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="rf-input flex-1 min-w-0"
                   placeholder="Ingredient"
                 />
                 <button
                   type="button"
                   onClick={() => removeIngredient(i)}
-                  className="text-red-500 hover:text-red-700 text-sm px-2 py-2"
+                  className="text-sm px-2 py-2 transition-colors"
+                  style={{ color: 'var(--red)' }}
                   aria-label="Remove ingredient"
                 >
                   Remove
@@ -456,7 +453,8 @@ export default function RecipeForm() {
             <button
               type="button"
               onClick={addIngredient}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm font-medium hover:underline"
+              style={{ color: 'var(--green)' }}
             >
               + Add ingredient
             </button>
@@ -464,28 +462,29 @@ export default function RecipeForm() {
 
           {/* Steps */}
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-gray-700">Steps</legend>
+            <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Steps</legend>
             {steps.map((step, i) => (
               <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
-                <span className="text-sm text-gray-500 pt-2 w-6 text-right">{step.order}.</span>
+                <span className="text-sm pt-2 w-6 text-right" style={{ color: 'var(--muted)' }}>{step.order}.</span>
                 <input
                   type="text"
                   value={step.category ?? ''}
                   onChange={(e) => updateStep(i, 'category', e.target.value)}
-                  className="w-full sm:w-28 shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="rf-input w-full sm:w-28 shrink-0"
                   placeholder="Category"
                 />
                 <textarea
                   value={step.instruction}
                   onChange={(e) => updateStep(i, 'instruction', e.target.value)}
-                  className={inputClass + ' flex-1 min-w-0'}
+                  className="rf-input flex-1 min-w-0"
                   rows={2}
                   placeholder={`Step ${step.order}`}
                 />
                 <button
                   type="button"
                   onClick={() => removeStep(i)}
-                  className="text-red-500 hover:text-red-700 text-sm px-2 py-2"
+                  className="text-sm px-2 py-2 transition-colors"
+                  style={{ color: 'var(--red)' }}
                   aria-label="Remove step"
                 >
                   Remove
@@ -495,7 +494,8 @@ export default function RecipeForm() {
             <button
               type="button"
               onClick={addStep}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm font-medium hover:underline"
+              style={{ color: 'var(--green)' }}
             >
               + Add step
             </button>
@@ -505,7 +505,7 @@ export default function RecipeForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="rf-btn rf-btn-filled w-full"
           >
             {submitting ? 'Saving...' : isEditing ? 'Update Recipe' : 'Save Recipe'}
           </button>

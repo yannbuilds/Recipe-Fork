@@ -49,41 +49,54 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-900 text-center mb-8">
+        <h1
+          className="rf-heading text-2xl font-bold text-center mb-8"
+          style={{ color: 'var(--text)' }}
+        >
           Recipe Fork
         </h1>
 
         {signUpSuccess ? (
-          <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+          <div className="rf-card text-center" style={{ padding: 24 }}>
             <div className="text-3xl mb-3">✉️</div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Check your email</h2>
-            <p className="text-sm text-gray-600 mb-5">
+            <h2 className="rf-heading text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>
+              Check your email
+            </h2>
+            <p className="text-sm mb-5" style={{ color: 'var(--muted)' }}>
               We've sent a confirmation link to <strong>{email}</strong>. Click the link to activate your account, then come back here to sign in.
             </p>
             <button
               onClick={() => { setSignUpSuccess(false); setIsSignUp(false); setError(null); }}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="text-sm font-medium"
+              style={{ color: 'var(--green)' }}
             >
               Back to sign in
             </button>
           </div>
         ) : (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="rf-card" style={{ padding: 24 }}>
+          <h2 className="rf-heading text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>
             {isSignUp ? 'Create an account' : 'Sign in'}
           </h2>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-md">
+            <div
+              className="mb-4 p-3 text-sm rounded-lg"
+              style={{ background: '#fef2f0', color: 'var(--red)', border: '1px solid #f5c6c0' }}
+            >
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium mb-1"
+                style={{ color: 'var(--muted)' }}
+              >
                 Email
               </label>
               <input
@@ -92,13 +105,17 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="rf-input w-full"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium mb-1"
+                style={{ color: 'var(--muted)' }}
+              >
                 Password
               </label>
               <input
@@ -108,7 +125,7 @@ export default function LoginPage() {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="rf-input w-full"
                 placeholder="At least 6 characters"
               />
             </div>
@@ -116,22 +133,22 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rf-btn rf-btn-filled w-full"
             >
               {loading ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}
             </button>
           </form>
 
           <div className="my-5 flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400">or continue with</span>
-            <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+            <span className="text-xs" style={{ color: 'var(--muted)' }}>or continue with</span>
+            <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
           </div>
 
           <div className="space-y-2">
             <button
               onClick={() => handleOAuth('google')}
-              className="w-full py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+              className="rf-btn rf-btn-secondary w-full"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -144,7 +161,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => handleOAuth('facebook')}
-              className="w-full py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+              className="rf-btn rf-btn-secondary w-full"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1877F2">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -154,7 +171,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => handleOAuth('apple')}
-              className="w-full py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+              className="rf-btn rf-btn-secondary w-full"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
@@ -163,11 +180,12 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <p className="mt-5 text-center text-sm text-gray-500">
+          <p className="mt-5 text-center text-sm" style={{ color: 'var(--muted)' }}>
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="font-medium"
+              style={{ color: 'var(--green)' }}
             >
               {isSignUp ? 'Sign in' : 'Sign up'}
             </button>

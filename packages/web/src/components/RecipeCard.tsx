@@ -1,29 +1,63 @@
 import { Link } from 'react-router-dom';
-import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import type { Recipe } from '@recipe-aggregator/shared';
 import FavouriteButton from './FavouriteButton';
 
 interface RecipeCardProps {
   recipe: Recipe;
-  tags?: Tag[];
   onToggleFavourite?: (recipeId: string, newValue: boolean) => void;
+  index?: number;
 }
 
-export default function RecipeCard({ recipe, tags, onToggleFavourite }: RecipeCardProps) {
+function formatTime(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: RecipeCardProps) {
+  const totalTime =
+    recipe.prep_time != null && recipe.cook_time != null
+      ? recipe.prep_time + recipe.cook_time
+      : recipe.prep_time ?? recipe.cook_time ?? null;
+
   return (
     <Link
       to={`/recipe/${recipe.id}`}
-      className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+      className="block overflow-hidden rf-card-hover"
+      style={{
+        background: 'var(--card)',
+        borderRadius: 'var(--radius)',
+        boxShadow: 'var(--shadow-md)',
+        animation: 'fadeUp 0.4s ease both',
+        animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
+      }}
     >
-      <div className="relative">
-        {recipe.image_url && (
+      {/* Image area with overlays */}
+      <div className="relative" style={{ aspectRatio: '4 / 3' }}>
+        {recipe.image_url ? (
           <img
             src={recipe.image_url}
             alt={recipe.title}
-            className="w-full h-48 object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
           />
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center text-5xl"
+            style={{
+              background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+            }}
+          >
+            🍴
+          </div>
         )}
+
+        {/* Gradient scrim */}
+        <div className="rf-scrim absolute inset-0" />
+
+        {/* Favourite button: top-right */}
         {onToggleFavourite && (
-          <div className={`absolute ${recipe.image_url ? 'top-2 right-2' : 'top-2 right-2'}`}>
+          <div className="absolute top-3 right-3">
             <FavouriteButton
               recipeId={recipe.id}
               isFavourite={recipe.is_favourite}
@@ -31,28 +65,44 @@ export default function RecipeCard({ recipe, tags, onToggleFavourite }: RecipeCa
             />
           </div>
         )}
-      </div>
-      <div className="p-4 space-y-2">
-        <h2 className="text-xl font-semibold text-gray-900">{recipe.title}</h2>
-        {recipe.description && (
-          <p className="text-gray-600 text-sm line-clamp-2">{recipe.description}</p>
-        )}
-        <div className="flex gap-4 text-xs text-gray-500 pt-1">
-          {recipe.prep_time != null && <span>Prep: {recipe.prep_time}m</span>}
-          {recipe.cook_time != null && <span>Cook: {recipe.cook_time}m</span>}
-          {recipe.servings != null && <span>Serves {recipe.servings}</span>}
+
+        {/* Meta pills: top-left */}
+        <div className="absolute top-3 left-3 flex gap-1.5">
+          {totalTime != null && (
+            <span
+              className="rf-glass-dark rounded-full text-white"
+              style={{ padding: '3px 10px', fontSize: 11 }}
+            >
+              ⏱ {formatTime(totalTime)}
+            </span>
+          )}
+          {recipe.servings != null && (
+            <span
+              className="rf-glass-dark rounded-full text-white"
+              style={{ padding: '3px 10px', fontSize: 11 }}
+            >
+              🍽 {recipe.servings}
+            </span>
+          )}
         </div>
-        {tags && tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full"
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
+
+      </div>
+
+      {/* Title & description below image */}
+      <div style={{ padding: '10px 12px' }}>
+        <h2
+          className="rf-heading font-semibold leading-snug"
+          style={{ fontSize: 15, color: 'var(--text)' }}
+        >
+          {recipe.title}
+        </h2>
+        {recipe.description && (
+          <p
+            className="line-clamp-2 mt-0.5"
+            style={{ fontSize: 12, color: 'var(--muted)' }}
+          >
+            {recipe.description}
+          </p>
         )}
       </div>
     </Link>

@@ -5,7 +5,7 @@
       "name": "web",
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": ["-c", "export PATH=/Users/jason/.nvm/versions/node/v20.19.6/bin:$PATH && npm run dev:web"],
-      "port": 5173
+      "port": 5175
     }
   ]
 }

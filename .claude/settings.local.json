@@ -33,7 +33,24 @@
       "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/\")",
       "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/pages/\")",
       "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/\")",
-      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/public/\")"
+      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/public/\")",
+      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/.env.local\")",
+      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/.env\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web\" -name \"vite.config.ts\" -o -name \"tsconfig.json\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -name .env*)",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web\" -type f -name \"*.ts\" -o -name \"*.tsx\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -type d -name \"api\" -o -type d -name \"functions\" -o -type d -name \"server\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/supabase/\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/context/\")",
+      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/.gitignore\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/shared/src/\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/dist/\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -maxdepth 2 -name \"vercel.json\" -o -name \"build\" -o -name \".vercelignore\")",
+      "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/vite-env.d.ts\")",
+      "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/\")",
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -type f \\\\\\( -name \"*.json\" \\\\\\))"
     ]
   }
 }
