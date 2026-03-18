@@ -18,6 +18,7 @@ export default function RecipeForm() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [creatorName, setCreatorName] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     { item: '', quantity: '', unit: '', category: '' },
   ]);
@@ -57,6 +58,7 @@ export default function RecipeForm() {
         setSourceUrl(recipe.source_url ?? '');
         setImageUrl(recipe.image_url ?? '');
         setVideoUrl(recipe.video_url ?? '');
+        setCreatorName(recipe.creator_name ?? '');
         setIngredients(
           recipe.ingredients.length > 0
             ? recipe.ingredients.map((ing) => ({ ...ing, category: ing.category ?? '' }))
@@ -182,6 +184,7 @@ export default function RecipeForm() {
       prep_time: prepTime ? Number(prepTime) : null,
       cook_time: cookTime ? Number(cookTime) : null,
       source_url: sourceUrl.trim() || '',
+      creator_name: creatorName.trim() || null,
       video_url: videoUrl.trim() || null,
       image_url: imageUrl.trim() || null,
       ingredients: filteredIngredients,
@@ -331,6 +334,18 @@ export default function RecipeForm() {
                 className="rf-input w-full"
               />
             </div>
+          </div>
+
+          {/* Original creator */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Original creator</label>
+            <input
+              type="text"
+              value={creatorName}
+              onChange={(e) => setCreatorName(e.target.value)}
+              className="rf-input w-full"
+              placeholder="e.g. Nagi | RecipeTin Eats"
+            />
           </div>
 
           {/* URLs */}

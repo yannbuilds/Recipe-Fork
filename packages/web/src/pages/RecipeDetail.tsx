@@ -591,6 +591,28 @@ export default function RecipeDetail() {
                 </p>
               )}
 
+              {/* Original creator attribution */}
+              {(recipe.creator_name || recipe.source_url) && (
+                <div className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+                  {recipe.creator_name && (
+                    <span>
+                      👤 Original recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+                    </span>
+                  )}
+                  {recipe.source_url && (
+                    <a
+                      href={recipe.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline block mt-1"
+                      style={{ color: 'var(--green)' }}
+                    >
+                      View original recipe ↗
+                    </a>
+                  )}
+                </div>
+              )}
+
               {/* Stats tiles */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {recipe.prep_time != null && (
@@ -634,17 +656,7 @@ export default function RecipeDetail() {
                 )}
               </div>
 
-              {recipe.source_url && (
-                <a
-                  href={recipe.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm hover:underline"
-                  style={{ color: 'var(--green)' }}
-                >
-                  View original source ↗
-                </a>
-              )}
+              {/* Attribution removed – now shown under description */}
             </div>
 
             {/* Directions card */}

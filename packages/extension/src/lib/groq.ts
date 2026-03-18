@@ -1,7 +1,10 @@
 import type { RecipeInsert } from "@recipe-aggregator/shared";
 
+// user_id and is_favourite are added at insert time in popup/index.ts
+export type ExtractedRecipeData = Omit<RecipeInsert, 'user_id' | 'is_favourite'>;
+
 export interface ExtractedRecipe {
-  recipe: RecipeInsert;
+  recipe: ExtractedRecipeData;
   tagNames: string[];
 }
 
@@ -25,6 +28,7 @@ Return ONLY a JSON object with this exact structure:
   "cook_time": null or number in minutes,
   "image_url": "full image URL or null",
   "video_url": "full video URL or null",
+  "creator_name": "recipe author/creator name or null",
   "tags": ["tag1", "tag2", "tag3"]
 }
 
@@ -40,6 +44,7 @@ Rules:
 - Look for structured data (JSON-LD) first, then fall back to page content.
 - For video_url: check the "[Video URLs found on page]" section first — if present, use the first URL. Also check JSON-LD "video" field. Return a full YouTube watch URL (https://www.youtube.com/watch?v=...) or null if no video exists.
 - For tags: suggest 3–5 lowercase tags. Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
+- For creator_name: extract the recipe author/creator name. Check JSON-LD "author.name", byline elements, or meta tags. Return the name as-is (e.g. "Nagi | RecipeTin Eats"). Return null if not found.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
 
 /**
@@ -92,13 +97,14 @@ export async function extractRecipe(
     throw new Error(parsed.error);
   }
 
-  // Build RecipeInsert with source_url from the actual page
-  const recipe: RecipeInsert = {
+  // Build recipe data (user_id and is_favourite are added at insert time in popup)
+  const recipe: ExtractedRecipeData = {
     title: parsed.title,
     description: parsed.description ?? null,
     ingredients: parsed.ingredients ?? [],
     steps: parsed.steps ?? [],
     source_url: url,
+    creator_name: parsed.creator_name ?? null,
     video_url: parsed.video_url ?? null,
     image_url: parsed.image_url ?? null,
     servings: parsed.servings ?? null,

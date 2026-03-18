@@ -200,7 +200,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
       </div>
 
       <footer class="popup-footer">
-        <a id="footer-link" href="http://localhost:5173" target="_blank">Open Recipe Fork ↗</a>
+        <a id="footer-link" href="https://recipe-fork.vercel.app" target="_blank">Open Recipe Fork ↗</a>
         <span class="footer-sep">·</span>
         <button id="sign-out-btn" class="link-btn footer-link-btn">Sign out</button>
       </footer>
@@ -321,7 +321,7 @@ async function handleSaveRecipe() {
 
     const { data, error: saveError } = await supabase
       .from("recipes")
-      .insert({ ...recipe, user_id: user.id })
+      .insert({ ...recipe, user_id: user.id, is_favourite: false })
       .select("id")
       .single();
 
@@ -335,7 +335,7 @@ async function handleSaveRecipe() {
     // Update footer link to point to the saved recipe
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
     if (footerLink) {
-      footerLink.href = `http://localhost:5173/recipe/${data.id}`;
+      footerLink.href = `https://recipe-fork.vercel.app/recipe/${data.id}`;
       footerLink.textContent = "View in Recipe Fork ↗";
     }
 
@@ -354,7 +354,7 @@ async function handleSaveRecipe() {
 async function syncSessionFromWebApp() {
   try {
     // Find a tab running the web app
-    const tabs = await chrome.tabs.query({ url: "http://localhost/*" });
+    const tabs = await chrome.tabs.query({ url: ["https://recipe-fork.vercel.app/*", "http://localhost/*"] });
     if (tabs.length === 0 || !tabs[0].id) return null;
 
     const response = await chrome.tabs.sendMessage(tabs[0].id, {

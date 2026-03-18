@@ -19,6 +19,7 @@ export interface Recipe {
   ingredients: Ingredient[];
   steps: Step[];
   source_url: string;
+  creator_name: string | null;
   video_url: string | null;
   image_url: string | null;
   servings: number | null;
