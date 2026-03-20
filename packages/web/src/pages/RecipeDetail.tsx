@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
@@ -63,6 +63,58 @@ export default function RecipeDetail() {
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [currentServings, setCurrentServings] = useState<number>(1);
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
+
+  // ── Wake Lock (keep screen on while cooking) ──────────────
+  const supportsWakeLock = 'wakeLock' in navigator;
+  const [isAwake, setIsAwake] = useState(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const [showAwakeTooltip, setShowAwakeTooltip] = useState(false);
+
+  useEffect(() => {
+    if (!supportsWakeLock) return;
+
+    async function acquire() {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null;
+        });
+      } catch {
+        // Wake lock request can fail if tab isn't visible yet –
+        // the visibilitychange handler will re-acquire when it is.
+      }
+    }
+
+    if (isAwake) {
+      acquire();
+    } else {
+      wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    }
+
+    return () => {
+      wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    };
+  }, [isAwake, supportsWakeLock]);
+
+  // Re-acquire wake lock when tab becomes visible again
+  useEffect(() => {
+    if (!supportsWakeLock) return;
+
+    const handleVisibility = async () => {
+      if (document.visibilityState === 'visible' && isAwake && !wakeLockRef.current) {
+        try {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [isAwake, supportsWakeLock]);
 
   useEffect(() => {
     async function fetchRecipe() {
@@ -373,7 +425,7 @@ export default function RecipeDetail() {
         {/* ── Action buttons ─────────────────────────────────────── */}
         <div
           className="flex flex-wrap gap-3 mt-5"
-          style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
+          style={{ animation: 'fadeUp 0.4s ease 0.15s both', position: 'relative', zIndex: 1 }}
         >
           <button
             onClick={() => setShowWeekPicker(true)}
@@ -426,6 +478,60 @@ export default function RecipeDetail() {
           >
             Delete
           </button>
+
+          {/* Keep Screen Awake toggle */}
+          {supportsWakeLock && (
+            <div className="relative ml-auto" style={{ zIndex: 10 }}>
+              <button
+                onClick={() => {
+                  const next = !isAwake;
+                  setIsAwake(next);
+                  if (next) {
+                    setShowAwakeTooltip(true);
+                    setTimeout(() => setShowAwakeTooltip(false), 4000);
+                  } else {
+                    setShowAwakeTooltip(false);
+                  }
+                }}
+                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+                style={{
+                  background: isAwake ? 'var(--green-light)' : 'var(--card)',
+                  border: isAwake ? '1px solid var(--green)' : '1px solid var(--border)',
+                  color: isAwake ? 'var(--green)' : 'var(--text)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = isAwake
+                    ? 'var(--green-light)'
+                    : 'var(--warm)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = isAwake
+                    ? 'var(--green-light)'
+                    : 'var(--card)';
+                }}
+              >
+                {isAwake ? '⚡' : '💤'} Keep Awake
+              </button>
+
+              {/* Tooltip – shows on every activation, dismisses after 4s or on click */}
+              {showAwakeTooltip && (
+                <div
+                  onClick={() => setShowAwakeTooltip(false)}
+                  className="absolute right-0 top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+                  style={{
+                    background: 'var(--text)',
+                    color: 'var(--card)',
+                    width: 220,
+                    animation: 'fadeUp 0.2s ease both',
+                    cursor: 'pointer',
+                    zIndex: 9999,
+                  }}
+                >
+                  Screen will stay on while you cook. This may use more battery.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Two-column body ────────────────────────────────────── */}
