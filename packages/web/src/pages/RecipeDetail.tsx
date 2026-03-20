@@ -482,7 +482,7 @@ export default function RecipeDetail() {
 
           {/* Keep Screen Awake toggle */}
           {supportsWakeLock && (
-            <div className="relative ml-auto" style={{ zIndex: 10 }}>
+            <div className="relative rd-awake" style={{ zIndex: 10 }}>
               <button
                 onClick={() => {
                   const next = !isAwake;
@@ -511,14 +511,14 @@ export default function RecipeDetail() {
                     : 'var(--card)';
                 }}
               >
-                {isAwake ? '⚡' : '💤'} Keep Awake
+                {isAwake ? '⚡' : '💤'} Screen on
               </button>
 
               {/* Tooltip – shows on every activation, dismisses after 4s or on click */}
               {showAwakeTooltip && (
                 <div
                   onClick={() => setShowAwakeTooltip(false)}
-                  className="absolute right-0 top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
                   style={{
                     background: 'var(--text)',
                     color: 'var(--card)',
@@ -541,7 +541,7 @@ export default function RecipeDetail() {
           style={{ animation: 'fadeUp 0.4s ease 0.2s both' }}
         >
           {/* ─ Left: Ingredients sidebar ───────────────────────── */}
-          <aside className="self-start" style={{ position: 'sticky', top: 72 }}>
+          <aside className="rd-ingredients self-start">
             <div
               style={{
                 background: 'var(--card)',
@@ -700,9 +700,8 @@ export default function RecipeDetail() {
             </div>
           </aside>
 
-          {/* ─ Right: About + Directions ──────────────────────── */}
-          <div className="space-y-5">
-            {/* About card */}
+          {/* ─ About card ────────────────────────────────────── */}
+          <div className="rd-about">
             <div
               style={{
                 background: 'var(--card)',
@@ -787,10 +786,11 @@ export default function RecipeDetail() {
                   </div>
                 )}
               </div>
-
-              {/* Attribution removed – now shown under description */}
             </div>
+          </div>
 
+          {/* ─ Right: Directions + Video ──────────────────────── */}
+          <div className="rd-steps space-y-5">
             {/* Directions card */}
             <div
               style={{
