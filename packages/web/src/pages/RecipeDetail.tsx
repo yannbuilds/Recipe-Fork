@@ -63,6 +63,7 @@ export default function RecipeDetail() {
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [currentServings, setCurrentServings] = useState<number>(1);
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
@@ -818,41 +819,68 @@ export default function RecipeDetail() {
                         {group.category}
                       </h3>
                     )}
-                    {group.items.map((step, i) => (
-                      <div key={step.order} className="flex gap-4">
-                        {/* Number column with connecting line */}
-                        <div className="flex flex-col items-center shrink-0">
+                    {group.items.map((step, i) => {
+                      const isDone = completedSteps.has(step.order);
+                      return (
+                        <div
+                          key={step.order}
+                          className="flex gap-4 rounded-md transition-colors select-none"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            setCompletedSteps((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(step.order)) next.delete(step.order);
+                              else next.add(step.order);
+                              return next;
+                            });
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'var(--warm)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          {/* Number column with connecting line */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <div
+                              className="flex items-center justify-center rounded-full text-xs font-bold text-white shrink-0 transition-colors"
+                              style={{
+                                width: 32,
+                                height: 32,
+                                background: isDone ? 'var(--muted)' : 'var(--green)',
+                                boxShadow: isDone
+                                  ? '0 0 0 4px var(--warm)'
+                                  : '0 0 0 4px var(--green-light)',
+                              }}
+                            >
+                              {isDone ? '✓' : i + 1}
+                            </div>
+                            {i < group.items.length - 1 && (
+                              <div
+                                className="flex-1"
+                                style={{
+                                  width: 2,
+                                  background: 'var(--green-light)',
+                                  minHeight: 20,
+                                }}
+                              />
+                            )}
+                          </div>
+                          {/* Step text */}
                           <div
-                            className="flex items-center justify-center rounded-full text-xs font-bold text-white shrink-0"
+                            className="text-sm pt-1.5 pb-5"
                             style={{
-                              width: 32,
-                              height: 32,
-                              background: 'var(--green)',
-                              boxShadow: '0 0 0 4px var(--green-light)',
+                              color: 'var(--text)',
+                              textDecoration: isDone ? 'line-through' : 'none',
+                              opacity: isDone ? 0.45 : 1,
                             }}
                           >
-                            {i + 1}
+                            {step.instruction}
                           </div>
-                          {i < group.items.length - 1 && (
-                            <div
-                              className="flex-1"
-                              style={{
-                                width: 2,
-                                background: 'var(--green-light)',
-                                minHeight: 20,
-                              }}
-                            />
-                          )}
                         </div>
-                        {/* Step text */}
-                        <div
-                          className="text-sm pt-1.5 pb-5"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          {step.instruction}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })}
