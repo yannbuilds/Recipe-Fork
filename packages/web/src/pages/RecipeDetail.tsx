@@ -62,6 +62,7 @@ export default function RecipeDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [currentServings, setCurrentServings] = useState<number>(1);
+  const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function fetchRecipe() {
@@ -523,46 +524,70 @@ export default function RecipeDetail() {
                       {group.category}
                     </h3>
                   )}
-                  {group.items.map((ing, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 py-2 px-1 rounded-md transition-colors"
-                      style={{
-                        borderBottom:
-                          i < group.items.length - 1
-                            ? '1px solid var(--border)'
-                            : undefined,
-                        cursor: 'default',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--warm)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      {/* Emoji icon */}
-                      <span
-                        className="flex items-center justify-center shrink-0 rounded-md text-sm"
+                  {group.items.map((ing, i) => {
+                    const ingKey = `${group.category}::${i}`;
+                    const isUsed = usedIngredients.has(ingKey);
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 py-2 px-1 rounded-md transition-colors select-none"
                         style={{
-                          width: 28,
-                          height: 28,
-                          background: 'var(--warm)',
+                          borderBottom:
+                            i < group.items.length - 1
+                              ? '1px solid var(--border)'
+                              : undefined,
+                          cursor: 'pointer',
+                          opacity: isUsed ? 0.45 : 1,
+                        }}
+                        onClick={() => {
+                          setUsedIngredients((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(ingKey)) next.delete(ingKey);
+                            else next.add(ingKey);
+                            return next;
+                          });
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--warm)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        {getIngredientEmoji(ing.item)}
-                      </span>
-                      {/* Name */}
-                      <span className="flex-1 text-sm">{ing.item}</span>
-                      {/* Quantity + unit */}
-                      {(ing.quantity || ing.unit) && (
-                        <span className="text-sm font-bold shrink-0" style={{ color: 'var(--text)' }}>
-                          {scaleQuantity(ing.quantity, recipe.servings, currentServings)}
-                          {ing.unit ? ` ${ing.unit}` : ''}
+                        {/* Emoji icon */}
+                        <span
+                          className="flex items-center justify-center shrink-0 rounded-md text-sm"
+                          style={{
+                            width: 28,
+                            height: 28,
+                            background: 'var(--warm)',
+                          }}
+                        >
+                          {getIngredientEmoji(ing.item)}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                        {/* Name */}
+                        <span
+                          className="flex-1 text-sm"
+                          style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
+                        >
+                          {ing.item}
+                        </span>
+                        {/* Quantity + unit */}
+                        {(ing.quantity || ing.unit) && (
+                          <span
+                            className="text-sm font-bold shrink-0"
+                            style={{
+                              color: 'var(--text)',
+                              textDecoration: isUsed ? 'line-through' : 'none',
+                            }}
+                          >
+                            {scaleQuantity(ing.quantity, recipe.servings, currentServings)}
+                            {ing.unit ? ` ${ing.unit}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
