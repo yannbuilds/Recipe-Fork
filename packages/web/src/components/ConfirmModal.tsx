@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ConfirmModalProps {
   open: boolean;
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmWord?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -14,13 +15,18 @@ export default function ConfirmModal({
   title,
   message,
   confirmLabel = 'Delete',
+  confirmWord,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [typed, setTyped] = useState('');
 
   useEffect(() => {
-    if (open) cancelRef.current?.focus();
+    if (open) {
+      setTyped('');
+      cancelRef.current?.focus();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -33,6 +39,8 @@ export default function ConfirmModal({
   }, [open, onCancel]);
 
   if (!open) return null;
+
+  const confirmed = confirmWord ? typed.toLowerCase() === confirmWord.toLowerCase() : true;
 
   return (
     <div
@@ -48,11 +56,25 @@ export default function ConfirmModal({
           {title}
         </h2>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>{message}</p>
+        {confirmWord && (
+          <div>
+            <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+              Type <strong style={{ color: 'var(--text)' }}>{confirmWord}</strong> to confirm
+            </p>
+            <input
+              className="rf-input w-full"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={confirmWord}
+              autoFocus
+            />
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-2">
           <button ref={cancelRef} onClick={onCancel} className="rf-btn rf-btn-secondary">
             Cancel
           </button>
-          <button onClick={onConfirm} className="rf-btn rf-btn-danger">
+          <button onClick={onConfirm} disabled={!confirmed} className="rf-btn rf-btn-danger">
             {confirmLabel}
           </button>
         </div>

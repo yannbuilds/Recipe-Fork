@@ -71,6 +71,11 @@ export default function RecipeDetail() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [showAwakeTooltip, setShowAwakeTooltip] = useState(false);
 
+  // ── Description expand/collapse ─────────────────────────
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descTruncated, setDescTruncated] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+
   useEffect(() => {
     if (!supportsWakeLock) return;
 
@@ -145,6 +150,14 @@ export default function RecipeDetail() {
     fetchRecipe();
   }, [id]);
 
+  // Check if description is truncated (needs "more" button)
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 16;
+    setDescTruncated(el.scrollHeight > lh * 2 + 2);
+  }, [recipe?.description]);
+
   async function handleDelete() {
     setShowDeleteModal(false);
     const { error } = await supabase.from('recipes').delete().eq('id', id!);
@@ -215,12 +228,6 @@ export default function RecipeDetail() {
     ? stepGroups
     : [{ category: '', items: sortedSteps }];
 
-  /* Total time */
-  const totalTime =
-    recipe.prep_time != null && recipe.cook_time != null
-      ? recipe.prep_time + recipe.cook_time
-      : recipe.prep_time ?? recipe.cook_time ?? null;
-
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
@@ -266,9 +273,8 @@ export default function RecipeDetail() {
       >
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div
-          className="relative overflow-hidden"
+          className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
           style={{
-            height: 400,
             borderRadius: 'var(--radius)',
             animation: 'fadeUp 0.4s ease both',
           }}
@@ -328,13 +334,12 @@ export default function RecipeDetail() {
           <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4">
             {/* Title card */}
             <div
-              className="px-5 py-4"
+              className="rd-hero-title px-5 py-4"
               style={{
-                background: 'rgba(255,255,255,0.93)',
+                background: 'rgba(255,255,255,0.78)',
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
                 borderRadius: 10,
-                maxWidth: '55%',
               }}
             >
               <h1
@@ -344,35 +349,89 @@ export default function RecipeDetail() {
                 {recipe.title}
               </h1>
               {recipe.description && (
-                <p
-                  className="text-xs mt-1 line-clamp-2"
-                  style={{ color: 'var(--muted)' }}
-                >
-                  {recipe.description}
-                </p>
+                <>
+                  <div
+                    className="relative mt-1"
+                    style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '2rem' }}
+                  >
+                    <p
+                      ref={descRef}
+                      className="text-xs"
+                      style={{ color: 'var(--muted)' }}
+                    >
+                      {recipe.description}
+                    </p>
+                    {!descExpanded && descTruncated && (
+                      <button
+                        onClick={() => setDescExpanded(true)}
+                        className="absolute text-xs cursor-pointer"
+                        style={{
+                          bottom: 0,
+                          right: 0,
+                          color: 'var(--muted)',
+                          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.78) 35%)',
+                          border: 'none',
+                          paddingLeft: '2rem',
+                          paddingRight: 0,
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 2,
+                        }}
+                      >
+                        more
+                      </button>
+                    )}
+                  </div>
+                  {descExpanded && (
+                    <button
+                      onClick={() => setDescExpanded(false)}
+                      className="text-xs mt-0.5 cursor-pointer"
+                      style={{
+                        color: 'var(--muted)',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        textDecoration: 'underline',
+                        textUnderlineOffset: 2,
+                      }}
+                    >
+                      less
+                    </button>
+                  )}
+                </>
               )}
             </div>
 
             {/* Meta cards */}
-            <div className="flex gap-2 shrink-0">
-              {totalTime != null && (
+            <div className="rd-hero-meta flex gap-2 shrink-0">
+              {recipe.prep_time != null && (
                 <div
                   className="text-center px-3 py-2"
                   style={{
-                    background: 'rgba(255,255,255,0.93)',
+                    background: 'rgba(255,255,255,0.78)',
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
                     borderRadius: 10,
                   }}
                 >
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>
-                    ⏱ Prep time
+                  <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
+                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                    {formatTime(recipe.prep_time)}
                   </div>
-                  <div
-                    className="text-sm font-bold mt-0.5"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    {formatTime(totalTime)}
+                </div>
+              )}
+              {recipe.cook_time != null && (
+                <div
+                  className="text-center px-3 py-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderRadius: 10,
+                  }}
+                >
+                  <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
+                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                    {formatTime(recipe.cook_time)}
                   </div>
                 </div>
               )}
@@ -380,19 +439,14 @@ export default function RecipeDetail() {
                 <div
                   className="text-center px-3 py-2"
                   style={{
-                    background: 'rgba(255,255,255,0.93)',
+                    background: 'rgba(255,255,255,0.78)',
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
                     borderRadius: 10,
                   }}
                 >
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>
-                    🍽 Servings
-                  </div>
-                  <div
-                    className="text-sm font-bold mt-0.5"
-                    style={{ color: 'var(--text)' }}
-                  >
+                  <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
+                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
                     {recipe.servings}
                   </div>
                 </div>
@@ -401,139 +455,72 @@ export default function RecipeDetail() {
           </div>
         </div>
 
-        {/* ── Tags row ───────────────────────────────────────────── */}
-        {tags.length > 0 && (
-          <div
-            className="flex flex-wrap gap-2 mt-5"
-            style={{ animation: 'fadeUp 0.4s ease 0.1s both' }}
-          >
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="text-xs px-3 py-1 rounded-full"
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--muted)',
-                }}
+        {/* ── Mobile meta row (hidden on desktop) ─────────────────── */}
+        {(recipe.prep_time != null || recipe.cook_time != null || recipe.servings != null) && (
+          <div className="rd-meta-row">
+            {recipe.prep_time != null && (
+              <div
+                className="text-center px-3 py-2 flex-1"
+                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
               >
-                {tag.name}
-              </span>
-            ))}
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
+                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                  {formatTime(recipe.prep_time)}
+                </div>
+              </div>
+            )}
+            {recipe.cook_time != null && (
+              <div
+                className="text-center px-3 py-2 flex-1"
+                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
+              >
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
+                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                  {formatTime(recipe.cook_time)}
+                </div>
+              </div>
+            )}
+            {recipe.servings != null && (
+              <div
+                className="text-center px-3 py-2 flex-1"
+                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
+              >
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
+                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                  {recipe.servings}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Action buttons ─────────────────────────────────────── */}
-        <div
-          className="flex flex-wrap gap-3 mt-5"
-          style={{ animation: 'fadeUp 0.4s ease 0.15s both', position: 'relative', zIndex: 1 }}
-        >
-          <button
-            onClick={() => setShowWeekPicker(true)}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
+        {/* ── Attribution ─────────────────────────────────────────── */}
+        {(recipe.creator_name || recipe.source_url) && (
+          <div
+            className="flex items-center gap-2 mt-4 text-sm flex-wrap"
+            style={{ color: 'var(--muted)' }}
           >
-            + Meal Plan
-          </button>
-          <Link
-            to={`/recipe/${id}/edit`}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              color: 'var(--text)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--warm)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            Edit
-          </Link>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid #f5c6c0',
-              color: 'var(--red)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#fef2f0';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            Delete
-          </button>
-
-          {/* Keep Screen Awake toggle */}
-          {supportsWakeLock && (
-            <div className="relative rd-awake" style={{ zIndex: 10 }}>
-              <button
-                onClick={() => {
-                  const next = !isAwake;
-                  setIsAwake(next);
-                  if (next) {
-                    setShowAwakeTooltip(true);
-                    setTimeout(() => setShowAwakeTooltip(false), 4000);
-                  } else {
-                    setShowAwakeTooltip(false);
-                  }
-                }}
-                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-                style={{
-                  background: isAwake ? 'var(--green-light)' : 'var(--card)',
-                  border: isAwake ? '1px solid var(--green)' : '1px solid var(--border)',
-                  color: isAwake ? 'var(--green)' : 'var(--text)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isAwake
-                    ? 'var(--green-light)'
-                    : 'var(--warm)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isAwake
-                    ? 'var(--green-light)'
-                    : 'var(--card)';
-                }}
+            {recipe.creator_name && (
+              <span>
+                👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+              </span>
+            )}
+            {recipe.creator_name && recipe.source_url && (
+              <span style={{ color: 'var(--border)' }}>·</span>
+            )}
+            {recipe.source_url && (
+              <a
+                href={recipe.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline"
+                style={{ color: 'var(--green)' }}
               >
-                {isAwake ? '⚡' : '💤'} Screen on
-              </button>
-
-              {/* Tooltip – shows on every activation, dismisses after 4s or on click */}
-              {showAwakeTooltip && (
-                <div
-                  onClick={() => setShowAwakeTooltip(false)}
-                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
-                  style={{
-                    background: 'var(--text)',
-                    color: 'var(--card)',
-                    width: 220,
-                    animation: 'fadeUp 0.2s ease both',
-                    cursor: 'pointer',
-                    zIndex: 9999,
-                  }}
-                >
-                  Screen will stay on while you cook. This may use more battery.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                View original ↗
+              </a>
+            )}
+          </div>
+        )}
 
         {/* ── Two-column body ────────────────────────────────────── */}
         <div
@@ -700,95 +687,6 @@ export default function RecipeDetail() {
             </div>
           </aside>
 
-          {/* ─ About card ────────────────────────────────────── */}
-          <div className="rd-about">
-            <div
-              style={{
-                background: 'var(--card)',
-                borderRadius: 'var(--radius)',
-                boxShadow: 'var(--shadow-md)',
-                padding: 24,
-              }}
-            >
-              <h2
-                className="text-lg font-bold mb-3"
-                style={{ fontFamily: "'Lora', serif" }}
-              >
-                About this recipe
-              </h2>
-              {recipe.description && (
-                <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
-                  {recipe.description}
-                </p>
-              )}
-
-              {/* Original creator attribution */}
-              {(recipe.creator_name || recipe.source_url) && (
-                <div className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
-                  {recipe.creator_name && (
-                    <span>
-                      👤 Original recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
-                    </span>
-                  )}
-                  {recipe.source_url && (
-                    <a
-                      href={recipe.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline block mt-1"
-                      style={{ color: 'var(--green)' }}
-                    >
-                      View original recipe ↗
-                    </a>
-                  )}
-                </div>
-              )}
-
-              {/* Stats tiles */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {recipe.prep_time != null && (
-                  <div
-                    className="rounded-lg p-3 text-center"
-                    style={{ background: 'var(--warm)' }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>
-                      Prep time
-                    </div>
-                    <div className="text-sm font-bold mt-1">
-                      {formatTime(recipe.prep_time)}
-                    </div>
-                  </div>
-                )}
-                {recipe.cook_time != null && (
-                  <div
-                    className="rounded-lg p-3 text-center"
-                    style={{ background: 'var(--warm)' }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>
-                      Cook time
-                    </div>
-                    <div className="text-sm font-bold mt-1">
-                      {formatTime(recipe.cook_time)}
-                    </div>
-                  </div>
-                )}
-                {recipe.servings != null && (
-                  <div
-                    className="rounded-lg p-3 text-center"
-                    style={{ background: 'var(--warm)' }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>
-                      Servings
-                    </div>
-                    <div className="text-sm font-bold mt-1">
-                      {recipe.servings}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* ─ Right: Directions + Video ──────────────────────── */}
           <div className="rd-steps space-y-5">
             {/* Directions card */}
@@ -926,6 +824,138 @@ export default function RecipeDetail() {
               })()}
           </div>
         </div>
+
+        {/* ── Tags row ───────────────────────────────────────────── */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-8">
+            {tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="text-xs px-3 py-1 rounded-full"
+                style={{
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--muted)',
+                }}
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* ── Action buttons ─────────────────────────────────────── */}
+        <div
+          className="rd-actions flex flex-wrap gap-3 mt-4"
+          style={{ position: 'relative', zIndex: 1 }}
+        >
+          <button
+            onClick={() => setShowWeekPicker(true)}
+            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--green)',
+              color: 'var(--green)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--green-light)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--card)';
+            }}
+          >
+            + Meal Plan
+          </button>
+
+          {/* Keep Screen Awake toggle – sits next to Meal Plan */}
+          {supportsWakeLock && (
+            <div className="rd-action-btn relative rd-awake" style={{ zIndex: 10 }}>
+              <button
+                onClick={() => {
+                  const next = !isAwake;
+                  setIsAwake(next);
+                  if (next) {
+                    setShowAwakeTooltip(true);
+                    setTimeout(() => setShowAwakeTooltip(false), 4000);
+                  } else {
+                    setShowAwakeTooltip(false);
+                  }
+                }}
+                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+                style={{
+                  background: isAwake ? 'var(--green-light)' : 'var(--card)',
+                  border: isAwake ? '1px solid var(--green)' : '1px solid var(--border)',
+                  color: isAwake ? 'var(--green)' : 'var(--text)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = isAwake
+                    ? 'var(--green-light)'
+                    : 'var(--warm)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = isAwake
+                    ? 'var(--green-light)'
+                    : 'var(--card)';
+                }}
+              >
+                {isAwake ? '⚡' : '💤'} Screen on
+              </button>
+
+              {/* Tooltip */}
+              {showAwakeTooltip && (
+                <div
+                  onClick={() => setShowAwakeTooltip(false)}
+                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+                  style={{
+                    background: 'var(--text)',
+                    color: 'var(--card)',
+                    width: 220,
+                    animation: 'fadeUp 0.2s ease both',
+                    cursor: 'pointer',
+                    zIndex: 9999,
+                  }}
+                >
+                  Screen will stay on while you cook. This may use more battery.
+                </div>
+              )}
+            </div>
+          )}
+
+          <Link
+            to={`/recipe/${id}/edit`}
+            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--warm)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--card)';
+            }}
+          >
+            Edit
+          </Link>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid #f5c6c0',
+              color: 'var(--red)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#fef2f0';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--card)';
+            }}
+          >
+            Delete
+          </button>
+        </div>
       </div>
 
       <ConfirmModal
@@ -933,6 +963,7 @@ export default function RecipeDetail() {
         title="Delete recipe"
         message="Are you sure you want to delete this recipe? This can't be undone."
         confirmLabel="Delete"
+        confirmWord="delete"
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteModal(false)}
       />

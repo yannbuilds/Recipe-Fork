@@ -34,17 +34,20 @@
   }
 }
 
+.rd-hero       { height: 500px; transition: height 0.3s ease; }
+.rd-hero-expanded { height: auto; min-height: 500px; }
+.rd-hero-title { max-width: 55%; }
+.rd-meta-row   { display: none; }
+
 .rd-grid {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 20px;
 }
 
-.rd-about       { grid-column: 2; grid-row: 1; }
-.rd-ingredients { grid-column: 1; grid-row: 1 / 3; }
-.rd-steps       { grid-column: 2; grid-row: 2; }
-.rd-awake             { margin-left: auto; }
-.rd-awake-tooltip     { right: 0; }
+.rd-ingredients { grid-column: 1; grid-row: 1; }
+.rd-steps       { grid-column: 2; grid-row: 1; }
+.rd-awake-tooltip { left: 0; }
 
 @media (min-width: 769px) {
   .rd-ingredients {
@@ -57,17 +60,20 @@
   .rd-grid {
     grid-template-columns: 1fr;
   }
-  .rd-about,
   .rd-ingredients,
   .rd-steps {
     grid-column: auto;
     grid-row: auto;
   }
-  .rd-about       { order: 1; }
-  .rd-ingredients { order: 2; }
-  .rd-steps       { order: 3; }
-  .rd-awake         { margin-left: 0; }
-  .rd-awake-tooltip { right: auto; left: 0; }
+  .rd-ingredients { order: 1; }
+  .rd-steps       { order: 2; }
+  .rd-hero       { height: 360px; }
+  .rd-hero-expanded { height: auto; min-height: 360px; }
+  .rd-hero-title { max-width: 100%; background: rgba(255,255,255,0.78) !important; text-align: center; }
+  .rd-hero-meta  { display: none; }
+  .rd-meta-row   { display: flex; gap: 12px; margin-top: 12px; }
+  .rd-action-btn { flex: 0 0 calc(50% - 6px); text-align: center; }
+  .rd-action-btn button { width: 100%; }
 }
 
 /* ── Reusable input ────────────────────────────── */
