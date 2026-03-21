@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NewRecipeModalProvider } from "./context/NewRecipeModalContext";
 import RecipeList from "./pages/RecipeList";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
 import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import BottomNav from "./components/BottomNav";
+import NewRecipeModal from "./components/NewRecipeModal";
 
 function AppLayout() {
   const { user, loading } = useAuth();
@@ -78,23 +81,27 @@ function Header() {
 
 function AppShell() {
   const location = useLocation();
-  const hideNav = location.pathname === '/login';
+  const hideNav = location.pathname === '/login' || location.pathname === '/privacy';
 
   return (
-    <div className="min-h-screen">
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/recipe/:id" element={<RecipeDetail />} />
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<RecipeList />} />
-          <Route path="/new" element={<RecipeForm />} />
-          <Route path="/recipe/:id/edit" element={<RecipeForm />} />
-          <Route path="/meal-plan" element={<MealPlan />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Route>
-      </Routes>
-      {!hideNav && <BottomNav />}
-    </div>
+    <NewRecipeModalProvider>
+      <div className="min-h-screen">
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/recipe/:id" element={<RecipeDetail />} />
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<RecipeList />} />
+            <Route path="/new" element={<RecipeForm />} />
+            <Route path="/recipe/:id/edit" element={<RecipeForm />} />
+            <Route path="/meal-plan" element={<MealPlan />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+        </Routes>
+        {!hideNav && <BottomNav />}
+        <NewRecipeModal />
+      </div>
+    </NewRecipeModalProvider>
   );
 }
 

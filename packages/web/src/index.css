@@ -32,6 +32,11 @@
     from { opacity: 0; }
     to { opacity: 1; }
   }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 }
 
 .rd-hero       { height: 500px; transition: height 0.3s ease; }

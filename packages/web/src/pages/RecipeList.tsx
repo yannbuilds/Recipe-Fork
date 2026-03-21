@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
+import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 
 interface RecipeTagRow {
   recipe_id: string;
@@ -10,6 +10,7 @@ interface RecipeTagRow {
 }
 
 export default function RecipeList() {
+  const { openModal } = useNewRecipeModal();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
@@ -89,9 +90,9 @@ export default function RecipeList() {
             {activeTagIds.size > 0 && ` · ${activeTagIds.size} tag${activeTagIds.size !== 1 ? 's' : ''} active`}
           </p>
         </div>
-        <Link to="/new" className="rf-btn rf-btn-filled shrink-0">
+        <button onClick={openModal} className="rf-btn rf-btn-filled shrink-0">
           + New Recipe
-        </Link>
+        </button>
       </div>
 
       {/* Search + filter card */}

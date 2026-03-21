@@ -27,7 +27,7 @@ function renderLogin(root: HTMLElement) {
           ${LOGO_SVG}
           <h1>Pie Keeper</h1>
         </div>
-        <span class="header-version">v0.0.1</span>
+        <span class="header-version">v1.0.0</span>
       </header>
 
       <div class="login-card">
@@ -184,7 +184,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
           ${LOGO_SVG}
           <h1>Pie Keeper</h1>
         </div>
-        <span class="header-version">v0.0.1</span>
+        <span class="header-version">v1.0.0</span>
       </header>
 
       <div class="page-info-card">
@@ -383,7 +383,7 @@ async function handleSaveRecipe() {
 async function syncSessionFromWebApp() {
   try {
     // Find a tab running the web app
-    const tabs = await chrome.tabs.query({ url: ["https://recipe-fork.vercel.app/*", "http://localhost/*"] });
+    const tabs = await chrome.tabs.query({ url: ["https://recipe-fork.vercel.app/*"] });
     if (tabs.length === 0 || !tabs[0].id) return null;
 
     const response = await chrome.tabs.sendMessage(tabs[0].id, {

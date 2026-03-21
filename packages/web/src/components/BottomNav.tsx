@@ -1,16 +1,18 @@
 import { Link, useLocation } from 'react-router-dom';
 import { House, CalendarDays, PlusCircle, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 
-const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean }[] = [
+const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean; action?: boolean }[] = [
   { to: '/', icon: House, label: 'Home', exact: true },
   { to: '/meal-plan', icon: CalendarDays, label: 'Plan' },
-  { to: '/new', icon: PlusCircle, label: 'Add' },
+  { to: '/new', icon: PlusCircle, label: 'Add', action: true },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
 export default function BottomNav() {
   const { pathname } = useLocation();
+  const { openModal } = useNewRecipeModal();
 
   return (
     <nav
@@ -27,8 +29,29 @@ export default function BottomNav() {
       }}
     >
       <div className="flex items-center justify-around" style={{ height: 64 }}>
-        {NAV_ITEMS.map(({ to, icon: Icon, label, exact }) => {
+        {NAV_ITEMS.map(({ to, icon: Icon, label, exact, action }) => {
           const active = exact ? pathname === to : pathname.startsWith(to);
+
+          if (action) {
+            return (
+              <button
+                key={to}
+                onClick={openModal}
+                className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors"
+                style={{
+                  color: 'var(--muted)',
+                  fontWeight: 500,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon size={22} strokeWidth={1.8} />
+                <span style={{ fontSize: 11 }}>{label}</span>
+              </button>
+            );
+          }
+
           return (
             <Link
               key={to}
