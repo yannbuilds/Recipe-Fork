@@ -50,7 +50,8 @@
       "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -maxdepth 2 -name \"vercel.json\" -o -name \"build\" -o -name \".vercelignore\")",
       "Bash(cat \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web/src/vite-env.d.ts\")",
       "Bash(ls -la \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/extension/\")",
-      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -type f \\\\\\( -name \"*.json\" \\\\\\))"
+      "Bash(find \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork\" -type f \\\\\\( -name \"*.json\" \\\\\\))",
+      "Bash(npm install:*)"
     ]
   }
 }

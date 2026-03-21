@@ -5,6 +5,8 @@ import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
 import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
+import BottomNav from "./components/BottomNav";
 
 function AppLayout() {
   const { user, loading } = useAuth();
@@ -95,15 +97,29 @@ function Header() {
           </Link>
         )}
       </div>
-      {/* Mobile nav */}
-      <nav
-        className="sm:hidden flex gap-4"
-        style={{ padding: '0 24px 12px', background: 'rgba(255,255,255,0.92)' }}
-      >
-        {navLink('/', 'Recipes')}
-        {navLink('/meal-plan', 'Meal Plan')}
-      </nav>
     </header>
+  );
+}
+
+function AppShell() {
+  const location = useLocation();
+  const hideNav = location.pathname === '/login';
+
+  return (
+    <div className="min-h-screen">
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/recipe/:id" element={<RecipeDetail />} />
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<RecipeList />} />
+          <Route path="/new" element={<RecipeForm />} />
+          <Route path="/recipe/:id/edit" element={<RecipeForm />} />
+          <Route path="/meal-plan" element={<MealPlan />} />
+          <Route path="/profile" element={<ProfilePage />} />
+        </Route>
+      </Routes>
+      {!hideNav && <BottomNav />}
+    </div>
   );
 }
 
@@ -111,18 +127,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="min-h-screen">
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/recipe/:id" element={<RecipeDetail />} />
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<RecipeList />} />
-              <Route path="/new" element={<RecipeForm />} />
-              <Route path="/recipe/:id/edit" element={<RecipeForm />} />
-              <Route path="/meal-plan" element={<MealPlan />} />
-            </Route>
-          </Routes>
-        </div>
+        <AppShell />
       </AuthProvider>
     </BrowserRouter>
   );
