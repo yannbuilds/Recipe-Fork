@@ -1,17 +1,18 @@
-import { Link, useLocation } from 'react-router-dom';
-import { House, CalendarDays, PlusCircle, User } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { House, CalendarDays, PlusCircle, ShoppingCart, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 
-const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean; action?: boolean }[] = [
+const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean; action?: boolean; activeCheck?: (pathname: string, search: string) => boolean }[] = [
   { to: '/', icon: House, label: 'Home', exact: true },
-  { to: '/meal-plan', icon: CalendarDays, label: 'Plan' },
+  { to: '/meal-plan', icon: CalendarDays, label: 'Plan', activeCheck: (p, s) => p === '/meal-plan' && !s.includes('tab=shopping') },
   { to: '/new', icon: PlusCircle, label: 'Add', action: true },
+  { to: '/meal-plan?tab=shopping', icon: ShoppingCart, label: 'Shop', activeCheck: (p, s) => p === '/meal-plan' && s.includes('tab=shopping') },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
 export default function BottomNav() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { openModal } = useNewRecipeModal();
 
   return (
@@ -29,8 +30,10 @@ export default function BottomNav() {
       }}
     >
       <div className="flex items-center justify-around" style={{ height: 64 }}>
-        {NAV_ITEMS.map(({ to, icon: Icon, label, exact, action }) => {
-          const active = exact ? pathname === to : pathname.startsWith(to);
+        {NAV_ITEMS.map(({ to, icon: Icon, label, exact, action, activeCheck }) => {
+          const active = activeCheck
+            ? activeCheck(pathname, search)
+            : exact ? pathname === to : pathname.startsWith(to);
 
           if (action) {
             return (

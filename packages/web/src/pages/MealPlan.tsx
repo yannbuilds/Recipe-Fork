@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -12,11 +13,16 @@ type Tab = 'meals' | 'shopping';
 
 export default function MealPlan() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [plan, setPlan] = useState<MealPlanType | null>(null);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('meals');
+  const [tab, setTab] = useState<Tab>(() => searchParams.get('tab') === 'shopping' ? 'shopping' : 'meals');
+
+  useEffect(() => {
+    setTab(searchParams.get('tab') === 'shopping' ? 'shopping' : 'meals');
+  }, [searchParams]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
