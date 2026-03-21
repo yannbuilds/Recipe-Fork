@@ -88,7 +88,7 @@ export default function NewRecipeModal() {
       }
 
       // Call Edge Function
-      setStatusText('Fetching recipe…');
+      setStatusText('Cooking recipe…');
 
       const { data, error } = await supabase.functions.invoke('import-recipe', {
         body: { url: trimmed },
