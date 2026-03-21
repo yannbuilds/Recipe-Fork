@@ -269,7 +269,7 @@ export default function RecipeDetail() {
       {/* ── Page wrapper ───────────────────────────────────────────── */}
       <div
         className="mx-auto"
-        style={{ maxWidth: 1100, padding: '28px 24px 64px' }}
+        style={{ maxWidth: 1100, padding: '28px 24px 96px' }}
       >
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div

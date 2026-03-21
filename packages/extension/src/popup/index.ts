@@ -314,6 +314,24 @@ async function handleSaveRecipe() {
     return;
   }
 
+  // Check for duplicate — skip save if this URL is already in the library
+  const { data: existing } = await supabase
+    .from("recipes")
+    .select("id")
+    .eq("source_url", tab.url)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing) {
+    const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
+    if (footerLink) {
+      footerLink.href = `https://recipe-fork.vercel.app/recipe/${existing.id}`;
+      footerLink.textContent = "View saved recipe ↗";
+    }
+    showSuccess("Recipe already saved!");
+    return;
+  }
+
   showLoading("Reading recipe…");
 
   try {
@@ -326,7 +344,7 @@ async function handleSaveRecipe() {
       return;
     }
 
-    showLoading("Saving recipe…");
+    showLoading("Cooking recipe…");
 
     const { recipe, tagNames } = await extractRecipe(response.html, response.url);
 

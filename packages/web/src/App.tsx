@@ -27,7 +27,7 @@ function AppLayout() {
   return (
     <>
       <Header />
-      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 64px' }}>
+      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}>
         <Outlet />
       </main>
     </>
