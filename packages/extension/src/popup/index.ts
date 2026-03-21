@@ -1,6 +1,17 @@
 import { extractRecipe, type ExtractedRecipe } from "../lib/groq";
 import { supabase } from "../lib/supabase";
 
+// Inline SVG logo – pie icon in sage green
+const LOGO_SVG = `<svg class="header-logo" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M12 3C7.03 3 3 7.03 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9z" fill="#3f7358" opacity="0.15"/>
+  <path d="M12 3C7.03 3 3 7.03 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9z" stroke="#3f7358" stroke-width="1.5" fill="none"/>
+  <path d="M12 3v9l6.36 6.36" stroke="#3f7358" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M12 12L5.64 18.36" stroke="#3f7358" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M8 3.5C8 3.5 7 1.5 6.5 1.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  <path d="M12 3C12 3 12 1 12 0.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  <path d="M16 3.5C16 3.5 17 1.5 17.5 1.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+</svg>`;
+
 // DOM references
 let saveBtn: HTMLButtonElement;
 let statusLoading: HTMLElement;
@@ -13,8 +24,8 @@ function renderLogin(root: HTMLElement) {
     <div class="popup-container">
       <header class="popup-header">
         <div class="header-brand">
-          <img class="header-logo" src="../icons/icon48.png" alt="" />
-          <h1>Recipe Fork</h1>
+          ${LOGO_SVG}
+          <h1>Pie Keeper</h1>
         </div>
         <span class="header-version">v0.0.1</span>
       </header>
@@ -170,8 +181,8 @@ function render(tab: chrome.tabs.Tab | undefined) {
     <div class="popup-container">
       <header class="popup-header">
         <div class="header-brand">
-          <img class="header-logo" src="../icons/icon48.png" alt="" />
-          <h1>Recipe Fork</h1>
+          ${LOGO_SVG}
+          <h1>Pie Keeper</h1>
         </div>
         <span class="header-version">v0.0.1</span>
       </header>
@@ -200,7 +211,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
       </div>
 
       <footer class="popup-footer">
-        <a id="footer-link" href="https://recipe-fork.vercel.app" target="_blank">Open Recipe Fork ↗</a>
+        <a id="footer-link" href="https://recipe-fork.vercel.app" target="_blank">Open Pie Keeper ↗</a>
         <span class="footer-sep">·</span>
         <button id="sign-out-btn" class="link-btn footer-link-btn">Sign out</button>
       </footer>
@@ -336,7 +347,7 @@ async function handleSaveRecipe() {
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
     if (footerLink) {
       footerLink.href = `https://recipe-fork.vercel.app/recipe/${data.id}`;
-      footerLink.textContent = "View in Recipe Fork ↗";
+      footerLink.textContent = "View in Pie Keeper ↗";
     }
 
     showSuccess("Recipe saved!");

@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import RecipeList from "./pages/RecipeList";
@@ -34,24 +35,18 @@ function AppLayout() {
 }
 
 function Header() {
-  const { user, signOut } = useAuth();
-  const location = useLocation();
+  const [hidden, setHidden] = useState(false);
+  const lastScrollY = useRef(0);
 
-  function navLink(path: string, label: string) {
-    const active = location.pathname === path;
-    return (
-      <Link
-        to={path}
-        className="text-sm transition-colors"
-        style={{
-          color: active ? 'var(--green)' : 'var(--muted)',
-          fontWeight: active ? 600 : 500,
-        }}
-      >
-        {label}
-      </Link>
-    );
-  }
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY;
+      setHidden(y > lastScrollY.current && y > 56);
+      lastScrollY.current = y;
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
     <header
@@ -63,39 +58,19 @@ function Header() {
         WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
+        transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
+        transition: 'transform 0.3s ease',
       }}
     >
       <div
-        className="mx-auto h-full flex items-center justify-between"
+        className="mx-auto h-full flex items-center justify-center"
         style={{ maxWidth: 1100, padding: '0 24px' }}
       >
-        <div className="flex items-center gap-6">
-          <Link to="/">
-            <span className="rf-heading text-lg font-bold" style={{ color: 'var(--text)' }}>
-              Recipe Fork
-            </span>
-          </Link>
-          <nav className="hidden sm:flex gap-4">
-            {navLink('/', 'Recipes')}
-            {navLink('/meal-plan', 'Meal Plan')}
-          </nav>
-        </div>
-        {user ? (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="hidden sm:inline" style={{ color: 'var(--muted)' }}>{user.email}</span>
-            <button
-              onClick={signOut}
-              className="transition-colors"
-              style={{ color: 'var(--muted)' }}
-            >
-              Sign out
-            </button>
-          </div>
-        ) : (
-          <Link to="/login" className="text-sm font-medium" style={{ color: 'var(--green)' }}>
-            Sign in
-          </Link>
-        )}
+        <Link to="/">
+          <span className="rf-heading text-lg font-bold" style={{ color: 'var(--text)' }}>
+            Pie Keeper
+          </span>
+        </Link>
       </div>
     </header>
   );

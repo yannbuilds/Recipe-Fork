@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Recipe Fork",
+  "name": "Pie Keeper",
   "version": "0.0.1",
   "description": "Save recipes from any website with AI-powered parsing",
   "permissions": ["activeTab", "storage", "identity"],
   "host_permissions": ["http://localhost/*", "https://recipe-fork.vercel.app/*"],
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Recipe Fork"
+    "default_title": "Pie Keeper"
   },
   "background": {
     "service_worker": "background.js",

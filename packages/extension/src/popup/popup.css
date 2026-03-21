@@ -1,4 +1,38 @@
-/* Recipe Fork – Chrome Extension Popup Styles */
+/* Pie Keeper – Chrome Extension Popup Styles */
+
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/Lora.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito.woff2') format('woff2');
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #e9ede4;
+  --card: #ffffff;
+  --green: #3f7358;
+  --green-dark: #2d5a43;
+  --green-muted: #a3c4b1;
+  --green-light: #edf3ef;
+  --warm: #f0ece6;
+  --warm-dark: #e0d9d0;
+  --text: #1c1c1a;
+  --muted: #7a7a74;
+  --border: #ebebea;
+  --red: #d94f3a;
+  --radius: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+}
 
 * {
   box-sizing: border-box;
@@ -6,8 +40,9 @@
 
 body {
   margin: 0;
-  background: #f9fafb;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  color: var(--text);
 }
 
 .popup-container {
@@ -34,30 +69,31 @@ body {
 }
 
 .header-brand h1 {
+  font-family: 'Lora', Georgia, serif;
   font-size: 16px;
-  font-weight: 600;
-  color: #111827;
+  font-weight: 700;
+  color: var(--text);
   margin: 0;
 }
 
 .header-version {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 /* Page info card */
 .page-info-card {
-  background: #ffffff;
-  border-radius: 8px;
+  background: var(--card);
+  border-radius: var(--radius);
   padding: 12px;
   margin-top: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .page-title {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--text);
   margin: 0 0 4px;
   overflow: hidden;
   display: -webkit-box;
@@ -67,7 +103,7 @@ body {
 
 .page-url {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--muted);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -79,10 +115,11 @@ body {
   width: 100%;
   margin-top: 12px;
   padding: 10px;
-  background: #2563eb;
+  background: var(--green);
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -90,11 +127,11 @@ body {
 }
 
 .save-button:hover {
-  background: #1d4ed8;
+  background: var(--green-dark);
 }
 
 .save-button:disabled {
-  background: #93c5fd;
+  background: var(--green-muted);
   cursor: not-allowed;
 }
 
@@ -110,7 +147,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 13px;
 }
 
@@ -121,28 +158,29 @@ body {
 }
 
 .status-loading {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--green-light);
+  color: var(--green);
 }
 
 .status-success {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: var(--green-light);
+  color: var(--green);
 }
 
 .status-error {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #fef2f0;
+  color: var(--red);
 }
 
 .status-error .retry-link {
   margin-left: auto;
-  color: #dc2626;
+  color: var(--red);
   font-weight: 500;
   cursor: pointer;
   text-decoration: underline;
   background: none;
   border: none;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 13px;
 }
 
@@ -150,8 +188,8 @@ body {
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #93c5fd;
-  border-top-color: #2563eb;
+  border: 2px solid var(--green-muted);
+  border-top-color: var(--green);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   flex-shrink: 0;
@@ -171,33 +209,41 @@ body {
 .login-title {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
   margin: 0 0 12px;
 }
 
 .login-error {
   display: none;
-  background: #fef2f2;
-  color: #dc2626;
+  background: #fef2f0;
+  color: var(--red);
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 12px;
   margin-bottom: 8px;
 }
 
 .login-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 13px;
+  color: var(--text);
   margin-bottom: 8px;
   outline: none;
+  background: var(--card);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.login-input::placeholder {
+  color: var(--muted);
 }
 
 .login-input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(63, 115, 88, 0.12);
 }
 
 .login-divider {
@@ -212,12 +258,12 @@ body {
   content: "";
   flex: 1;
   height: 1px;
-  background: #e5e7eb;
+  background: var(--border);
 }
 
 .login-divider span {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 .oauth-buttons {
@@ -228,34 +274,36 @@ body {
 .oauth-btn {
   flex: 1;
   padding: 8px;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .oauth-btn:hover {
-  background: #f9fafb;
+  background: var(--warm);
 }
 
 .login-toggle {
   margin-top: 12px;
   text-align: center;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .link-btn {
   background: none;
   border: none;
-  color: #2563eb;
+  color: var(--green);
   cursor: pointer;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 0;
 }
 
@@ -276,7 +324,7 @@ body {
 .popup-footer a,
 .footer-link-btn {
   font-size: 12px;
-  color: #2563eb;
+  color: var(--green);
   text-decoration: none;
 }
 
@@ -286,6 +334,6 @@ body {
 }
 
 .footer-sep {
-  color: #d1d5db;
+  color: var(--border);
   font-size: 12px;
 }
