@@ -34,7 +34,17 @@ Return ONLY a JSON object with this exact structure:
 
 Rules:
 - Extract ALL ingredients and ALL steps from the recipe.
-- For ingredients: "quantity" should be a string (e.g. "1/2", "2-3"). "unit" should be standardised (e.g. "cup", "tbsp", "g"). If no unit, use an empty string.
+- For ingredients: Parse each ingredient into its components carefully.
+  - "quantity" should be a string (e.g. "1/2", "2-3", "1.5").
+  - "unit" should be the unit of measurement (e.g. "cup", "tbsp", "tsp", "g", "kg", "ml", "L", "oz", "lb", "bunch", "clove", "can", "packet"). NEVER leave unit empty when a measurement is present in the source text.
+  - JSON-LD recipeIngredient values are often compound strings. You MUST split them correctly:
+    - "400ml coconut milk" → quantity: "400", unit: "ml", item: "coconut milk"
+    - "1.5 kg lamb shanks" → quantity: "1.5", unit: "kg", item: "lamb shanks"
+    - "2 cups chicken stock" → quantity: "2", unit: "cup", item: "chicken stock"
+    - "114g Massaman curry paste" → quantity: "114", unit: "g", item: "Massaman curry paste"
+    - "3 cloves garlic" → quantity: "3", unit: "clove", item: "garlic"
+    - "1 bunch coriander" → quantity: "1", unit: "bunch", item: "coriander"
+  - Only use an empty string for unit when the ingredient is truly unitless (e.g. "2 eggs" → quantity: "2", unit: "", item: "eggs").
 - For steps: number them sequentially starting at 1. Keep the full instruction text.
 - IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for each item in that group.
   - For steps: if JSON-LD contains "HowToSection" objects, use the section "name" as the category (e.g. "Par Boiled Rice", "Crispy Onions"). If page text has section headings before steps, use those.
