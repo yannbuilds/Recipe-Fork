@@ -225,3 +225,76 @@ input[type="checkbox"] { accent-color: var(--green); }
   transition: width 0.4s ease;
 }
 
+/* ── Category bubbles ────────────────────────── */
+.rf-category-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  padding: 4px 0;
+}
+.rf-category-scroll::-webkit-scrollbar { display: none; }
+
+.rf-category-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.rf-category-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--warm);
+  font-size: 24px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.rf-category-bubble:hover .rf-category-icon {
+  background: var(--warm-dark);
+}
+
+.rf-category-active .rf-category-icon {
+  background: var(--green-light);
+  box-shadow: 0 0 0 2px var(--green);
+}
+
+.rf-category-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rf-category-active .rf-category-label {
+  color: var(--green);
+}
+
+/* ── Filter dropdown ─────────────────────────── */
+.rf-filter-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 200px;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 50;
+  animation: fadeUp 0.15s ease both;
+}
+
+.rf-filter-dropdown button:hover {
+  background: var(--warm);
+}
+

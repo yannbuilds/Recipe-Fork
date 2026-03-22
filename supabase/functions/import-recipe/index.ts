@@ -24,9 +24,17 @@ Return ONLY a JSON object with this exact structure:
   "tags": ["tag1", "tag2", "tag3"]
 }
 
+Example ingredient parsing — JSON-LD "recipeIngredient" contains flat strings. You MUST parse each into separate fields:
+- "1 cup all-purpose flour" → { "item": "all-purpose flour", "quantity": "1", "unit": "cup", "category": "" }
+- "2 large eggs" → { "item": "eggs", "quantity": "2", "unit": "large", "category": "" }
+- "1/2 tsp salt" → { "item": "salt", "quantity": "1/2", "unit": "tsp", "category": "" }
+- "2-3 cloves garlic, minced" → { "item": "garlic, minced", "quantity": "2-3", "unit": "cloves", "category": "" }
+- "Fresh cilantro for garnish" → { "item": "fresh cilantro for garnish", "quantity": "", "unit": "", "category": "" }
+- "400g canned tomatoes" → { "item": "canned tomatoes", "quantity": "400", "unit": "g", "category": "" }
+
 Rules:
 - Extract ALL ingredients and ALL steps from the recipe.
-- For ingredients: "quantity" should be a string (e.g. "1/2", "2-3"). "unit" should be standardised (e.g. "cup", "tbsp", "g"). If no unit, use an empty string.
+- IMPORTANT — Ingredient parsing: JSON-LD "recipeIngredient" contains flat strings like "1 cup flour". You MUST parse each string into separate fields: extract the leading number(s) as "quantity", the unit word as "unit", and the remaining text as "item". Do NOT put the full string into "item" with empty quantity/unit. "quantity" should be a string (e.g. "1/2", "2-3"). "unit" should be standardised (e.g. "cup", "tbsp", "g"). If no unit, use an empty string.
 - For steps: number them sequentially starting at 1. Keep the full instruction text.
 - IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for each item in that group.
   - For steps: if JSON-LD contains "HowToSection" objects, use the section "name" as the category (e.g. "Par Boiled Rice", "Crispy Onions"). If page text has section headings before steps, use those.
@@ -94,13 +102,63 @@ function extractVideoUrls(html: string): string[] {
   return [...ids].map((id) => `https://www.youtube.com/watch?v=${id}`);
 }
 
+/**
+ * Extract ingredient section headings from raw HTML using regex.
+ * Gives the LLM category/grouping context that JSON-LD lacks.
+ * Uses simple, non-backtracking patterns safe for edge runtimes.
+ */
+function extractIngredientSections(html: string): string | null {
+  const parts: string[] = [];
+
+  // WPRM group names (WordPress Recipe Maker)
+  const groupNames = html.matchAll(
+    /<span[^>]*class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([^<]+)<\/span>/gi,
+  );
+  for (const m of groupNames) {
+    const text = m[1].replace(/:$/, "").trim();
+    if (text && text.length < 60) {
+      parts.push(`\n--- ${text} ---`);
+    }
+  }
+
+  // If no WPRM groups, look for headings inside ingredient-related containers
+  if (parts.length === 0) {
+    // Find h2–h4 headings that appear near ingredient-related class names
+    const headingPattern = /<h[2-4][^>]*>([^<]+)<\/h[2-4]>/gi;
+    const lines = html.split("\n");
+    let inIngredientSection = false;
+    for (const line of lines) {
+      if (/class="[^"]*ingredient/i.test(line)) {
+        inIngredientSection = true;
+      } else if (inIngredientSection && /class="[^"]*(?:instruction|step|direction|method)/i.test(line)) {
+        inIngredientSection = false;
+      }
+      if (inIngredientSection) {
+        let hMatch;
+        while ((hMatch = headingPattern.exec(line)) !== null) {
+          const text = hMatch[1].replace(/:$/, "").trim();
+          if (text && text.length < 60 && !/^\d/.test(text)) {
+            parts.push(`\n--- ${text} ---`);
+          }
+        }
+      }
+    }
+  }
+
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
 function buildLlmPayload(html: string, url: string): string {
   const jsonLd = extractJsonLd(html);
   const videoUrls = extractVideoUrls(html);
+  const ingredientSections = extractIngredientSections(html);
   const videoSection =
     videoUrls.length > 0
       ? `\n\n[Video URLs found on page]:\n${videoUrls.join("\n")}`
       : "";
+  const ingredientSectionBlock = ingredientSections
+    ? `\n\n[Ingredient sections from page (with group headings)]:\n${ingredientSections}`
+    : "";
 
   if (jsonLd) {
     const text = extractMainText(html);
@@ -108,12 +166,37 @@ function buildLlmPayload(html: string, url: string): string {
     return (
       `[JSON-LD structured data]:\n${jsonLd}\n\n` +
       `[Page text (excerpt)]:\n${truncatedText}` +
+      ingredientSectionBlock +
       videoSection
     );
   }
 
   const text = extractMainText(html);
-  return text.slice(0, 12000) + videoSection;
+  return text.slice(0, 12000) + ingredientSectionBlock + videoSection;
+}
+
+/**
+ * Safety net: if the LLM dumped the full string into "item" with empty quantity/unit,
+ * parse it client-side with a regex.
+ */
+function fixIngredientParsing(
+  ingredients: Array<{ item: string; quantity: string; unit: string; category?: string }>,
+) {
+  return ingredients.map((ing) => {
+    if (ing.quantity || ing.unit) return ing;
+    const match = ing.item?.match(
+      /^([\d\u00BC-\u00BE\u2150-\u215E\/\.\-–]+(?:\s*[\d\/\.]+)?)\s*(cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|litres?|liters?|cloves?|large|medium|small|cans?|bunch(?:es)?|pieces?|slices?|sprigs?|stalks?|heads?|pinch(?:es)?|handfuls?|packets?|sticks?|rashers?|fillets?)?\s+(.+)$/i,
+    );
+    if (match) {
+      return {
+        ...ing,
+        quantity: match[1].trim(),
+        unit: (match[2] || "").trim().toLowerCase(),
+        item: match[3].trim(),
+      };
+    }
+    return ing;
+  });
 }
 
 // --- Main handler ---
@@ -166,6 +249,7 @@ Deno.serve(async (req) => {
     });
 
     if (!pageRes.ok) {
+      console.error(`[import-recipe] Failed to fetch page: ${pageRes.status} ${url}`);
       return new Response(
         JSON.stringify({ error: `Failed to fetch page (${pageRes.status})` }),
         { status: 422, headers: corsHeaders },
@@ -178,6 +262,7 @@ Deno.serve(async (req) => {
     const content = buildLlmPayload(html, url);
 
     if (content.length < 100) {
+      console.error(`[import-recipe] No recipe content found (content length: ${content.length})`);
       return new Response(
         JSON.stringify({ error: "No recipe content found on this page" }),
         { status: 422, headers: corsHeaders },
@@ -187,6 +272,7 @@ Deno.serve(async (req) => {
     // 3. Call Groq API
     const apiKey = Deno.env.get("GROQ_API_KEY");
     if (!apiKey) {
+      console.error("[import-recipe] GROQ_API_KEY not set in environment");
       return new Response(
         JSON.stringify({ error: "Groq API key not configured" }),
         { status: 500, headers: corsHeaders },
@@ -212,12 +298,14 @@ Deno.serve(async (req) => {
 
     if (!groqRes.ok) {
       if (groqRes.status === 429) {
+        console.error("[import-recipe] Groq rate limited (429)");
         return new Response(
           JSON.stringify({ error: "Daily limit reached – try again tomorrow." }),
           { status: 429, headers: corsHeaders },
         );
       }
       const body = await groqRes.text();
+      console.error(`[import-recipe] Groq API error (${groqRes.status}): ${body}`);
       return new Response(
         JSON.stringify({ error: `AI extraction failed (${groqRes.status}): ${body}` }),
         { status: 502, headers: corsHeaders },
@@ -244,10 +332,11 @@ Deno.serve(async (req) => {
     }
 
     // 4. Build structured recipe response
+    const ingredients = fixIngredientParsing(parsed.ingredients ?? []);
     const recipe = {
       title: parsed.title,
       description: parsed.description ?? null,
-      ingredients: parsed.ingredients ?? [],
+      ingredients,
       steps: parsed.steps ?? [],
       source_url: url,
       creator_name: parsed.creator_name ?? null,
@@ -269,6 +358,7 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[import-recipe] Unhandled error: ${message}`);
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: corsHeaders },

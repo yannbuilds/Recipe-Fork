@@ -211,7 +211,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
       </div>
 
       <footer class="popup-footer">
-        <a id="footer-link" href="https://recipe-fork.vercel.app" target="_blank">Open Pie Keeper ↗</a>
+        <a id="footer-link" href="https://piekeeper.com" target="_blank">Open Pie Keeper ↗</a>
         <span class="footer-sep">·</span>
         <button id="sign-out-btn" class="link-btn footer-link-btn">Sign out</button>
       </footer>
@@ -325,7 +325,7 @@ async function handleSaveRecipe() {
   if (existing) {
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
     if (footerLink) {
-      footerLink.href = `https://recipe-fork.vercel.app/recipe/${existing.id}`;
+      footerLink.href = `https://piekeeper.com/recipe/${existing.id}`;
       footerLink.textContent = "View saved recipe ↗";
     }
     showSuccess("Recipe already saved!");
@@ -364,7 +364,7 @@ async function handleSaveRecipe() {
     // Update footer link to point to the saved recipe
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
     if (footerLink) {
-      footerLink.href = `https://recipe-fork.vercel.app/recipe/${data.id}`;
+      footerLink.href = `https://piekeeper.com/recipe/${data.id}`;
       footerLink.textContent = "View in Pie Keeper ↗";
     }
 
@@ -383,7 +383,7 @@ async function handleSaveRecipe() {
 async function syncSessionFromWebApp() {
   try {
     // Find a tab running the web app
-    const tabs = await chrome.tabs.query({ url: ["https://recipe-fork.vercel.app/*"] });
+    const tabs = await chrome.tabs.query({ url: ["https://piekeeper.com/*"] });
     if (tabs.length === 0 || !tabs[0].id) return null;
 
     const response = await chrome.tabs.sendMessage(tabs[0].id, {

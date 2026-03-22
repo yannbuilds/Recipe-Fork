@@ -26,15 +26,13 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: Rec
       to={`/recipe/${recipe.id}`}
       className="block overflow-hidden rf-card-hover"
       style={{
-        background: 'var(--card)',
         borderRadius: 'var(--radius)',
         boxShadow: 'var(--shadow-md)',
         animation: 'fadeUp 0.4s ease both',
         animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
       }}
     >
-      {/* Image area with overlays */}
-      <div className="relative" style={{ aspectRatio: '4 / 3' }}>
+      <div className="relative" style={{ aspectRatio: '3 / 4' }}>
         {recipe.image_url ? (
           <img
             src={recipe.image_url}
@@ -57,53 +55,45 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: Rec
 
         {/* Favourite button: top-right */}
         {onToggleFavourite && (
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-2 right-2">
             <FavouriteButton
               recipeId={recipe.id}
               isFavourite={recipe.is_favourite}
               onToggle={(val) => onToggleFavourite(recipe.id, val)}
+              size="sm"
             />
           </div>
         )}
 
-        {/* Meta pills: top-left */}
-        <div className="absolute top-3 left-3 flex gap-1.5">
-          {totalTime != null && (
-            <span
-              className="rf-glass-dark rounded-full text-white"
-              style={{ padding: '3px 10px', fontSize: 11 }}
-            >
-              ⏱ {formatTime(totalTime)}
-            </span>
-          )}
-          {recipe.servings != null && (
-            <span
-              className="rf-glass-dark rounded-full text-white"
-              style={{ padding: '3px 10px', fontSize: 11 }}
-            >
-              🍽 {recipe.servings}
-            </span>
+        {/* Title + meta overlay at bottom */}
+        <div
+          className="absolute bottom-0 left-0 right-0 rf-glass"
+          style={{
+            padding: '10px 12px',
+            borderRadius: '0 0 var(--radius) var(--radius)',
+          }}
+        >
+          <h2
+            className="rf-heading font-semibold leading-snug"
+            style={{ fontSize: 14, color: 'var(--text)' }}
+          >
+            {recipe.title}
+          </h2>
+          {(totalTime != null || recipe.servings != null) && (
+            <div className="flex items-center gap-3 mt-1" style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {totalTime != null && (
+                <span className="flex items-center gap-1">
+                  🕐 {formatTime(totalTime)}
+                </span>
+              )}
+              {recipe.servings != null && (
+                <span className="flex items-center gap-1">
+                  🍽 {recipe.servings} serves
+                </span>
+              )}
+            </div>
           )}
         </div>
-
-      </div>
-
-      {/* Title & description below image */}
-      <div style={{ padding: '10px 12px' }}>
-        <h2
-          className="rf-heading font-semibold leading-snug"
-          style={{ fontSize: 15, color: 'var(--text)' }}
-        >
-          {recipe.title}
-        </h2>
-        {recipe.description && (
-          <p
-            className="line-clamp-2 mt-0.5"
-            style={{ fontSize: 12, color: 'var(--muted)' }}
-          >
-            {recipe.description}
-          </p>
-        )}
       </div>
     </Link>
   );

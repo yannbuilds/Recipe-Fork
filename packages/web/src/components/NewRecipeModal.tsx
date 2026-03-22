@@ -95,7 +95,14 @@ export default function NewRecipeModal() {
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to import recipe');
+        let msg = 'Failed to import recipe';
+        if (error.context instanceof Response) {
+          try {
+            const body = await error.context.json();
+            msg = body?.error || msg;
+          } catch { /* fall back to generic message */ }
+        }
+        throw new Error(msg);
       }
 
       if (data?.error) {
