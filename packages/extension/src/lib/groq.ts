@@ -46,10 +46,11 @@ Rules:
     - "1 bunch coriander" → quantity: "1", unit: "bunch", item: "coriander"
   - Only use an empty string for unit when the ingredient is truly unitless (e.g. "2 eggs" → quantity: "2", unit: "", item: "eggs").
 - For steps: number them sequentially starting at 1. Keep the full instruction text.
-- IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for each item in that group.
-  - For steps: if JSON-LD contains "HowToSection" objects, use the section "name" as the category (e.g. "Par Boiled Rice", "Crispy Onions"). If page text has section headings before steps, use those.
-  - For ingredients: JSON-LD usually lists ingredients flat without groups. Check the page text for section headings (e.g. "Marinade", "For the sauce", "Rice", "Garnish") that separate ingredient lists, and assign those as categories.
+- IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for EVERY item in that group.
+  - For ingredients: Check the "[Ingredient sections from page]" data first — if present, it contains the exact section names and their ingredients. Use these section names as the category for each ingredient. If "[Ingredient sections from page]" is not present, check the page text for section headings (e.g. "Marinade", "For the sauce", "Garnish") that separate ingredient lists.
+  - For steps: if JSON-LD contains "HowToSection" objects, use the section "name" as the category. If page text has section headings before steps, use those.
   - Strip trailing colons from category names (e.g. "Marinade:" → "Marinade").
+  - If no section groupings exist at all, omit the category field entirely.
 - Times should be in minutes (convert hours to minutes).
 - Look for structured data (JSON-LD) first, then fall back to page content.
 - For video_url: check the "[Video URLs found on page]" section first — if present, use the first URL. Also check JSON-LD "video" field. Return a full YouTube watch URL (https://www.youtube.com/watch?v=...) or null if no video exists.

@@ -140,16 +140,80 @@ function getVideoUrls(): string[] {
 }
 
 /**
+ * Extract ingredient section groupings from the DOM.
+ * Recipe sites group ingredients under headings (e.g. "Curry Paste", "Sauce").
+ * JSON-LD flattens these into a single list, so we extract them from HTML.
+ */
+function getIngredientSections(): string | null {
+  // Try common recipe plugin selectors for ingredient groups
+  const groupSelectors = [
+    '.wprm-recipe-ingredient-group',           // WordPress Recipe Maker
+    '.tasty-recipe-ingredients > div',          // Tasty Recipes
+    '.mv-recipe-ingredients .mv-recipe-group', // Mediavine Create
+    '.recipe-ingredients > div',               // Generic
+    '.ingredients-section',                    // Generic
+  ];
+
+  for (const selector of groupSelectors) {
+    const groups = document.querySelectorAll(selector);
+    if (groups.length > 1) {
+      const sections: string[] = [];
+      for (const group of groups) {
+        const heading = group.querySelector(
+          'h3, h4, .wprm-recipe-group-name, [class*="group-name"], [class*="heading"]'
+        );
+        const name = heading?.textContent?.trim().replace(/:$/, '') || '';
+        const items = [...group.querySelectorAll('li')]
+          .map(li => li.textContent?.trim())
+          .filter(Boolean);
+        if (items.length > 0) {
+          sections.push(`**${name || 'Ungrouped'}:**\n${items.map(i => `- ${i}`).join('\n')}`);
+        }
+      }
+      if (sections.length > 0) return sections.join('\n\n');
+    }
+  }
+
+  // Fallback: look for heading + list pairs inside a recipe container
+  const recipeContainer = document.querySelector(
+    '[class*="recipe"], [itemtype*="Recipe"], .entry-content'
+  );
+  if (recipeContainer) {
+    const headings = recipeContainer.querySelectorAll('h3, h4');
+    const sections: string[] = [];
+    for (const h of headings) {
+      const list = h.nextElementSibling;
+      if (list && (list.tagName === 'UL' || list.tagName === 'OL')) {
+        const items = [...list.querySelectorAll('li')]
+          .map(li => li.textContent?.trim())
+          .filter(Boolean);
+        if (items.length > 0) {
+          const name = h.textContent?.trim().replace(/:$/, '') || '';
+          sections.push(`**${name}:**\n${items.map(i => `- ${i}`).join('\n')}`);
+        }
+      }
+    }
+    if (sections.length > 1) return sections.join('\n\n');
+  }
+
+  return null;
+}
+
+/**
  * Build a compact payload for the LLM.
  * Prefers JSON-LD (tiny, structured) over full page text.
  */
 function extractContent(): string {
   const jsonLd = getJsonLd();
   const videoUrls = getVideoUrls();
+  const ingredientSections = getIngredientSections();
   const videoSection =
     videoUrls.length > 0
       ? `\n\n[Video URLs found on page]:\n${videoUrls.join("\n")}`
       : "";
+  const ingredientSection = ingredientSections
+    ? `\n\n[Ingredient sections from page]:\n${ingredientSections}`
+    : "";
 
   if (jsonLd) {
     const text = getMainText();
@@ -157,12 +221,13 @@ function extractContent(): string {
     return (
       `[JSON-LD structured data]:\n${jsonLd}\n\n` +
       `[Page text (excerpt)]:\n${truncatedText}` +
+      ingredientSection +
       videoSection
     );
   }
 
   const text = getMainText();
-  return text.slice(0, 12000) + videoSection;
+  return text.slice(0, 12000) + ingredientSection + videoSection;
 }
 
 /**

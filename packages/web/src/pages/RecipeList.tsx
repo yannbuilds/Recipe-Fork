@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
@@ -8,20 +8,31 @@ interface RecipeTagRow {
   tag_id: string;
 }
 
-const CATEGORIES = [
-  { label: 'Dinner', emoji: '🍽️', tag: 'dinner' },
-  { label: 'Quick', emoji: '⚡', tag: 'quick' },
-  { label: 'Healthy', emoji: '🥗', tag: 'healthy' },
-  { label: 'Vegetarian', emoji: '🌱', tag: 'vegetarian' },
-  { label: 'Pasta', emoji: '🍝', tag: 'pasta' },
-  { label: 'Chicken', emoji: '🍗', tag: 'chicken' },
-  { label: 'Seafood', emoji: '🐟', tag: 'seafood' },
-  { label: 'Dessert', emoji: '🍰', tag: 'dessert' },
-  { label: 'Baking', emoji: '🧁', tag: 'baking' },
-  { label: 'Breakfast', emoji: '🥞', tag: 'breakfast' },
-  { label: 'Snack', emoji: '🥜', tag: 'snack' },
-  { label: 'Soup', emoji: '🍲', tag: 'soup' },
-];
+const TAG_EMOJI: Record<string, string> = {
+  dinner: '🍽️',
+  quick: '⚡',
+  healthy: '🥗',
+  vegetarian: '🌱',
+  vegan: '🌿',
+  pasta: '🍝',
+  chicken: '🍗',
+  beef: '🥩',
+  seafood: '🐟',
+  fish: '🐟',
+  dessert: '🍰',
+  baking: '🧁',
+  breakfast: '🥞',
+  snack: '🥜',
+  soup: '🍲',
+  indian: '🍛',
+  italian: '🇮🇹',
+  mexican: '🌮',
+  chinese: '🥡',
+  tofu: '🫘',
+  'gluten-free': '🌾',
+  salad: '🥗',
+  rice: '🍚',
+};
 
 function getGreeting(): string {
   const hour = new Date().getHours();
