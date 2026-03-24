@@ -23,7 +23,7 @@ Return ONLY a JSON object with this exact structure:
   "title": "Recipe title",
   "description": "Brief description or null",
   "ingredients": [
-    { "item": "ingredient name", "quantity": "amount as string", "unit": "unit of measurement", "category": "optional grouping" }
+    { "original_text": "full ingredient line exactly as written on the page", "item": "ingredient name", "quantity": "amount as string", "unit": "unit of measurement", "category": "optional grouping" }
   ],
   "steps": [
     { "order": 1, "instruction": "step instruction", "category": "optional grouping" }
@@ -40,6 +40,7 @@ Return ONLY a JSON object with this exact structure:
 Rules:
 - Extract ALL ingredients and ALL steps from the recipe.
 - For ingredients: Parse each ingredient into its components carefully.
+  - "original_text" MUST be the full ingredient line exactly as it appears on the page, with no modifications. Include fractions, parenthetical conversions, preparation notes, annotations, and qualifiers verbatim. For example: "2/3 cup (150 ml) yoghurt, plain" or "750g (1.5 lb) chicken thighs, skin on, bone in, halved along bone (Note 1)". Do NOT paraphrase or restructure.
   - "quantity" should be a string (e.g. "1/2", "2-3", "1.5").
   - "unit" should be the unit of measurement (e.g. "cup", "tbsp", "tsp", "g", "kg", "ml", "L", "oz", "lb", "bunch", "clove", "can", "packet"). NEVER leave unit empty when a measurement is present in the source text.
   - JSON-LD recipeIngredient values are often compound strings. You MUST split them correctly:

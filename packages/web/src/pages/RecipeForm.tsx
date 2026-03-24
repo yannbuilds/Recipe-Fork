@@ -132,6 +132,10 @@ export default function RecipeForm() {
   function updateIngredient(index: number, field: keyof Ingredient, value: string) {
     const updated = [...ingredients];
     updated[index] = { ...updated[index], [field]: value };
+    // Clear original_text when structured fields change so it regenerates on save
+    if (field !== 'original_text' && field !== 'category') {
+      updated[index].original_text = undefined;
+    }
     setIngredients(updated);
   }
 
@@ -167,6 +171,9 @@ export default function RecipeForm() {
       .map((ing) => {
         const clean: Ingredient = { item: ing.item, quantity: ing.quantity, unit: ing.unit };
         if (ing.category?.trim()) clean.category = ing.category.trim();
+        // Preserve existing original_text or auto-generate from structured fields
+        const parts = [ing.quantity, ing.unit, ing.item].filter(Boolean);
+        clean.original_text = ing.original_text?.trim() || parts.join(' ');
         return clean;
       });
     const filteredSteps = steps

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import type { Recipe, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
@@ -20,16 +20,94 @@ function getIngredientEmoji(item: string): string {
   return '🥘';
 }
 
+function parseFraction(q: string): number | null {
+  const parts = q.trim().split(/\s+/);
+  let total = 0;
+  let parsedAny = false;
+  for (const p of parts) {
+    if (p.includes('/')) {
+      const [num, den] = p.split('/').map(Number);
+      if (isNaN(num) || isNaN(den) || den === 0) break;
+      total += num / den;
+      parsedAny = true;
+    } else {
+      const n = Number(p);
+      if (isNaN(n)) break; // stop at non-numeric parts (e.g. unit text)
+      total += n;
+      parsedAny = true;
+    }
+  }
+  return parsedAny ? total : null;
+}
+
+const COMMON_FRACTIONS: [number, string][] = [
+  [0.125, '1/8'], [0.25, '1/4'], [0.333, '1/3'], [0.5, '1/2'],
+  [0.667, '2/3'], [0.75, '3/4'],
+];
+
+function formatQuantity(value: number): string {
+  const whole = Math.floor(value);
+  const frac = value - whole;
+
+  for (const [target, label] of COMMON_FRACTIONS) {
+    if (Math.abs(frac - target) < 0.02) {
+      return whole > 0 ? `${whole} ${label}` : label;
+    }
+  }
+
+  if (value % 1 === 0) return String(value);
+  return value.toFixed(1);
+}
+
 function scaleQuantity(
   quantity: string,
   originalServings: number | null,
   currentServings: number,
 ): string {
   if (!originalServings || originalServings === 0) return quantity;
-  const parsed = parseFloat(quantity);
-  if (isNaN(parsed)) return quantity;
+  const parsed = parseFraction(quantity);
+  if (parsed === null) return quantity;
   const scaled = parsed * (currentServings / originalServings);
-  return scaled % 1 === 0 ? String(scaled) : scaled.toFixed(1);
+  return formatQuantity(scaled);
+}
+
+function renderOriginalText(
+  ing: Ingredient,
+  originalServings: number | null,
+  currentServings: number,
+): React.JSX.Element {
+  const text = ing.original_text!;
+  const qty = ing.quantity;
+  const unit = ing.unit;
+
+  // If there's no meaningful quantity, just show the original text as-is
+  if (!qty || qty === '0') {
+    return <>{text}</>;
+  }
+
+  // Build a regex to locate the quantity+unit portion in the original text
+  const escapedQty = qty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = unit
+    ? new RegExp(`(${escapedQty}\\s*${escapedUnit})`)
+    : new RegExp(`(${escapedQty})`);
+
+  const match = text.match(pattern);
+  if (!match || match.index === undefined) {
+    // Fallback: show original text without bolding
+    return <>{text}</>;
+  }
+
+  const before = text.slice(0, match.index);
+  const after = text.slice(match.index + match[0].length);
+  const scaledQty = scaleQuantity(qty, originalServings, currentServings);
+  const boldPart = unit ? `${scaledQty} ${unit}` : scaledQty;
+
+  return (
+    <>
+      {before}<strong>{boldPart}</strong>{after}
+    </>
+  );
 }
 
 function formatTime(minutes: number): string {
@@ -659,25 +737,37 @@ export default function RecipeDetail() {
                         >
                           {getIngredientEmoji(ing.item)}
                         </span>
-                        {/* Name */}
-                        <span
-                          className="flex-1 text-sm"
-                          style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
-                        >
-                          {ing.item}
-                        </span>
-                        {/* Quantity + unit */}
-                        {(ing.quantity || ing.unit) && (
+                        {ing.original_text ? (
+                          /* Full original text with quantity+unit bolded */
                           <span
-                            className="text-sm font-bold shrink-0"
-                            style={{
-                              color: 'var(--text)',
-                              textDecoration: isUsed ? 'line-through' : 'none',
-                            }}
+                            className="flex-1 text-sm"
+                            style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
                           >
-                            {scaleQuantity(ing.quantity, recipe.servings, currentServings)}
-                            {ing.unit ? ` ${ing.unit}` : ''}
+                            {renderOriginalText(ing, recipe.servings, currentServings)}
                           </span>
+                        ) : (
+                          <>
+                            {/* Legacy: Name */}
+                            <span
+                              className="flex-1 text-sm"
+                              style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
+                            >
+                              {ing.item}
+                            </span>
+                            {/* Legacy: Quantity + unit */}
+                            {(ing.quantity || ing.unit) && (
+                              <span
+                                className="text-sm font-bold shrink-0"
+                                style={{
+                                  color: 'var(--text)',
+                                  textDecoration: isUsed ? 'line-through' : 'none',
+                                }}
+                              >
+                                {scaleQuantity(ing.quantity, recipe.servings, currentServings)}
+                                {ing.unit ? ` ${ing.unit}` : ''}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     );

@@ -3,6 +3,7 @@ export interface Ingredient {
   quantity: string;
   unit: string;
   category?: string;
+  original_text?: string;
 }
 
 export interface Step {
