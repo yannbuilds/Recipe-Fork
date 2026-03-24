@@ -37,6 +37,11 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
 }
 
 .rd-hero       { height: 500px; transition: height 0.3s ease; }

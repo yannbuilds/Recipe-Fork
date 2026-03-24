@@ -69,8 +69,8 @@ export default function NewRecipeModal() {
 
     try {
       // Require auth — edge function needs a valid JWT
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
 
       if (!userId) {
         throw new Error('Please sign in to import recipes');

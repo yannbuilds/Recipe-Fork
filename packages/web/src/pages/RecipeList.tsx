@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
+import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
 
 interface RecipeTagRow {
   recipe_id: string;
@@ -381,7 +382,29 @@ export default function RecipeList() {
         ref={tagsExpandedRef}
       >
         <div className="rf-category-scroll">
-          {visibleCategories.map((cat) => (
+          {loading && Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="rf-category-bubble" style={{ cursor: 'default' }}>
+              <span
+                className="rf-category-icon"
+                style={{
+                  background: 'var(--warm)',
+                  animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              />
+              <span
+                style={{
+                  height: 10,
+                  width: 40,
+                  borderRadius: 4,
+                  background: 'var(--border)',
+                  animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                  animationDelay: `${i * 0.1 + 0.15}s`,
+                }}
+              />
+            </div>
+          ))}
+          {!loading && visibleCategories.map((cat) => (
             <button
               key={cat.tag}
               onClick={() => toggleCategory(cat.tag)}
@@ -391,7 +414,7 @@ export default function RecipeList() {
               <span className="rf-category-label">{cat.label}</span>
             </button>
           ))}
-          {hiddenCount > 0 && (
+          {!loading && hiddenCount > 0 && (
             <button
               onClick={() => setTagsExpanded((prev) => !prev)}
               className={`rf-category-bubble ${tagsExpanded ? 'rf-category-active' : ''}`}
@@ -417,11 +440,13 @@ export default function RecipeList() {
         )}
       </div>
 
-      {/* Loading */}
+      {/* Loading skeletons */}
       {loading && (
-        <p className="text-center text-sm py-12" style={{ color: 'var(--muted)' }}>
-          Loading recipes...
-        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <RecipeCardSkeleton key={i} index={i} />
+          ))}
+        </div>
       )}
 
       {/* Error */}
