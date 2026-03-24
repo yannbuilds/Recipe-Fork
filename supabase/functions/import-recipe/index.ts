@@ -10,7 +10,7 @@ Return ONLY a JSON object with this exact structure:
   "title": "Recipe title",
   "description": "Brief description or null",
   "ingredients": [
-    { "item": "ingredient name", "quantity": "amount as string", "unit": "unit of measurement", "category": "optional grouping" }
+    { "original_text": "full ingredient line exactly as written on the page", "item": "ingredient name", "quantity": "amount as string", "unit": "unit of measurement", "category": "optional grouping" }
   ],
   "steps": [
     { "order": 1, "instruction": "step instruction", "category": "optional grouping" }
@@ -25,15 +25,16 @@ Return ONLY a JSON object with this exact structure:
 }
 
 Example ingredient parsing — JSON-LD "recipeIngredient" contains flat strings. You MUST parse each into separate fields:
-- "1 cup all-purpose flour" → { "item": "all-purpose flour", "quantity": "1", "unit": "cup", "category": "" }
-- "2 large eggs" → { "item": "eggs", "quantity": "2", "unit": "large", "category": "" }
-- "1/2 tsp salt" → { "item": "salt", "quantity": "1/2", "unit": "tsp", "category": "" }
-- "2-3 cloves garlic, minced" → { "item": "garlic, minced", "quantity": "2-3", "unit": "cloves", "category": "" }
-- "Fresh cilantro for garnish" → { "item": "fresh cilantro for garnish", "quantity": "", "unit": "", "category": "" }
-- "400g canned tomatoes" → { "item": "canned tomatoes", "quantity": "400", "unit": "g", "category": "" }
+- "1 cup all-purpose flour" → { "original_text": "1 cup all-purpose flour", "item": "all-purpose flour", "quantity": "1", "unit": "cup", "category": "" }
+- "2 large eggs" → { "original_text": "2 large eggs", "item": "eggs", "quantity": "2", "unit": "large", "category": "" }
+- "1/2 tsp salt" → { "original_text": "1/2 tsp salt", "item": "salt", "quantity": "1/2", "unit": "tsp", "category": "" }
+- "2-3 cloves garlic, minced" → { "original_text": "2-3 cloves garlic, minced", "item": "garlic, minced", "quantity": "2-3", "unit": "cloves", "category": "" }
+- "Fresh cilantro for garnish" → { "original_text": "Fresh cilantro for garnish", "item": "fresh cilantro for garnish", "quantity": "", "unit": "", "category": "" }
+- "400g canned tomatoes" → { "original_text": "400g canned tomatoes", "item": "canned tomatoes", "quantity": "400", "unit": "g", "category": "" }
 
 Rules:
 - Extract ALL ingredients and ALL steps from the recipe.
+- "original_text" MUST be the full ingredient line exactly as it appears on the page, with no modifications. Include fractions, parenthetical conversions, preparation notes, annotations, and qualifiers verbatim. For example: "2/3 cup (150 ml) yoghurt, plain" or "750g (1.5 lb) chicken thighs, skin on, bone in, halved along bone (Note 1)". Do NOT paraphrase or restructure.
 - IMPORTANT — Ingredient parsing: JSON-LD "recipeIngredient" contains flat strings like "1 cup flour". You MUST parse each string into separate fields: extract the leading number(s) as "quantity", the unit word as "unit", and the remaining text as "item". Do NOT put the full string into "item" with empty quantity/unit. "quantity" should be a string (e.g. "1/2", "2-3"). "unit" should be standardised (e.g. "cup", "tbsp", "g"). If no unit, use an empty string.
 - For steps: number them sequentially starting at 1. Keep the full instruction text.
 - IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for each item in that group.
@@ -180,9 +181,14 @@ function buildLlmPayload(html: string, url: string): string {
  * parse it client-side with a regex.
  */
 function fixIngredientParsing(
-  ingredients: Array<{ item: string; quantity: string; unit: string; category?: string }>,
+  ingredients: Array<{ item: string; quantity: string; unit: string; category?: string; original_text?: string }>,
 ) {
   return ingredients.map((ing) => {
+    // Ensure original_text is set — fall back to reconstructing from fields
+    if (!ing.original_text) {
+      const parts = [ing.quantity, ing.unit, ing.item].filter(Boolean);
+      ing.original_text = parts.join(" ");
+    }
     if (ing.quantity || ing.unit) return ing;
     const match = ing.item?.match(
       /^([\d\u00BC-\u00BE\u2150-\u215E\/\.\-–]+(?:\s*[\d\/\.]+)?)\s*(cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|litres?|liters?|cloves?|large|medium|small|cans?|bunch(?:es)?|pieces?|slices?|sprigs?|stalks?|heads?|pinch(?:es)?|handfuls?|packets?|sticks?|rashers?|fillets?)?\s+(.+)$/i,
