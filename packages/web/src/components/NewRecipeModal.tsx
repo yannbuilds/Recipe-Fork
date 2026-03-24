@@ -68,23 +68,25 @@ export default function NewRecipeModal() {
     setStatusText('Checking for duplicates…');
 
     try {
-      // Check for duplicate
+      // Require auth — edge function needs a valid JWT
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
 
-      if (userId) {
-        const { data: existing } = await supabase
-          .from('recipes')
-          .select('id')
-          .eq('source_url', trimmed)
-          .eq('user_id', userId)
-          .maybeSingle();
+      if (!userId) {
+        throw new Error('Please sign in to import recipes');
+      }
 
-        if (existing) {
-          closeModal();
-          navigate(`/recipe/${existing.id}`);
-          return;
-        }
+      const { data: existing } = await supabase
+        .from('recipes')
+        .select('id')
+        .eq('source_url', trimmed)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        closeModal();
+        navigate(`/recipe/${existing.id}`);
+        return;
       }
 
       // Call Edge Function
@@ -96,12 +98,20 @@ export default function NewRecipeModal() {
 
       if (error) {
         let msg = 'Failed to import recipe';
-        if (error.context instanceof Response) {
-          try {
-            const body = await error.context.json();
-            msg = body?.error || msg;
-          } catch { /* fall back to generic message */ }
-        }
+        try {
+          if (error.context instanceof Response) {
+            const clone = error.context.clone();
+            try {
+              const body = await clone.json();
+              msg = body?.error || msg;
+            } catch {
+              msg = await error.context.text() || msg;
+            }
+          } else if (error.message) {
+            msg = error.message;
+          }
+        } catch { /* keep generic message */ }
+        console.error('[import-recipe]', error);
         throw new Error(msg);
       }
 

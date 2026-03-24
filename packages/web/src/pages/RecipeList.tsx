@@ -10,28 +10,74 @@ interface RecipeTagRow {
 
 const TAG_EMOJI: Record<string, string> = {
   dinner: '🍽️',
+  lunch: '🥪',
+  breakfast: '🥞',
+  brunch: '🧇',
+  snack: '🥜',
+  dessert: '🍰',
   quick: '⚡',
   healthy: '🥗',
   vegetarian: '🌱',
   vegan: '🌿',
+  'gluten-free': '🌾',
   pasta: '🍝',
   chicken: '🍗',
   beef: '🥩',
+  lamb: '🍖',
+  pork: '🥓',
   seafood: '🐟',
   fish: '🐟',
-  dessert: '🍰',
-  baking: '🧁',
-  breakfast: '🥞',
-  snack: '🥜',
+  tofu: '🫘',
+  chickpea: '🫘',
+  lentil: '🫘',
+  egg: '🥚',
+  avocado: '🥑',
+  banana: '🍌',
+  potato: '🥔',
+  mushroom: '🍄',
+  rice: '🍚',
+  noodle: '🍜',
   soup: '🍲',
+  stew: '🍲',
+  curry: '🍛',
+  salad: '🥗',
+  baking: '🧁',
+  bread: '🍞',
+  pizza: '🍕',
+  burger: '🍔',
+  taco: '🌮',
+  sushi: '🍣',
   indian: '🍛',
   italian: '🇮🇹',
   mexican: '🌮',
   chinese: '🥡',
-  tofu: '🫘',
-  'gluten-free': '🌾',
-  salad: '🥗',
-  rice: '🍚',
+  japanese: '🇯🇵',
+  thai: '🇹🇭',
+  korean: '🇰🇷',
+  greek: '🇬🇷',
+  mediterranean: '🫒',
+  vietnamese: '🇻🇳',
+  australian: '🇦🇺',
+  caribbean: '🏝️',
+  african: '🌍',
+  'middle-eastern': '🧆',
+  french: '🇫🇷',
+  spanish: '🇪🇸',
+  bbq: '🔥',
+  comfort: '🛋️',
+  spicy: '🌶️',
+  sweet: '🍯',
+  'one-pot': '🫕',
+  slow: '🐢',
+  grilled: '🔥',
+  roast: '🍗',
+  fried: '🍳',
+  raw: '🥬',
+  smoothie: '🥤',
+  drink: '🥤',
+  sauce: '🫙',
+  dip: '🫕',
+  side: '🥦',
 };
 
 function getGreeting(): string {
@@ -52,9 +98,11 @@ export default function RecipeList() {
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const tagsExpandedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -95,8 +143,48 @@ export default function RecipeList() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [filterOpen]);
 
+  // Close tags expanded panel on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tagsExpandedRef.current && !tagsExpandedRef.current.contains(e.target as Node)) {
+        setTagsExpanded(false);
+      }
+    }
+    if (tagsExpanded) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [tagsExpanded]);
+
   // Build a map from tag name -> tag id for category filtering
   const tagNameToId = new Map(tags.map((t) => [t.name.toLowerCase(), t.id]));
+
+  // Derive dynamic category bubbles from tags actually in use
+  const allCategories = useMemo(() => {
+    const countByTagId = new Map<string, number>();
+    for (const rt of recipeTags) {
+      countByTagId.set(rt.tag_id, (countByTagId.get(rt.tag_id) ?? 0) + 1);
+    }
+
+    return tags
+      .filter((t) => (countByTagId.get(t.id) ?? 0) > 0)
+      .sort((a, b) => (countByTagId.get(b.id) ?? 0) - (countByTagId.get(a.id) ?? 0))
+      .map((t) => ({
+        tag: t.name.toLowerCase(),
+        label: t.name.charAt(0).toUpperCase() + t.name.slice(1),
+        emoji: t.emoji || TAG_EMOJI[t.name.toLowerCase()] || '🏷️',
+      }));
+  }, [tags, recipeTags]);
+
+  const MAX_VISIBLE_TAGS = 6;
+
+  const visibleCategories = useMemo(() => {
+    const top = allCategories.slice(0, MAX_VISIBLE_TAGS);
+    const topTags = new Set(top.map((c) => c.tag));
+    // Promote any active tags not already in the top set
+    const promoted = allCategories.filter((c) => activeCategories.has(c.tag) && !topTags.has(c.tag));
+    return [...top, ...promoted];
+  }, [allCategories, activeCategories]);
+
+  const hiddenCount = allCategories.length - visibleCategories.length;
 
   function handleToggleFavourite(recipeId: string, newValue: boolean) {
     setRecipes((prev) =>
@@ -288,19 +376,45 @@ export default function RecipeList() {
 
       {/* Category bubbles */}
       <div
-        className="rf-category-scroll mb-6"
+        className="rf-category-section mb-6"
         style={{ animation: 'fadeUp 0.4s ease 0.16s both' }}
+        ref={tagsExpandedRef}
       >
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.tag}
-            onClick={() => toggleCategory(cat.tag)}
-            className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
-          >
-            <span className="rf-category-icon">{cat.emoji}</span>
-            <span className="rf-category-label">{cat.label}</span>
-          </button>
-        ))}
+        <div className="rf-category-scroll">
+          {visibleCategories.map((cat) => (
+            <button
+              key={cat.tag}
+              onClick={() => toggleCategory(cat.tag)}
+              className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
+            >
+              <span className="rf-category-icon">{cat.emoji}</span>
+              <span className="rf-category-label">{cat.label}</span>
+            </button>
+          ))}
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setTagsExpanded((prev) => !prev)}
+              className={`rf-category-bubble ${tagsExpanded ? 'rf-category-active' : ''}`}
+            >
+              <span className="rf-category-icon rf-category-icon-more">+{hiddenCount}</span>
+              <span className="rf-category-label">More</span>
+            </button>
+          )}
+        </div>
+
+        {tagsExpanded && (
+          <div className="rf-tags-expanded">
+            {allCategories.map((cat) => (
+              <button
+                key={cat.tag}
+                onClick={() => toggleCategory(cat.tag)}
+                className={`rf-tag rf-tag-clickable ${activeCategories.has(cat.tag) ? 'rf-tag-active' : ''}`}
+              >
+                {cat.emoji} {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Loading */}

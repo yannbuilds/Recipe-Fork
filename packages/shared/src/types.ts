@@ -34,6 +34,7 @@ export interface Recipe {
 export interface Tag {
   id: string;
   name: string;
+  emoji?: string;
 }
 
 export interface RecipeTag {

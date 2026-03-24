@@ -259,8 +259,8 @@ function resetStatus() {
 }
 
 // Save AI-suggested tags to Supabase, reusing existing tags where possible
-async function saveTags(recipeId: string, tagNames: string[]) {
-  if (tagNames.length === 0) return;
+async function saveTags(recipeId: string, tags: { name: string; emoji: string }[]) {
+  if (tags.length === 0) return;
 
   const { data: existingTags } = await supabase
     .from("tags")
@@ -272,13 +272,13 @@ async function saveTags(recipeId: string, tagNames: string[]) {
 
   const tagIds: string[] = [];
 
-  for (const name of tagNames) {
-    if (existingMap.has(name)) {
-      tagIds.push(existingMap.get(name)!);
+  for (const tag of tags) {
+    if (existingMap.has(tag.name)) {
+      tagIds.push(existingMap.get(tag.name)!);
     } else {
       const { data } = await supabase
         .from("tags")
-        .insert({ name })
+        .insert({ name: tag.name, emoji: tag.emoji })
         .select("id")
         .single();
       if (data) tagIds.push(data.id);
@@ -346,7 +346,7 @@ async function handleSaveRecipe() {
 
     showLoading("Cooking recipe…");
 
-    const { recipe, tagNames } = await extractRecipe(response.html, response.url);
+    const { recipe, tags } = await extractRecipe(response.html, response.url);
 
     const { data, error: saveError } = await supabase
       .from("recipes")
@@ -359,7 +359,7 @@ async function handleSaveRecipe() {
     }
 
     // Save auto-generated tags (non-blocking — don't fail the save if tags fail)
-    await saveTags(data.id, tagNames).catch(() => {});
+    await saveTags(data.id, tags).catch(() => {});
 
     // Update footer link to point to the saved recipe
     const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;

@@ -54,7 +54,11 @@
       "Bash(npm install:*)",
       "Bash(brew install:*)",
       "Bash(supabase init:*)",
-      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/supabase/\")"
+      "Bash(ls \"/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/supabase/\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx supabase:*)",
+      "Bash(node -e \":*)",
+      "Bash(node --input-type=module -e \":*)"
     ]
   }
 }

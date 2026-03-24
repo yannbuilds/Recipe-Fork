@@ -225,7 +225,12 @@ input[type="checkbox"] { accent-color: var(--green); }
   transition: width 0.4s ease;
 }
 
-/* ── Category bubbles ────────────────────────── */
+/* ── Category section ────────────────────────── */
+.rf-category-section {
+  position: relative;
+  z-index: 20;
+}
+
 .rf-category-scroll {
   display: flex;
   gap: 16px;
@@ -255,13 +260,13 @@ input[type="checkbox"] { accent-color: var(--green); }
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--warm);
+  background: #fff;
   font-size: 24px;
   transition: background 0.15s, box-shadow 0.15s;
 }
 
 .rf-category-bubble:hover .rf-category-icon {
-  background: var(--warm-dark);
+  background: #f5f5f5;
 }
 
 .rf-category-active .rf-category-icon {
@@ -278,6 +283,52 @@ input[type="checkbox"] { accent-color: var(--green); }
 
 .rf-category-active .rf-category-label {
   color: var(--green);
+}
+
+.rf-category-icon-more {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--warm);
+}
+
+.rf-category-bubble:hover .rf-category-icon-more {
+  background: var(--warm-dark);
+}
+
+.rf-category-active .rf-category-icon-more {
+  color: var(--green);
+  background: var(--green-light);
+}
+
+/* ── Tags expanded overlay ───────────────────── */
+.rf-tags-expanded {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  padding: 12px;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  animation: fadeUp 0.15s ease both;
+}
+
+.rf-tag-clickable {
+  cursor: pointer;
+}
+
+.rf-tag-clickable:hover {
+  background: var(--warm);
+}
+
+.rf-tag-active.rf-tag-clickable:hover {
+  background: var(--green);
+  opacity: 0.9;
 }
 
 /* ── Filter dropdown ─────────────────────────── */

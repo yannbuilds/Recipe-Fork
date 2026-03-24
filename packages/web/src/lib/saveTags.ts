@@ -4,8 +4,8 @@ import { supabase } from '@recipe-aggregator/shared';
  * Save AI-suggested tags to Supabase, reusing existing tags where possible.
  * Non-critical – callers should .catch() to avoid failing the recipe save.
  */
-export async function saveTags(recipeId: string, tagNames: string[]): Promise<void> {
-  if (tagNames.length === 0) return;
+export async function saveTags(recipeId: string, tags: { name: string; emoji: string }[]): Promise<void> {
+  if (tags.length === 0) return;
 
   const { data: existingTags } = await supabase
     .from('tags')
@@ -17,13 +17,13 @@ export async function saveTags(recipeId: string, tagNames: string[]): Promise<vo
 
   const tagIds: string[] = [];
 
-  for (const name of tagNames) {
-    if (existingMap.has(name)) {
-      tagIds.push(existingMap.get(name)!);
+  for (const tag of tags) {
+    if (existingMap.has(tag.name)) {
+      tagIds.push(existingMap.get(tag.name)!);
     } else {
       const { data } = await supabase
         .from('tags')
-        .insert({ name })
+        .insert({ name: tag.name, emoji: tag.emoji })
         .select('id')
         .single();
       if (data) tagIds.push(data.id);
