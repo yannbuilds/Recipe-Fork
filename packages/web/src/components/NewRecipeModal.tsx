@@ -94,6 +94,9 @@ export default function NewRecipeModal() {
 
       const { data, error } = await supabase.functions.invoke('import-recipe', {
         body: { url: trimmed },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       if (error) {
@@ -159,15 +162,34 @@ export default function NewRecipeModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      style={{ animation: 'fadeIn 0.15s ease' }}
+      className="fixed inset-0 flex flex-col justify-end bg-black/50"
+      style={{ zIndex: 60, animation: 'fadeIn 0.15s ease' }}
       onClick={handleBackdropClick}
     >
       <div
-        className="rf-card w-full mx-4"
-        style={{ maxWidth: 420, padding: 24, animation: 'fadeUp 0.2s ease' }}
+        className="w-full"
+        style={{
+          background: 'var(--card)',
+          borderRadius: '20px 20px 0 0',
+          padding: '12px 24px calc(24px + 72px)',
+          maxHeight: '50vh',
+          overflowY: 'auto',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
+          animation: 'slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag handle */}
+        <div className="flex justify-center mb-4">
+          <div
+            style={{
+              width: 40,
+              height: 4,
+              borderRadius: 2,
+              background: 'var(--border)',
+            }}
+          />
+        </div>
         {/* Step: Choose */}
         {step === 'choose' && (
           <>
