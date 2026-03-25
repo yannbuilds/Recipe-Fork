@@ -69,7 +69,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: Rec
         <div
           className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-end"
           style={{
-            padding: '24px 12px 10px',
+            padding: '12px 12px 10px',
             minHeight: 90,
             borderRadius: '0 0 var(--radius) var(--radius)',
           }}
