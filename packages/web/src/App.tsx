@@ -122,7 +122,7 @@ function AppShell() {
     return <MarketingShell />;
   }
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/privacy';
+  const hideNav = location.pathname === '/login' || location.pathname === '/privacy' || location.pathname === '/landing';
 
   return (
     <NewRecipeModalProvider>
@@ -130,6 +130,7 @@ function AppShell() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
+          {import.meta.env.DEV && <Route path="/landing" element={<LandingPage />} />}
           <Route path="/recipe/:id" element={<RecipeDetail />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<RecipeList />} />
