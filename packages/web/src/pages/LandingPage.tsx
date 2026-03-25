@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
 import { Scissors, Search, CalendarDays, Chrome, Sparkles, Tag, ListChecks, ChefHat, ShoppingCart, LayoutGrid } from "lucide-react";
 
 /* ── Scroll-reveal hook ──────────────────────── */
@@ -41,12 +41,12 @@ function LandingNav() {
           Pie Keeper
         </span>
         <div className="flex items-center gap-3">
-          <Link to="/login" className="rf-btn rf-btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
+          <a href={`${APP_URL}/login`} className="rf-btn rf-btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
             Sign in
-          </Link>
-          <Link to="/login" className="rf-btn rf-btn-filled" style={{ padding: "8px 16px", fontSize: 13 }}>
+          </a>
+          <a href={`${APP_URL}/login`} className="rf-btn rf-btn-filled" style={{ padding: "8px 16px", fontSize: 13 }}>
             Get started
-          </Link>
+          </a>
         </div>
       </div>
     </nav>
@@ -205,13 +205,13 @@ export default function LandingPage() {
             className="flex flex-wrap gap-3"
             style={{ animation: "fadeUp 0.6s ease 0.3s both" }}
           >
-            <Link
-              to="/login"
+            <a
+              href={`${APP_URL}/login`}
               className="rf-btn rf-btn-filled"
               style={{ padding: "12px 24px", fontSize: 15 }}
             >
               Get started free
-            </Link>
+            </a>
             <button
               onClick={scrollToFeatures}
               className="rf-btn rf-btn-primary"
@@ -383,13 +383,13 @@ export default function LandingPage() {
           <p style={{ color: "var(--muted)", fontSize: 16, marginBottom: 28 }}>
             Free to use. No credit card needed.
           </p>
-          <Link
-            to="/login"
+          <a
+            href={`${APP_URL}/login`}
             className="rf-btn rf-btn-filled"
             style={{ padding: "14px 32px", fontSize: 16 }}
           >
             Get started
-          </Link>
+          </a>
         </div>
       </section>
 

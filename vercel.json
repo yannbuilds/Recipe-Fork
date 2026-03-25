@@ -1,4 +1,23 @@
 {
+  "redirects": [
+    {
+      "source": "/landing",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/((?!privacy|_next|assets|screenshots|favicon|.*\\..*).*)",
+      "has": [{ "type": "host", "value": "piekeeper.com" }],
+      "destination": "https://app.piekeeper.com/$1",
+      "permanent": false
+    },
+    {
+      "source": "/((?!privacy|_next|assets|screenshots|favicon|.*\\..*).*)",
+      "has": [{ "type": "host", "value": "www.piekeeper.com" }],
+      "destination": "https://app.piekeeper.com/$1",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

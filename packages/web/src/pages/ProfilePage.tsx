@@ -1,7 +1,9 @@
 import { useAuth } from '../context/AuthContext';
 
 export default function ProfilePage() {
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
+
+  const initial = profile?.display_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? '?';
 
   return (
     <div className="flex flex-col items-center gap-6 py-12">
@@ -16,16 +18,23 @@ export default function ProfilePage() {
           fontWeight: 700,
         }}
       >
-        {user?.email?.[0]?.toUpperCase() ?? '?'}
+        {initial}
       </div>
 
       <div className="text-center">
-        <p className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+        {profile?.display_name && (
+          <p className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+            {profile.display_name}
+          </p>
+        )}
+        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
           {user?.email ?? 'Guest'}
         </p>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          More settings coming soon.
-        </p>
+        {profile?.measurement_preference && (
+          <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
+            {profile.measurement_preference === 'metric' ? 'Metric (g, ml)' : 'Imperial (oz, cups)'}
+          </p>
+        )}
       </div>
 
       {user && (

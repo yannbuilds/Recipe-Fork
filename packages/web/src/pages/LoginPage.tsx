@@ -7,6 +7,9 @@ import { useAuth } from '../context/AuthContext';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [measurement, setMeasurement] = useState<'metric' | 'imperial'>('metric');
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,10 +26,31 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (isSignUp) {
+      if (!displayName.trim()) {
+        setError('Please enter your name.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    }
+
     setLoading(true);
 
     const { error } = isSignUp
-      ? await supabase.auth.signUp({ email, password })
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              display_name: displayName.trim(),
+              measurement_preference: measurement,
+            },
+          },
+        })
       : await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
@@ -55,7 +79,7 @@ export default function LoginPage() {
           className="rf-heading text-2xl font-bold text-center mb-8"
           style={{ color: 'var(--text)' }}
         >
-          Recipe Fork
+          Pie Keeper
         </h1>
 
         {signUpSuccess ? (
@@ -91,6 +115,27 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div>
+                <label
+                  htmlFor="displayName"
+                  className="block text-sm font-medium mb-1"
+                  style={{ color: 'var(--muted)' }}
+                >
+                  Name
+                </label>
+                <input
+                  id="displayName"
+                  type="text"
+                  required
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="rf-input w-full"
+                  placeholder="Your first name"
+                />
+              </div>
+            )}
+
             <div>
               <label
                 htmlFor="email"
@@ -130,6 +175,65 @@ export default function LoginPage() {
               />
             </div>
 
+            {isSignUp && (
+              <>
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium mb-1"
+                    style={{ color: 'var(--muted)' }}
+                  >
+                    Confirm password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="rf-input w-full"
+                    placeholder="Re-enter your password"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    className="block text-sm font-medium mb-2"
+                    style={{ color: 'var(--muted)' }}
+                  >
+                    Measurement preference
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMeasurement('metric')}
+                      className="rf-btn flex-1 text-sm"
+                      style={{
+                        background: measurement === 'metric' ? 'var(--green)' : 'var(--surface)',
+                        color: measurement === 'metric' ? '#fff' : 'var(--text)',
+                        border: `1px solid ${measurement === 'metric' ? 'var(--green)' : 'var(--border)'}`,
+                      }}
+                    >
+                      Metric (g, ml)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMeasurement('imperial')}
+                      className="rf-btn flex-1 text-sm"
+                      style={{
+                        background: measurement === 'imperial' ? 'var(--green)' : 'var(--surface)',
+                        color: measurement === 'imperial' ? '#fff' : 'var(--text)',
+                        border: `1px solid ${measurement === 'imperial' ? 'var(--green)' : 'var(--border)'}`,
+                      }}
+                    >
+                      Imperial (oz, cups)
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -157,16 +261,6 @@ export default function LoginPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
               Google
-            </button>
-
-            <button
-              onClick={() => handleOAuth('facebook')}
-              className="rf-btn rf-btn-secondary w-full"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1877F2">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              Facebook
             </button>
 
             <button

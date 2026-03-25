@@ -3,6 +3,7 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
 import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
+import { useAuth } from '../context/AuthContext';
 
 interface RecipeTagRow {
   recipe_id: string;
@@ -91,6 +92,7 @@ function getGreeting(): string {
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 
 export default function RecipeList() {
+  const { profile } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
@@ -247,7 +249,7 @@ export default function RecipeList() {
           className="rf-heading font-bold"
           style={{ color: 'var(--text)', fontSize: 26 }}
         >
-          {getGreeting()}, Yann?
+          {getGreeting()}{profile?.display_name ? `, ${profile.display_name}` : ''}?
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
           You have {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} saved.

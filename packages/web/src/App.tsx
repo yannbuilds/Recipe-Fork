@@ -16,17 +16,16 @@ import NewRecipeModal from "./components/NewRecipeModal";
 function AppLayout() {
   const { user, loading } = useAuth();
 
-  // TEMPORARY: Auth bypass for testing — uncomment the block below to re-enable login
-  // if (loading) {
-  //   return (
-  //     <div className="flex items-center justify-center py-20">
-  //       <div style={{ color: 'var(--muted)' }}>Loading…</div>
-  //     </div>
-  //   );
-  // }
-  // if (!user) {
-  //   return <Navigate to="/login" replace />;
-  // }
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div style={{ color: 'var(--muted)' }}>Loading…</div>
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <>
@@ -80,15 +79,31 @@ function Header() {
   );
 }
 
+const isMarketingSite =
+  window.location.hostname === 'piekeeper.com' ||
+  window.location.hostname === 'www.piekeeper.com';
+
 function AppShell() {
   const location = useLocation();
-  const hideNav = location.pathname === '/login' || location.pathname === '/privacy' || location.pathname === '/landing';
+
+  if (isMarketingSite) {
+    return (
+      <div className="min-h-screen">
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  const hideNav = location.pathname === '/login' || location.pathname === '/privacy';
 
   return (
     <NewRecipeModalProvider>
       <div className="min-h-screen">
         <Routes>
-          <Route path="/landing" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
