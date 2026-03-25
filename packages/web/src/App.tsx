@@ -83,19 +83,43 @@ const isMarketingSite =
   window.location.hostname === 'piekeeper.com' ||
   window.location.hostname === 'www.piekeeper.com';
 
+const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
+
+function MarketingShell() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  const isPrivacy = location.pathname === '/privacy';
+
+  if (!isPrivacy && loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div style={{ color: 'var(--muted)' }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (!isPrivacy && user) {
+    window.location.href = APP_URL;
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen">
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  );
+}
+
 function AppShell() {
   const location = useLocation();
 
   if (isMarketingSite) {
-    return (
-      <div className="min-h-screen">
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    );
+    return <MarketingShell />;
   }
 
   const hideNav = location.pathname === '/login' || location.pathname === '/privacy';
