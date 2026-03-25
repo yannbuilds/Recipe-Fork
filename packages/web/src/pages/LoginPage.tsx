@@ -204,15 +204,18 @@ export default function LoginPage() {
                   >
                     Measurement preference
                   </label>
-                  <div className="flex gap-2">
+                  <div
+                    className="flex rounded-lg overflow-hidden"
+                    style={{ border: '1px solid var(--border)', height: 36 }}
+                  >
                     <button
                       type="button"
                       onClick={() => setMeasurement('metric')}
-                      className="rf-btn flex-1 text-sm"
+                      className="flex-1 text-xs font-medium transition-colors"
                       style={{
-                        background: measurement === 'metric' ? 'var(--green)' : 'var(--surface)',
-                        color: measurement === 'metric' ? '#fff' : 'var(--text)',
-                        border: `1px solid ${measurement === 'metric' ? 'var(--green)' : 'var(--border)'}`,
+                        background: measurement === 'metric' ? 'var(--warm)' : 'transparent',
+                        color: measurement === 'metric' ? 'var(--text)' : 'var(--muted)',
+                        borderRight: '1px solid var(--border)',
                       }}
                     >
                       Metric (g, ml)
@@ -220,11 +223,10 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setMeasurement('imperial')}
-                      className="rf-btn flex-1 text-sm"
+                      className="flex-1 text-xs font-medium transition-colors"
                       style={{
-                        background: measurement === 'imperial' ? 'var(--green)' : 'var(--surface)',
-                        color: measurement === 'imperial' ? '#fff' : 'var(--text)',
-                        border: `1px solid ${measurement === 'imperial' ? 'var(--green)' : 'var(--border)'}`,
+                        background: measurement === 'imperial' ? 'var(--warm)' : 'transparent',
+                        color: measurement === 'imperial' ? 'var(--text)' : 'var(--muted)',
                       }}
                     >
                       Imperial (oz, cups)
