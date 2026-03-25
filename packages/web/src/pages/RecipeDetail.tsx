@@ -411,7 +411,7 @@ export default function RecipeDetail() {
           {/* Bottom overlay: title card + meta cards */}
           <div
             className="absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
-            style={{ padding: '18px 20px 16px' }}
+            style={{ padding: '32px 20px 20px' }}
           >
             {/* Title card */}
             <div className="rd-hero-title">
