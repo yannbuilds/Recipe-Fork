@@ -221,6 +221,8 @@ input[type="checkbox"] { accent-color: var(--green); }
     rgba(255,255,255,0.0) 100%);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
+  -webkit-mask-image: linear-gradient(to top, black 70%, transparent 100%);
+  mask-image: linear-gradient(to top, black 70%, transparent 100%);
 }
 .rf-glass-dark {
   background: rgba(255,255,255,0.2);
