@@ -409,17 +409,12 @@ export default function RecipeDetail() {
           </div>
 
           {/* Bottom overlay: title card + meta cards */}
-          <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4">
+          <div
+            className="absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
+            style={{ padding: '18px 20px 16px' }}
+          >
             {/* Title card */}
-            <div
-              className="rd-hero-title px-5 py-4"
-              style={{
-                background: 'rgba(255,255,255,0.78)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                borderRadius: 10,
-              }}
-            >
+            <div className="rd-hero-title">
               <h1
                 className="font-bold leading-snug"
                 style={{ fontFamily: "'Lora', serif", fontSize: 20, color: 'var(--text)' }}
@@ -447,7 +442,7 @@ export default function RecipeDetail() {
                           bottom: 0,
                           right: 0,
                           color: 'var(--muted)',
-                          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.78) 35%)',
+                          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.92) 35%)',
                           border: 'none',
                           paddingLeft: '2rem',
                           paddingRight: 0,
