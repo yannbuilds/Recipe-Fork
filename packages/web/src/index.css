@@ -215,7 +215,7 @@ input[type="checkbox"] { accent-color: var(--green); }
 
 /* ── Frosted glass ────────────────────────────── */
 .rf-glass {
-  background: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
