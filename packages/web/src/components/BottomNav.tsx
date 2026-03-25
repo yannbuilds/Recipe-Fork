@@ -66,8 +66,18 @@ export default function BottomNav() {
                 textDecoration: 'none',
               }}
             >
-              <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
+              <Icon size={active ? 24 : 22} strokeWidth={active ? 2.2 : 1.8} style={{ transition: 'all 0.2s ease' }} />
               <span style={{ fontSize: 11 }}>{label}</span>
+              <span
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  background: 'var(--green)',
+                  opacity: active ? 1 : 0,
+                  transition: 'opacity 0.2s ease',
+                }}
+              />
             </Link>
           );
         })}
