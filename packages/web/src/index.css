@@ -222,7 +222,7 @@ input[type="checkbox"] { accent-color: var(--green); }
 /* ── Tile info gradient ───────────────────────── */
 .rf-glass {
   background: linear-gradient(to top,
-    rgba(255,255,255,0.92) 0%,
+    rgba(255,255,255,0.95) 0%,
     rgba(255,255,255,0.65) 60%,
     rgba(255,255,255,0.0) 100%);
   backdrop-filter: blur(3px);
