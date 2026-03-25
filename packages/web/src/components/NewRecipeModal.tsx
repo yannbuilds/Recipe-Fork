@@ -14,7 +14,12 @@ export default function NewRecipeModal() {
   const [url, setUrl] = useState('');
   const [statusText, setStatusText] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [dismissing, setDismissing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number | null>(null);
+  const dragCurrentY = useRef(0);
+  const isDragging = useRef(false);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -22,8 +27,50 @@ export default function NewRecipeModal() {
       setStep('choose');
       setUrl('');
       setErrorMessage('');
+      setDismissing(false);
+      dragStartY.current = null;
+      dragCurrentY.current = 0;
+      isDragging.current = false;
     }
   }, [open]);
+
+  function handleDragPointerDown(e: React.PointerEvent) {
+    if (step === 'processing') return;
+    isDragging.current = true;
+    dragStartY.current = e.clientY;
+    dragCurrentY.current = 0;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function handleDragPointerMove(e: React.PointerEvent) {
+    if (!isDragging.current || dragStartY.current === null) return;
+    const delta = Math.max(0, e.clientY - dragStartY.current);
+    dragCurrentY.current = delta;
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translateY(${delta}px)`;
+      sheetRef.current.style.transition = 'none';
+    }
+  }
+
+  function handleDragPointerUp() {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const delta = dragCurrentY.current;
+    const sheetHeight = sheetRef.current?.offsetHeight ?? 300;
+    const threshold = Math.min(80, sheetHeight * 0.35);
+
+    if (delta > threshold) {
+      // Dismiss: slide down then close
+      setDismissing(true);
+      setTimeout(() => closeModal(), 300);
+    } else {
+      // Snap back
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+        sheetRef.current.style.transform = 'translateY(0)';
+      }
+    }
+  }
 
   // Focus URL input when switching to that step
   useEffect(() => {
@@ -167,20 +214,28 @@ export default function NewRecipeModal() {
       onClick={handleBackdropClick}
     >
       <div
+        ref={sheetRef}
         className="w-full"
         style={{
           background: 'var(--card)',
           borderRadius: '20px 20px 0 0',
-          padding: '12px 24px calc(24px + 72px)',
+          padding: '0 24px calc(24px + 72px)',
           maxHeight: '50vh',
           overflowY: 'auto',
           boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
-          animation: 'slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+          animation: dismissing ? 'none' : 'slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+          transform: dismissing ? 'translateY(110%)' : undefined,
+          transition: dismissing ? 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)' : undefined,
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle */}
-        <div className="flex justify-center mb-4">
+        {/* Drag handle zone — touch target for drag-to-dismiss */}
+        <div
+          onPointerDown={handleDragPointerDown}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
+          style={{ touchAction: 'none', cursor: 'grab', padding: '12px 0 8px', display: 'flex', justifyContent: 'center' }}
+        >
           <div
             style={{
               width: 40,
