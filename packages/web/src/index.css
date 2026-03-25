@@ -84,7 +84,7 @@
   .rd-steps       { order: 2; }
   .rd-hero       { height: 360px; }
   .rd-hero-expanded { height: auto; min-height: 360px; }
-  .rd-hero-title { max-width: 100%; background: rgba(255,255,255,0.78) !important; text-align: center; }
+  .rd-hero-title { max-width: 100%; text-align: center; }
   .rd-hero-meta  { display: none; }
   .rd-meta-row   { display: flex; gap: 12px; margin-top: 12px; }
   .rd-action-btn { flex: 0 0 calc(50% - 6px); text-align: center; }
