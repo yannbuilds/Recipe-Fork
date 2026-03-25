@@ -31,11 +31,11 @@ export default function ProfilePage() {
 
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({
+      .upsert({
+        id: user!.id,
         display_name: nameValue.trim(),
         measurement_preference: measurementValue,
-      })
-      .eq('id', user!.id);
+      });
 
     if (updateError) {
       setError(updateError.message);
