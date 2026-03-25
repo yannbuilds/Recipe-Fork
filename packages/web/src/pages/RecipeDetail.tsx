@@ -353,7 +353,6 @@ export default function RecipeDetail() {
         <div
           className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
           style={{
-            borderRadius: 'var(--radius)',
             animation: 'fadeUp 0.4s ease both',
           }}
         >
