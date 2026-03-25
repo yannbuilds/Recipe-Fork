@@ -369,7 +369,7 @@ export default function MealPlan() {
                 }}
               >
                 {/* Image area with overlays */}
-                <div className="relative" style={{ height: 160 }}>
+                <div className="relative" style={{ height: 200 }}>
                   {entry.recipe?.image_url ? (
                     <img
                       src={entry.recipe.image_url}
@@ -411,8 +411,8 @@ export default function MealPlan() {
                   )}
 
                   {/* Title overlay: bottom, frosted glass */}
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <div className="rf-glass" style={{ borderRadius: 10, padding: '8px 12px' }}>
+                  <div className="absolute bottom-0 left-0 right-0">
+                    <div className="rf-glass" style={{ padding: '8px 12px' }}>
                       <h3
                         className={`rf-heading font-semibold text-sm ${entry.is_cooked ? 'line-through' : ''}`}
                         style={{ color: 'var(--text)' }}

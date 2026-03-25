@@ -9,6 +9,7 @@ import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import LandingPage from "./pages/LandingPage";
 import BottomNav from "./components/BottomNav";
 import NewRecipeModal from "./components/NewRecipeModal";
 
@@ -81,12 +82,13 @@ function Header() {
 
 function AppShell() {
   const location = useLocation();
-  const hideNav = location.pathname === '/login' || location.pathname === '/privacy';
+  const hideNav = location.pathname === '/login' || location.pathname === '/privacy' || location.pathname === '/landing';
 
   return (
     <NewRecipeModalProvider>
       <div className="min-h-screen">
         <Routes>
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />

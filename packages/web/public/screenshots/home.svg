@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+  <rect width="390" height="844" fill="#e9ede4"/>
+  <rect x="20" y="60" width="350" height="40" rx="8" fill="#fff"/>
+  <text x="195" y="86" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#7a7a74">Search recipes...</text>
+  <rect x="20" y="120" width="170" height="200" rx="16" fill="#fff"/>
+  <rect x="200" y="120" width="170" height="200" rx="16" fill="#fff"/>
+  <rect x="20" y="340" width="170" height="200" rx="16" fill="#fff"/>
+  <rect x="200" y="340" width="170" height="200" rx="16" fill="#fff"/>
+  <text x="195" y="30" text-anchor="middle" font-family="serif" font-size="20" font-weight="bold" fill="#1c1c1a">Pie Keeper</text>
+</svg>

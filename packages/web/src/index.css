@@ -322,6 +322,56 @@ input[type="checkbox"] { accent-color: var(--green); }
   background: var(--green-light);
 }
 
+/* ── Landing page ────────────────────────────── */
+@keyframes lp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes lp-float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.lp-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.lp-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lp-float { animation: lp-float 6s ease-in-out infinite; }
+.lp-float-slow { animation: lp-float-slow 8s ease-in-out infinite; }
+.lp-float-delay-1 { animation-delay: -2s; }
+.lp-float-delay-2 { animation-delay: -4s; }
+
+.lp-phone {
+  border-radius: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08);
+  overflow: hidden;
+  border: 8px solid #1c1c1a;
+}
+.lp-phone img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--green-light);
+  color: var(--green);
+  border: 1px solid rgba(63,115,88,0.15);
+}
+
 /* ── Tags expanded overlay ───────────────────── */
 .rf-tags-expanded {
   position: absolute;
