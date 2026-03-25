@@ -75,7 +75,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: Rec
           }}
         >
           <h2
-            className="rf-heading font-semibold leading-snug"
+            className="rf-heading font-semibold leading-snug line-clamp-2"
             style={{ fontSize: 14, color: 'var(--text)' }}
           >
             {recipe.title}
