@@ -182,7 +182,7 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {profile && (
+          {user && (
             <button
               onClick={enterEditMode}
               className="rf-btn rf-btn-secondary"

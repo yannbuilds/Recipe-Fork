@@ -82,11 +82,43 @@ const TAG_EMOJI: Record<string, string> = {
   side: '🥦',
 };
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return "What's for lunch";
-  return "What's for dinner";
+function getGreeting(): { text: string; punctuation: string } {
+  const now = new Date();
+  const hour = now.getHours();
+  const month = now.getMonth(); // 0-indexed
+  const dayOfYear = Math.floor(
+    (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000,
+  );
+
+  const morning: { text: string; punctuation: string }[] = [
+    { text: 'Good morning', punctuation: '!' },
+    { text: 'Rise and shine', punctuation: '!' },
+    { text: 'Morning', punctuation: '!' },
+  ];
+  const afternoon: { text: string; punctuation: string }[] = [
+    { text: "What's for lunch", punctuation: '?' },
+    { text: 'Good afternoon', punctuation: '!' },
+    { text: 'Afternoon', punctuation: '!' },
+  ];
+  const evening: { text: string; punctuation: string }[] = [
+    { text: "What's for dinner", punctuation: '?' },
+    { text: 'Good evening', punctuation: '!' },
+    { text: 'Hungry yet', punctuation: '?' },
+  ];
+
+  // Australian seasonal extras
+  if (month === 11 || month <= 1) {
+    // Summer (Dec–Feb)
+    morning.push({ text: "It's BBQ weather", punctuation: '!' });
+    afternoon.push({ text: "It's BBQ weather", punctuation: '!' });
+  } else if (month >= 5 && month <= 7) {
+    // Winter (Jun–Aug)
+    evening.push({ text: 'Perfect soup weather', punctuation: '!' });
+    afternoon.push({ text: 'Perfect soup weather', punctuation: '!' });
+  }
+
+  const pool = hour < 12 ? morning : hour < 17 ? afternoon : evening;
+  return pool[dayOfYear % pool.length];
 }
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
@@ -240,6 +272,7 @@ export default function RecipeList() {
   });
 
   const hasActiveFilters = showFavouritesOnly || sortBy !== 'newest';
+  const greeting = getGreeting();
 
   return (
     <>
@@ -249,7 +282,7 @@ export default function RecipeList() {
           className="rf-heading font-bold"
           style={{ color: 'var(--text)', fontSize: 26 }}
         >
-          {getGreeting()}{profile?.display_name ? `, ${profile.display_name}` : ''}?
+          {greeting.text}{profile?.display_name ? `, ${profile.display_name}` : ''}{greeting.punctuation}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
           You have {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} saved.
