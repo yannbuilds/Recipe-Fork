@@ -131,10 +131,10 @@ function AppShell() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           {import.meta.env.DEV && <Route path="/landing" element={<LandingPage />} />}
-          <Route path="/recipe/:id" element={<RecipeDetail />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<RecipeList />} />
             <Route path="/new" element={<RecipeForm />} />
+            <Route path="/recipe/:id" element={<RecipeDetail />} />
             <Route path="/recipe/:id/edit" element={<RecipeForm />} />
             <Route path="/meal-plan" element={<MealPlan />} />
             <Route path="/profile" element={<ProfilePage />} />

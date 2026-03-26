@@ -311,44 +311,7 @@ export default function RecipeDetail() {
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-      {/* ── Sticky nav ─────────────────────────────────────────────── */}
-      <nav
-        className="sticky top-0 z-50"
-        style={{
-          height: 56,
-          background: 'rgba(255,255,255,0.92)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-sm)',
-        }}
-      >
-        <div
-          className="mx-auto h-full flex items-center justify-between"
-          style={{ maxWidth: 1100, padding: '0 24px' }}
-        >
-          <Link
-            to="/"
-            className="text-sm hover:underline"
-            style={{ color: 'var(--muted)' }}
-          >
-            &larr; Back to recipes
-          </Link>
-          <span
-            className="text-sm font-bold"
-            style={{ fontFamily: "'Lora', serif", color: 'var(--text)' }}
-          >
-            Recipe Fork
-          </span>
-        </div>
-      </nav>
-
-      {/* ── Page wrapper ───────────────────────────────────────────── */}
-      <div
-        className="mx-auto"
-        style={{ maxWidth: 1100, padding: '28px 24px 96px' }}
-      >
+    <div>
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div
           className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
@@ -1040,7 +1003,6 @@ export default function RecipeDetail() {
             Delete
           </button>
         </div>
-      </div>
 
       <ConfirmModal
         open={showDeleteModal}
