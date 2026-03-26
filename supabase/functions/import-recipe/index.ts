@@ -21,7 +21,7 @@ Return ONLY a JSON object with this exact structure:
   "image_url": "full image URL or null",
   "video_url": "full video URL or null",
   "creator_name": "recipe author/creator name or null",
-  "tags": ["tag1", "tag2", "tag3"]
+  "tags": [{"name": "tag1", "emoji": "🍽️"}, {"name": "tag2", "emoji": "🍗"}]
 }
 
 Example ingredient parsing — JSON-LD "recipeIngredient" contains flat strings. You MUST parse each into separate fields:
@@ -44,7 +44,7 @@ Rules:
 - Times should be in minutes (convert hours to minutes).
 - Look for structured data (JSON-LD) first, then fall back to page content.
 - For video_url: check the "[Video URLs found on page]" section first — if present, use the first URL. Also check JSON-LD "video" field. Return a full YouTube watch URL (https://www.youtube.com/watch?v=...) or null if no video exists.
-- For tags: suggest 3–5 lowercase tags. Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
+- For tags: suggest 3–5 tags as objects with "name" (lowercase) and "emoji" (a single emoji that represents the tag). Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
 - For creator_name: extract the recipe author/creator name. Check JSON-LD "author.name", byline elements, or meta tags. Return the name as-is (e.g. "Nagi | RecipeTin Eats"). Return null if not found.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
 
@@ -354,12 +354,19 @@ Deno.serve(async (req) => {
     };
 
     const rawTags = parsed.tags ?? [];
-    const tagNames = (Array.isArray(rawTags) ? rawTags : [])
-      .map((t: string) => String(t).trim().toLowerCase())
-      .filter((t: string) => t.length > 0 && t.length < 50);
+    const tags = (Array.isArray(rawTags) ? rawTags : [])
+      .map((t: unknown) => {
+        if (typeof t === 'string') return { name: t.trim().toLowerCase(), emoji: '🏷️' };
+        const obj = t as { name?: string; emoji?: string };
+        return {
+          name: String(obj.name ?? '').trim().toLowerCase(),
+          emoji: String(obj.emoji ?? '🏷️').trim(),
+        };
+      })
+      .filter((t) => t.name.length > 0 && t.name.length < 50);
 
     return new Response(
-      JSON.stringify({ recipe, tagNames }),
+      JSON.stringify({ recipe, tags }),
       { status: 200, headers: corsHeaders },
     );
   } catch (err) {

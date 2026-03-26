@@ -169,7 +169,7 @@ export default function NewRecipeModal() {
         throw new Error(data.error);
       }
 
-      const { recipe, tagNames } = data;
+      const { recipe, tags } = data;
 
       // Save recipe to Supabase
       setStatusText('Saving recipe…');
@@ -189,7 +189,7 @@ export default function NewRecipeModal() {
       }
 
       // Save tags (non-blocking)
-      await saveTags(saved.id, tagNames).catch(() => {});
+      await saveTags(saved.id, tags ?? []).catch(() => {});
 
       closeModal();
       navigate(`/recipe/${saved.id}`);

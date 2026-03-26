@@ -366,6 +366,90 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Testimonial ────────────────────────── */}
+      <section style={{ background: "var(--warm)", padding: "80px 24px" }}>
+        <div
+          className="lp-reveal mx-auto"
+          style={{ maxWidth: 640, textAlign: "center" }}
+        >
+          {/* Decorative quote mark */}
+          <div
+            style={{
+              fontSize: 72,
+              lineHeight: 1,
+              color: "var(--green)",
+              opacity: 0.25,
+              marginBottom: 8,
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            &ldquo;
+          </div>
+
+          <blockquote
+            className="rf-heading"
+            style={{
+              fontSize: "clamp(18px, 3vw, 24px)",
+              lineHeight: 1.6,
+              color: "var(--text)",
+              fontWeight: 400,
+              fontStyle: "italic",
+              margin: "0 0 32px",
+            }}
+          >
+            I used to lose recipes in screenshots and bookmarks. Now they're all
+            in one place, and Pie Keeper feels like a quiet companion in the
+            kitchen – one that helps me cherish the process as much as the meal.
+          </blockquote>
+
+          {/* Avatar + attribution */}
+          <div className="flex flex-col items-center gap-3">
+            {/* Inline SVG female avatar */}
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: "var(--green-light)",
+                border: "2px solid var(--green)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+              }}
+            >
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 36 36"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="18" cy="13" r="7" fill="var(--green)" opacity="0.6" />
+                <ellipse cx="18" cy="34" rx="13" ry="12" fill="var(--green)" opacity="0.6" />
+                {/* Hair */}
+                <path
+                  d="M10 14c0-6 3.5-10 8-10s8 4 8 10c0 1-0.5 2-1 2.5 0-5-3-9-7-9s-7 4-7 9c-0.5-0.5-1-1.5-1-2.5z"
+                  fill="var(--green)"
+                  opacity="0.45"
+                />
+              </svg>
+            </div>
+            <div>
+              <span
+                className="rf-heading font-bold"
+                style={{ fontSize: 16, color: "var(--text)" }}
+              >
+                Dafne
+              </span>
+              <span style={{ color: "var(--muted)", fontSize: 14 }}>
+                {" "}· Home Cook, Melbourne
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Final CTA ─────────────────────────── */}
       <section
         style={{ background: "var(--green-light)", padding: "80px 24px" }}

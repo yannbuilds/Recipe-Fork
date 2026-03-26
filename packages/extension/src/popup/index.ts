@@ -1,4 +1,3 @@
-import { extractRecipe, type ExtractedRecipe } from "../lib/groq";
 import { supabase } from "../lib/supabase";
 
 // Inline SVG logo – pie icon in sage green
@@ -332,21 +331,32 @@ async function handleSaveRecipe() {
     return;
   }
 
-  showLoading("Reading recipe…");
+  showLoading("Cooking recipe…");
 
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "GET_PAGE_HTML",
-    });
+    const { data: fnData, error: fnError } = await supabase.functions.invoke(
+      "import-recipe",
+      { body: { url: tab.url } },
+    );
 
-    if (!response?.html) {
-      showError("No recipe content found on this page.");
-      return;
+    if (fnError) {
+      let msg = "Failed to import recipe";
+      try {
+        if (fnError.context instanceof Response) {
+          const body = await fnError.context.clone().json();
+          msg = body?.error || msg;
+        } else if (fnError.message) {
+          msg = fnError.message;
+        }
+      } catch { /* keep generic message */ }
+      throw new Error(msg);
     }
 
-    showLoading("Cooking recipe…");
+    if (fnData?.error) {
+      throw new Error(fnData.error);
+    }
 
-    const { recipe, tags } = await extractRecipe(response.html, response.url);
+    const { recipe, tags } = fnData;
 
     const { data, error: saveError } = await supabase
       .from("recipes")
