@@ -49,7 +49,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="rf-card w-full max-w-lg mx-4 flex flex-col max-h-[80vh]"
+        className="rf-card w-full max-w-[1100px] mx-3 sm:mx-4 flex flex-col max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 space-y-3" style={{ borderBottom: '1px solid var(--border)' }}>

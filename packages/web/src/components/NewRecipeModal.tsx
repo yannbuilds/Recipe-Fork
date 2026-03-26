@@ -209,14 +209,15 @@ export default function NewRecipeModal() {
 
   return (
     <div
-      className="fixed inset-0 flex flex-col justify-end bg-black/50"
+      className="fixed inset-0 flex flex-col justify-end bg-black/50 px-2 sm:px-0"
       style={{ zIndex: 60, animation: 'fadeIn 0.15s ease' }}
       onClick={handleBackdropClick}
     >
       <div
         ref={sheetRef}
-        className="w-full"
+        className="w-full mx-auto"
         style={{
+          maxWidth: 1100,
           background: 'var(--card)',
           borderRadius: '20px 20px 0 0',
           padding: '0 24px calc(24px + 72px)',
