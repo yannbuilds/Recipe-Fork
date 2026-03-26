@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ type Tab = 'meals' | 'shopping';
 export default function MealPlan() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [plan, setPlan] = useState<MealPlanType | null>(null);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
@@ -428,11 +429,11 @@ export default function MealPlan() {
                   </div>
                 </div>
 
-                {/* Cooked toggle button */}
-                <div style={{ padding: 12 }}>
+                {/* Action buttons */}
+                <div className="flex gap-2" style={{ padding: 12 }}>
                   <button
                     onClick={() => handleToggleCooked(entry.id)}
-                    className="w-full text-center py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors"
                     style={
                       entry.is_cooked
                         ? { background: 'var(--green-light)', color: 'var(--green)' }
@@ -449,6 +450,15 @@ export default function MealPlan() {
                     ) : (
                       'Mark as cooked'
                     )}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
+                    className="flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors"
+                    style={{ background: 'var(--warm)', color: 'var(--text)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
+                  >
+                    View Recipe
                   </button>
                 </div>
               </div>
