@@ -1,4 +1,3 @@
-import { extractRecipe, type ExtractedRecipe } from "../lib/groq";
 import { supabase } from "../lib/supabase";
 
 // Inline SVG logo – pie icon in sage green
@@ -292,7 +291,7 @@ async function saveTags(recipeId: string, tags: { name: string; emoji: string }[
   }
 }
 
-// Save handler — grabs page HTML via content script, then will send to Claude API
+// Save handler — sends the page URL to the Supabase edge function for extraction
 async function handleSaveRecipe() {
   const [tab] = await chrome.tabs.query({
     active: true,
@@ -335,18 +334,20 @@ async function handleSaveRecipe() {
   showLoading("Reading recipe…");
 
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "GET_PAGE_HTML",
-    });
+    const { data: fnData, error: fnError } = await supabase.functions.invoke(
+      "import-recipe",
+      { body: { url: tab.url } },
+    );
 
-    if (!response?.html) {
-      showError("No recipe content found on this page.");
-      return;
-    }
+    if (fnError) throw new Error(fnError.message);
+    if (fnData?.error) throw new Error(fnData.error);
+
+    const { recipe, tagNames } = fnData as {
+      recipe: Record<string, unknown>;
+      tagNames: string[];
+    };
 
     showLoading("Cooking recipe…");
-
-    const { recipe, tags } = await extractRecipe(response.html, response.url);
 
     const { data, error: saveError } = await supabase
       .from("recipes")
@@ -359,6 +360,7 @@ async function handleSaveRecipe() {
     }
 
     // Save auto-generated tags (non-blocking — don't fail the save if tags fail)
+    const tags = (tagNames ?? []).map((name) => ({ name, emoji: "🏷️" }));
     await saveTags(data.id, tags).catch(() => {});
 
     // Update footer link to point to the saved recipe
