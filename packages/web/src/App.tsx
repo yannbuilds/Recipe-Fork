@@ -8,6 +8,7 @@ import RecipeForm from "./pages/RecipeForm";
 import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import IconCompare from "./pages/IconCompare";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LandingPage from "./pages/LandingPage";
 import BottomNav from "./components/BottomNav";
@@ -140,6 +141,7 @@ function AppShell() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           {import.meta.env.DEV && <Route path="/landing" element={<LandingPage />} />}
+          {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}
           <Route element={<AppLayout />}>
             <Route path="/" element={<RecipeList />} />
             <Route path="/new" element={<RecipeForm />} />
@@ -147,6 +149,7 @@ function AppShell() {
             <Route path="/recipe/:id/edit" element={<RecipeForm />} />
             <Route path="/meal-plan" element={<MealPlan />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/icon-compare" element={<IconCompare />} />
           </Route>
         </Routes>
         {!hideNav && <BottomNav />}

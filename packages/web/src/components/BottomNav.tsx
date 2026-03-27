@@ -39,7 +39,7 @@ export default function BottomNav() {
             return (
               <button
                 key={to}
-                onClick={openModal}
+                onClick={() => { navigator.vibrate?.(10); openModal(); }}
                 className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors"
                 style={{
                   color: 'var(--muted)',
@@ -59,6 +59,7 @@ export default function BottomNav() {
             <Link
               key={to}
               to={to}
+              onClick={() => navigator.vibrate?.(10)}
               className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors"
               style={{
                 color: active ? 'var(--green)' : 'var(--muted)',
