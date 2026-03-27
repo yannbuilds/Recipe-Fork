@@ -12,6 +12,8 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LandingPage from "./pages/LandingPage";
 import BottomNav from "./components/BottomNav";
 import NewRecipeModal from "./components/NewRecipeModal";
+import PWAUpdateBanner from "./components/PWAUpdateBanner";
+import OfflineBanner from "./components/OfflineBanner";
 
 function AppLayout() {
   const { user, loading } = useAuth();
@@ -142,6 +144,8 @@ function AppShell() {
         </Routes>
         {!hideNav && <BottomNav />}
         <NewRecipeModal />
+        <PWAUpdateBanner />
+        <OfflineBanner />
       </div>
     </NewRecipeModalProvider>
   );

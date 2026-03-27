@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '@recipe-aggregator/shared';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile, signOut } = useAuth();
+  const { canInstall, promptInstall } = useInstallPrompt();
 
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState('');
@@ -191,6 +193,15 @@ export default function ProfilePage() {
             </button>
           )}
         </>
+      )}
+
+      {canInstall && (
+        <button
+          onClick={promptInstall}
+          className="rf-btn rf-btn-filled"
+        >
+          Install Pie Keeper
+        </button>
       )}
 
       {user && (
