@@ -24,7 +24,7 @@ export default function BottomNav() {
         WebkitBackdropFilter: 'blur(12px)',
         borderTop: '1px solid var(--border)',
         boxShadow: '0 -1px 3px rgba(0,0,0,0.04)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
         willChange: 'transform',
         transform: 'translateZ(0)',
       }}
