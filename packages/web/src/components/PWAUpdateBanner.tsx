@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 
 let updateSWFn: ((reloadPage?: boolean) => Promise<void>) | undefined;
 
 export default function PWAUpdateBanner() {
   const [showUpdate, setShowUpdate] = useState(false);
+  const lastCheckRef = useRef(0);
 
   useEffect(() => {
     updateSWFn = registerSW({
@@ -15,6 +16,20 @@ export default function PWAUpdateBanner() {
         console.log('Pie Keeper is ready to work offline.');
       },
     });
+
+    // Check for SW updates when the app regains focus (fixes iOS PWA)
+    function onVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+
+      const now = Date.now();
+      if (now - lastCheckRef.current < 60_000) return; // throttle: once per minute
+      lastCheckRef.current = now;
+
+      navigator.serviceWorker?.ready.then((reg) => reg.update());
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   if (!showUpdate) return null;
