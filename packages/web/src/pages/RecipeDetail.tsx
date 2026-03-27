@@ -557,6 +557,97 @@ export default function RecipeDetail() {
           </div>
         )}
 
+        {/* ── Meal Plan + Screen On row ─────────────────────────── */}
+        <div
+          className="flex items-center justify-between flex-wrap gap-3 mt-6"
+          style={{ position: 'relative', zIndex: 10 }}
+        >
+          <button
+            onClick={() => setShowWeekPicker(true)}
+            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--green)',
+              color: 'var(--green)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--green-light)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--card)';
+            }}
+          >
+            + Meal Plan
+          </button>
+
+          {supportsWakeLock && (
+            <div className="relative flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const next = !isAwake;
+                  setIsAwake(next);
+                  if (next) {
+                    setShowAwakeTooltip(true);
+                    setTimeout(() => setShowAwakeTooltip(false), 4000);
+                  } else {
+                    setShowAwakeTooltip(false);
+                  }
+                }}
+                className="flex items-center gap-2 text-sm font-semibold"
+                style={{ color: isAwake ? 'var(--green)' : 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+              >
+                <span>{isAwake ? '⚡' : '💤'} Screen on</span>
+                {/* Toggle track */}
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: isAwake ? 'var(--green)' : 'var(--border)',
+                    transition: 'background 0.25s ease',
+                    padding: 2,
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* Toggle thumb */}
+                  <span
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: '#fff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      transform: isAwake ? 'translateX(20px)' : 'translateX(0)',
+                      transition: 'transform 0.25s ease',
+                    }}
+                  />
+                </span>
+              </button>
+
+              {/* Tooltip */}
+              {showAwakeTooltip && (
+                <div
+                  onClick={() => setShowAwakeTooltip(false)}
+                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+                  style={{
+                    background: 'var(--text)',
+                    color: 'var(--card)',
+                    width: 220,
+                    animation: 'fadeUp 0.2s ease both',
+                    cursor: 'pointer',
+                    zIndex: 9999,
+                    right: 0,
+                  }}
+                >
+                  Screen will stay on while you cook. This may use more battery.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* ── Two-column body ────────────────────────────────────── */}
         <div
           className="rd-grid mt-6"
@@ -896,78 +987,6 @@ export default function RecipeDetail() {
           className="rd-actions flex flex-wrap gap-3 mt-4"
           style={{ position: 'relative', zIndex: 1 }}
         >
-          <button
-            onClick={() => setShowWeekPicker(true)}
-            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            + Meal Plan
-          </button>
-
-          {/* Keep Screen Awake toggle – sits next to Meal Plan */}
-          {supportsWakeLock && (
-            <div className="rd-action-btn relative rd-awake" style={{ zIndex: 10 }}>
-              <button
-                onClick={() => {
-                  const next = !isAwake;
-                  setIsAwake(next);
-                  if (next) {
-                    setShowAwakeTooltip(true);
-                    setTimeout(() => setShowAwakeTooltip(false), 4000);
-                  } else {
-                    setShowAwakeTooltip(false);
-                  }
-                }}
-                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-                style={{
-                  background: isAwake ? 'var(--green-light)' : 'var(--card)',
-                  border: isAwake ? '1px solid var(--green)' : '1px solid var(--border)',
-                  color: isAwake ? 'var(--green)' : 'var(--text)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isAwake
-                    ? 'var(--green-light)'
-                    : 'var(--warm)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isAwake
-                    ? 'var(--green-light)'
-                    : 'var(--card)';
-                }}
-              >
-                {isAwake ? '⚡' : '💤'} Screen on
-              </button>
-
-              {/* Tooltip */}
-              {showAwakeTooltip && (
-                <div
-                  onClick={() => setShowAwakeTooltip(false)}
-                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
-                  style={{
-                    background: 'var(--text)',
-                    color: 'var(--card)',
-                    width: 220,
-                    animation: 'fadeUp 0.2s ease both',
-                    cursor: 'pointer',
-                    zIndex: 9999,
-                  }}
-                >
-                  Screen will stay on while you cook. This may use more battery.
-                </div>
-              )}
-            </div>
-          )}
-
           <Link
             to={`/recipe/${id}/edit`}
             className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
