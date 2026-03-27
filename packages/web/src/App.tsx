@@ -117,6 +117,12 @@ function MarketingShell() {
   );
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 function AppShell() {
   const location = useLocation();
 
@@ -128,6 +134,7 @@ function AppShell() {
 
   return (
     <NewRecipeModalProvider>
+      <ScrollToTop />
       <div className="min-h-screen">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
