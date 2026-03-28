@@ -34,7 +34,7 @@ export default function InvitePage() {
     async function fetchInvite() {
       const { data, error } = await supabase
         .from('family_invitations')
-        .select('*, inviter:profiles!invited_by(display_name)')
+        .select('*')
         .eq('token', token!)
         .eq('status', 'pending')
         .single();
@@ -51,8 +51,14 @@ export default function InvitePage() {
         return;
       }
 
-      const inviter = Array.isArray(data.inviter) ? data.inviter[0] : data.inviter;
-      setInviterName(inviter?.display_name || 'Someone');
+      // Fetch inviter name separately (no FK from invitations to profiles)
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', data.invited_by)
+        .single();
+
+      setInviterName(inviterProfile?.display_name || 'Someone');
       setStatus('ready');
     }
 
