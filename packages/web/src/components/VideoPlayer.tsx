@@ -8,20 +8,23 @@ interface VideoPlayerProps {
 
 export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [hasOpened, setHasOpened] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const isFirstOpen = useRef(true);
+
+  function sendCommand(func: string) {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args: '' }), '*'
+    );
+  }
 
   function open() {
-    if (!hasOpened) setHasOpened(true);
     setIsOpen(true);
+    // Small delay to ensure overlay is visible before sending play command
+    setTimeout(() => sendCommand('playVideo'), 100);
   }
 
   function close() {
-    iframeRef.current?.contentWindow?.postMessage(
-      '{"event":"command","func":"pauseVideo","args":""}', '*'
-    );
+    sendCommand('pauseVideo');
     setIsOpen(false);
   }
 
@@ -29,13 +32,6 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
     if (!isOpen) return;
     closeRef.current?.focus();
     document.body.style.overflow = 'hidden';
-    // Resume playback on reopen (first open uses autoplay=1)
-    if (!isFirstOpen.current) {
-      iframeRef.current?.contentWindow?.postMessage(
-        '{"event":"command","func":"playVideo","args":""}', '*'
-      );
-    }
-    isFirstOpen.current = false;
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') close();
     }
@@ -76,8 +72,8 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
         </div>
       </button>
 
-      {/* Fullscreen overlay — portaled to body to escape transformed ancestors */}
-      {hasOpened && createPortal(
+      {/* Fullscreen overlay — portaled to body, always mounted so iframe stays alive */}
+      {createPortal(
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 invisible pointer-events-none'}`}
           role="dialog"
@@ -103,7 +99,7 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
             <iframe
               ref={iframeRef}
               className="w-full h-full rounded-lg"
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
+              src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
               title={`${title} video`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
