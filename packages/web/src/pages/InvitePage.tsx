@@ -30,35 +30,20 @@ export default function InvitePage() {
 
     if (!user) return; // still loading auth
 
-    // Fetch invite details
+    // Fetch invite details via edge function (bypasses RLS)
     async function fetchInvite() {
-      const { data, error } = await supabase
-        .from('family_invitations')
-        .select('*')
-        .eq('token', token!)
-        .eq('status', 'pending')
-        .single();
+      const { data, error } = await supabase.functions.invoke('accept-family-invite', {
+        body: { token: token!, action: 'preview' },
+      });
 
-      if (error || !data) {
+      if (error || !data || data.error) {
+        const msg = data?.error || 'This invite is no longer valid. It may have expired or already been used.';
         setStatus('error');
-        setErrorMessage('This invite is no longer valid. It may have expired or already been used.');
+        setErrorMessage(msg);
         return;
       }
 
-      if (new Date(data.expires_at) < new Date()) {
-        setStatus('error');
-        setErrorMessage('This invite has expired. Ask the sender to send a new one.');
-        return;
-      }
-
-      // Fetch inviter name separately (no FK from invitations to profiles)
-      const { data: inviterProfile } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', data.invited_by)
-        .single();
-
-      setInviterName(inviterProfile?.display_name || 'Someone');
+      setInviterName(data.inviter_name || 'Someone');
       setStatus('ready');
     }
 

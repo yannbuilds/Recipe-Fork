@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse input
-    const { token } = await req.json();
+    const { token, action } = await req.json();
     if (!token || typeof token !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing invite token" }),
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use service role for admin operations
+    // Use service role for admin operations (bypasses RLS)
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -82,6 +82,24 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "This invite has expired. Ask the sender to send a new one." }),
         { status: 410, headers },
+      );
+    }
+
+    // Preview mode: return invite details without accepting
+    if (action === "preview") {
+      const { data: inviterProfile } = await admin
+        .from("profiles")
+        .select("display_name")
+        .eq("id", invitation.invited_by)
+        .single();
+
+      return new Response(
+        JSON.stringify({
+          inviter_name: inviterProfile?.display_name || "Someone",
+          invited_email: invitation.invited_email,
+          expires_at: invitation.expires_at,
+        }),
+        { status: 200, headers },
       );
     }
 
