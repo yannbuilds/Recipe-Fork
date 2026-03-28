@@ -279,7 +279,19 @@ function FamilySection({
     setSending(false);
 
     if (fnError) {
-      setError(fnError.message || 'Failed to send invite');
+      // supabase-js wraps non-2xx responses – try to extract the JSON body
+      let msg = 'Failed to send invite';
+      try {
+        if (fnError.context instanceof Response) {
+          const body = await fnError.context.clone().json();
+          msg = body?.error || msg;
+        } else if (fnError.message) {
+          msg = fnError.message;
+        }
+      } catch {
+        msg = fnError.message || msg;
+      }
+      setError(msg);
       return;
     }
 
