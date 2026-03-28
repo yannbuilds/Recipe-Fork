@@ -7,6 +7,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
 import FavouriteButton from '../components/FavouriteButton';
 import IngredientIcon from '../components/IngredientIcon';
+import VideoPlayer from '../components/VideoPlayer';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -927,18 +928,7 @@ export default function RecipeDetail() {
                     >
                       Video
                     </h2>
-                    <div
-                      className="relative w-full overflow-hidden rounded-lg"
-                      style={{ paddingBottom: '56.25%' }}
-                    >
-                      <iframe
-                        className="absolute inset-0 w-full h-full"
-                        src={`https://www.youtube.com/embed/${videoId}`}
-                        title={`${recipe.title} video`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
+                    <VideoPlayer videoId={videoId} title={recipe.title} />
                   </div>
                 );
               })()}
