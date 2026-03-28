@@ -16,32 +16,6 @@ Deno.serve(async (req) => {
   const headers = { ...corsHeaders, "Content-Type": "application/json" };
 
   try {
-    // Auth: get the calling user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization" }),
-        { status: 401, headers },
-      );
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Not authenticated" }),
-        { status: 401, headers },
-      );
-    }
-
     // Parse input
     const { token, action } = await req.json();
     if (!token || typeof token !== "string") {
@@ -85,7 +59,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Preview mode: return invite details without accepting
+    // Preview mode: return invite details without accepting (no auth needed – token is the secret)
     if (action === "preview") {
       const { data: inviterProfile } = await admin
         .from("profiles")
@@ -100,6 +74,32 @@ Deno.serve(async (req) => {
           expires_at: invitation.expires_at,
         }),
         { status: 200, headers },
+      );
+    }
+
+    // --- Accept flow: auth required from here ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization" }),
+        { status: 401, headers },
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Not authenticated" }),
+        { status: 401, headers },
       );
     }
 
