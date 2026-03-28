@@ -1,0 +1,90 @@
+// Maps ingredient substring keys to filenames in the ingredient-images bucket (without .png)
+const INGREDIENT_IMAGE_MAP: Record<string, string> = {
+  garlic: 'garlic',
+  onion: 'onion',
+  carrot: 'carrot',
+  mushroom: 'mushroom',
+  egg: 'egg',
+  cheese: 'cheese',
+  lemon: 'lemon',
+  bread: 'bread',
+  chicken: 'chicken',
+  fish: 'fish',
+  rice: 'rice',
+  spaghetti: 'spaghetti',
+  pasta: 'pasta',
+  honey: 'honey',
+  milk: 'milk',
+  flour: 'flour',
+  tomato: 'tomato',
+  beef: 'beef',
+  pork: 'pork',
+  cream: 'cream',
+  stock: 'stock',
+  bacon: 'bacon',
+  guanciale: 'guanciale',
+  pancetta: 'pancetta',
+  'olive oil': 'olive-oil',
+  oil: 'oil',
+  butter: 'butter',
+  cumin: 'cumin',
+  thyme: 'thyme',
+  'soy sauce': 'soy-sauce',
+  paprika: 'paprika',
+  cinnamon: 'cinnamon',
+  avocado: 'avocado',
+  corn: 'corn',
+  potato: 'potato',
+  broccoli: 'broccoli',
+  spinach: 'spinach',
+  celery: 'celery',
+  ginger: 'ginger',
+  'chilli flakes': 'chilli-flakes',
+  chilli: 'chilli',
+  cucumber: 'cucumber',
+  capsicum: 'capsicum',
+  zucchini: 'zucchini',
+  peas: 'peas',
+  'sweet potato': 'sweet-potato',
+  lime: 'lime',
+  orange: 'orange',
+  apple: 'apple',
+  banana: 'banana',
+  coconut: 'coconut',
+  lamb: 'lamb',
+  prawns: 'prawns',
+  tofu: 'tofu',
+  yoghurt: 'yoghurt',
+  parmesan: 'parmesan',
+  sugar: 'sugar',
+  salt: 'salt',
+  pepper: 'pepper',
+  vinegar: 'vinegar',
+  'sesame oil': 'sesame-oil',
+  mustard: 'mustard',
+  oregano: 'oregano',
+  basil: 'basil',
+  rosemary: 'rosemary',
+  'bay leaves': 'bay-leaves',
+  nutmeg: 'nutmeg',
+  turmeric: 'turmeric',
+  vanilla: 'vanilla',
+  chocolate: 'chocolate',
+  wine: 'wine',
+  'coconut milk': 'coconut-milk',
+  water: 'water',
+};
+
+const BUCKET_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/ingredient-images`;
+
+export function getIngredientImageUrl(item: string): string | null {
+  const lower = item.toLowerCase();
+  for (const [key, filename] of Object.entries(INGREDIENT_IMAGE_MAP)) {
+    if (lower.includes(key)) {
+      return `${BUCKET_BASE}/${filename}.png`;
+    }
+  }
+  return null;
+}
+
+export const FALLBACK_EMOJI = '🥘';

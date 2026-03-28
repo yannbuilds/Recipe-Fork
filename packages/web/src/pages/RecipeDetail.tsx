@@ -6,19 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
 import FavouriteButton from '../components/FavouriteButton';
-import { INGREDIENT_EMOJI_MAP } from '../utils/ingredientEmojis';
+import IngredientIcon from '../components/IngredientIcon';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function getIngredientEmoji(item: string): string {
-  const lower = item.toLowerCase();
-  for (const [key, emoji] of Object.entries(INGREDIENT_EMOJI_MAP)) {
-    if (lower.includes(key)) return emoji;
-  }
-  return '🥘';
-}
 
 function parseFraction(q: string): number | null {
   const parts = q.trim().split(/\s+/);
@@ -774,17 +766,7 @@ export default function RecipeDetail() {
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        {/* Emoji icon */}
-                        <span
-                          className="flex items-center justify-center shrink-0 rounded-md text-sm"
-                          style={{
-                            width: 28,
-                            height: 28,
-                            background: 'var(--warm)',
-                          }}
-                        >
-                          {getIngredientEmoji(ing.item)}
-                        </span>
+                        <IngredientIcon item={ing.item} />
                         {ing.original_text ? (
                           /* Full original text with quantity+unit bolded */
                           <span

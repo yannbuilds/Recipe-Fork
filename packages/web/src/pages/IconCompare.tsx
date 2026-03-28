@@ -46,6 +46,18 @@ const INGREDIENTS = [
   'beef', 'pork', 'cream', 'stock', 'bacon', 'olive oil', 'butter',
   // No emoji match (fallback 🥘)
   'cumin', 'thyme', 'soy sauce', 'paprika', 'cinnamon', 'avocado', 'corn',
+  // Produce
+  'potato', 'broccoli', 'spinach', 'celery', 'ginger', 'chilli', 'cucumber',
+  'capsicum', 'zucchini', 'peas', 'sweet potato', 'lime', 'orange', 'apple',
+  'banana', 'coconut',
+  // Proteins & dairy
+  'lamb', 'prawns', 'tofu', 'yoghurt', 'parmesan',
+  // Pantry & spices
+  'sugar', 'salt', 'pepper', 'vinegar', 'sesame oil', 'mustard',
+  'oregano', 'basil', 'rosemary', 'bay leaves', 'nutmeg', 'turmeric',
+  'chilli flakes', 'vanilla',
+  // Other
+  'chocolate', 'wine', 'coconut milk',
 ];
 
 // Hugeicons mapping — only icons that exist in the free set
@@ -103,6 +115,116 @@ const SPOONACULAR_MAP: Record<string, string> = {
   cinnamon: 'cinnamon-sticks.jpg',
   avocado: 'avocado.jpg',
   corn: 'corn.png',
+  potato: 'potatoes-yukon-gold.png',
+  broccoli: 'broccoli.jpg',
+  spinach: 'spinach.jpg',
+  celery: 'celery.jpg',
+  ginger: 'ginger.png',
+  chilli: 'red-chili.jpg',
+  cucumber: 'cucumber.jpg',
+  capsicum: 'red-pepper.jpg',
+  zucchini: 'zucchini.jpg',
+  peas: 'peas-fresh.jpg',
+  'sweet potato': 'sweet-potato.png',
+  lime: 'lime.png',
+  orange: 'orange.png',
+  apple: 'apple.png',
+  banana: 'bananas.jpg',
+  coconut: 'coconut.jpg',
+  lamb: 'lamb-loin-chops.jpg',
+  prawns: 'shrimp.png',
+  tofu: 'tofu.png',
+  yoghurt: 'plain-yogurt.jpg',
+  parmesan: 'parmesan.jpg',
+  sugar: 'sugar-in-702.png',
+  salt: 'salt.jpg',
+  pepper: 'pepper.jpg',
+  vinegar: 'vinegar-(white).jpg',
+  'sesame oil': 'sesame-oil.png',
+  mustard: 'dijon-mustard.jpg',
+  oregano: 'oregano.jpg',
+  basil: 'basil.jpg',
+  rosemary: 'rosemary.jpg',
+  'bay leaves': 'bay-leaves.jpg',
+  nutmeg: 'nutmeg.jpg',
+  turmeric: 'turmeric.jpg',
+  'chilli flakes': 'red-pepper-flakes.jpg',
+  vanilla: 'vanilla-extract.jpg',
+  chocolate: 'dark-chocolate.jpg',
+  wine: 'red-wine.jpg',
+  'coconut milk': 'coconut-milk.png',
+};
+
+// TheMealDB CDN image names (capitalised)
+const MEALDB_MAP: Record<string, string> = {
+  garlic: 'Garlic',
+  onion: 'Onion',
+  carrot: 'Carrots',
+  mushroom: 'Mushrooms',
+  egg: 'Egg',
+  cheese: 'Cheese',
+  lemon: 'Lemon',
+  bread: 'Bread',
+  chicken: 'Chicken',
+  fish: 'Salmon',
+  rice: 'Rice',
+  pasta: 'Penne Rigatoni',
+  honey: 'Honey',
+  milk: 'Milk',
+  flour: 'Plain Flour',
+  tomato: 'Tomatoes',
+  beef: 'Beef',
+  pork: 'Pork',
+  cream: 'Double Cream',
+  stock: 'Vegetable Stock',
+  bacon: 'Bacon',
+  'olive oil': 'Olive Oil',
+  butter: 'Butter',
+  cumin: 'Cumin',
+  thyme: 'Thyme',
+  'soy sauce': 'Soy Sauce',
+  paprika: 'Paprika',
+  cinnamon: 'Cinnamon',
+  avocado: 'Avocado',
+  corn: 'Corn Flour',
+  potato: 'Potatoes',
+  broccoli: 'Broccoli',
+  spinach: 'Spinach',
+  celery: 'Celery',
+  ginger: 'Ginger',
+  chilli: 'Red Chilli Flakes',
+  cucumber: 'Cucumber',
+  capsicum: 'Red Pepper',
+  zucchini: 'Courgettes',
+  peas: 'Peas',
+  'sweet potato': 'Sweet Potatoes',
+  lime: 'Lime',
+  orange: 'Orange',
+  apple: 'Apples',
+  banana: 'Banana',
+  coconut: 'Coconut Cream',
+  lamb: 'Lamb',
+  prawns: 'King Prawns',
+  tofu: 'Tofu',
+  yoghurt: 'Natural Yoghurt',
+  parmesan: 'Parmesan',
+  sugar: 'Sugar',
+  salt: 'Salt',
+  pepper: 'Pepper',
+  vinegar: 'Vinegar',
+  'sesame oil': 'Sesame Seed Oil',
+  mustard: 'Mustard',
+  oregano: 'Oregano',
+  basil: 'Basil',
+  rosemary: 'Rosemary',
+  'bay leaves': 'Bay Leaves',
+  nutmeg: 'Nutmeg',
+  turmeric: 'Turmeric',
+  'chilli flakes': 'Red Chilli Flakes',
+  vanilla: 'Vanilla Extract',
+  chocolate: 'Dark Chocolate',
+  wine: 'Red Wine',
+  'coconut milk': 'Coconut Milk',
 };
 
 function IconCell({ children, missing }: { children: React.ReactNode; missing?: boolean }) {
@@ -131,7 +253,7 @@ export default function IconCompare() {
         Ingredient Icon Comparison
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 24 }}>
-        Comparing emojis, Hugeicons (free), and Spoonacular photos side by side.
+        Comparing emojis, Hugeicons (free), Spoonacular photos, and TheMealDB photos side by side.
       </p>
 
       {/* Header row */}
@@ -139,7 +261,7 @@ export default function IconCompare() {
         className="sticky top-14 z-10"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 60px 60px 60px',
+          gridTemplateColumns: '1fr 60px 60px 60px 60px',
           gap: 8,
           padding: '12px 0',
           background: 'var(--bg)',
@@ -159,6 +281,9 @@ export default function IconCompare() {
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>
           Photo
         </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>
+          MealDB
+        </div>
       </div>
 
       {/* Ingredient rows */}
@@ -166,6 +291,7 @@ export default function IconCompare() {
         const emoji = getIngredientEmoji(name);
         const hugeicon = HUGEICON_MAP[name];
         const spoonacularFile = SPOONACULAR_MAP[name];
+        const mealdbName = MEALDB_MAP[name];
         const isGenericEmoji = emoji === '🥘';
 
         return (
@@ -173,7 +299,7 @@ export default function IconCompare() {
             key={name}
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 60px 60px 60px',
+              gridTemplateColumns: '1fr 60px 60px 60px 60px',
               gap: 8,
               alignItems: 'center',
               padding: '6px 0',
@@ -231,6 +357,26 @@ export default function IconCompare() {
                 </IconCell>
               )}
             </div>
+
+            {/* TheMealDB */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              {mealdbName ? (
+                <IconCell>
+                  <img
+                    src={`https://www.themealdb.com/images/ingredients/${encodeURIComponent(mealdbName)}-Small.png`}
+                    alt={name}
+                    style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 6 }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </IconCell>
+              ) : (
+                <IconCell missing>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>—</span>
+                </IconCell>
+              )}
+            </div>
           </div>
         );
       })}
@@ -238,7 +384,7 @@ export default function IconCompare() {
       {/* Summary */}
       <div className="rf-card" style={{ marginTop: 24, padding: 20 }}>
         <h2 className="rf-heading" style={{ fontSize: 16, marginBottom: 12 }}>Coverage Summary</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
           <SummaryCard
             label="Emojis"
             matched={INGREDIENTS.filter(n => getIngredientEmoji(n) !== '🥘').length}
@@ -256,6 +402,12 @@ export default function IconCompare() {
             matched={INGREDIENTS.filter(n => !!SPOONACULAR_MAP[n]).length}
             total={INGREDIENTS.length}
             note="Photos, not icons"
+          />
+          <SummaryCard
+            label="TheMealDB"
+            matched={INGREDIENTS.filter(n => !!MEALDB_MAP[n]).length}
+            total={INGREDIENTS.length}
+            note="CDN photos, no key"
           />
         </div>
       </div>

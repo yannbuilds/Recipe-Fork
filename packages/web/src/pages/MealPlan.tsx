@@ -7,7 +7,8 @@ import AddRecipeModal from '../components/AddRecipeModal';
 import { combineIngredients } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { getMonday, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
-import { getIngredientEmoji, CATEGORY_EMOJI_MAP } from '../utils/ingredientEmojis';
+import { CATEGORY_EMOJI_MAP } from '../utils/ingredientEmojis';
+import IngredientIcon from '../components/IngredientIcon';
 
 type Tab = 'meals' | 'shopping';
 
@@ -589,13 +590,7 @@ export default function MealPlan() {
                         className="sr-only"
                       />
 
-                      {/* Ingredient emoji */}
-                      <span
-                        className="flex items-center justify-center shrink-0 rounded-md text-sm"
-                        style={{ width: 28, height: 28, background: 'var(--warm)' }}
-                      >
-                        {getIngredientEmoji(ing.item)}
-                      </span>
+                      <IngredientIcon item={ing.item} />
 
                       {/* Item text */}
                       <span
