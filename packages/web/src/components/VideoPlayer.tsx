@@ -8,14 +8,36 @@ interface VideoPlayerProps {
 
 export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isFirstOpen = useRef(true);
+
+  function open() {
+    if (!hasOpened) setHasOpened(true);
+    setIsOpen(true);
+  }
+
+  function close() {
+    iframeRef.current?.contentWindow?.postMessage(
+      '{"event":"command","func":"pauseVideo","args":""}', '*'
+    );
+    setIsOpen(false);
+  }
 
   useEffect(() => {
     if (!isOpen) return;
     closeRef.current?.focus();
     document.body.style.overflow = 'hidden';
+    // Resume playback on reopen (first open uses autoplay=1)
+    if (!isFirstOpen.current) {
+      iframeRef.current?.contentWindow?.postMessage(
+        '{"event":"command","func":"playVideo","args":""}', '*'
+      );
+    }
+    isFirstOpen.current = false;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') close();
     }
     document.addEventListener('keydown', handleKey);
     return () => {
@@ -30,7 +52,7 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
       <button
         className="relative w-full overflow-hidden rounded-lg block group"
         style={{ paddingBottom: '56.25%' }}
-        onClick={() => setIsOpen(true)}
+        onClick={open}
         aria-label={`Play ${title} video`}
       >
         <img
@@ -55,17 +77,17 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
       </button>
 
       {/* Fullscreen overlay — portaled to body to escape transformed ancestors */}
-      {isOpen && createPortal(
+      {hasOpened && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 invisible pointer-events-none'}`}
           role="dialog"
-          aria-modal="true"
-          onClick={() => setIsOpen(false)}
+          aria-modal={isOpen}
+          onClick={close}
         >
           <button
             ref={closeRef}
             className="absolute top-4 right-4 z-10 text-white/80 hover:text-white transition-colors"
-            onClick={() => setIsOpen(false)}
+            onClick={close}
             aria-label="Close video"
           >
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,8 +101,9 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <iframe
+              ref={iframeRef}
               className="w-full h-full rounded-lg"
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
               title={`${title} video`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
