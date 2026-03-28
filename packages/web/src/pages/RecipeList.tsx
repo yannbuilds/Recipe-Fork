@@ -124,7 +124,7 @@ function getGreeting(): { text: string; punctuation: string } {
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 
 export default function RecipeList() {
-  const { profile } = useAuth();
+  const { user, profile, familyMembers } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
@@ -274,6 +274,17 @@ export default function RecipeList() {
   const hasActiveFilters = showFavouritesOnly || sortBy !== 'newest';
   const greeting = getGreeting();
 
+  // Build a map of family member user_id -> display_name (excludes current user)
+  const familyOwnerNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of familyMembers) {
+      if (m.user_id !== user?.id && m.profile?.display_name) {
+        map.set(m.user_id, m.profile.display_name);
+      }
+    }
+    return map;
+  }, [familyMembers, user?.id]);
+
   return (
     <>
       {/* Greeting header */}
@@ -285,7 +296,10 @@ export default function RecipeList() {
           {greeting.text}{profile?.display_name ? `, ${profile.display_name}` : ''}{greeting.punctuation}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          You have {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} saved.
+          {familyMembers.length > 1
+            ? `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} in your family collection.`
+            : `You have ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} saved.`
+          }
         </p>
       </div>
 
@@ -516,6 +530,7 @@ export default function RecipeList() {
               recipe={recipe}
               onToggleFavourite={handleToggleFavourite}
               index={index}
+              ownerName={familyOwnerNames.get(recipe.user_id)}
             />
           ))}
         </div>

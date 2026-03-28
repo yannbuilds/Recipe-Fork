@@ -6,6 +6,7 @@ interface RecipeCardProps {
   recipe: Recipe;
   onToggleFavourite?: (recipeId: string, newValue: boolean) => void;
   index?: number;
+  ownerName?: string;
 }
 
 function formatTime(minutes: number): string {
@@ -15,7 +16,7 @@ function formatTime(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: RecipeCardProps) {
+export default function RecipeCard({ recipe, onToggleFavourite, index = 0, ownerName }: RecipeCardProps) {
   const totalTime =
     recipe.prep_time != null && recipe.cook_time != null
       ? recipe.prep_time + recipe.cook_time
@@ -52,6 +53,35 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0 }: Rec
 
         {/* Gradient scrim */}
         <div className="rf-scrim absolute inset-0" />
+
+        {/* Family member badge: top-left */}
+        {ownerName && (
+          <div
+            className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full"
+            style={{
+              background: 'rgba(255,255,255,0.85)',
+              backdropFilter: 'blur(4px)',
+              fontSize: 11,
+              color: 'var(--muted)',
+              fontWeight: 500,
+            }}
+          >
+            <span
+              className="inline-flex items-center justify-center rounded-full"
+              style={{
+                width: 16,
+                height: 16,
+                background: 'var(--border)',
+                color: 'var(--text)',
+                fontSize: 9,
+                fontWeight: 600,
+              }}
+            >
+              {ownerName[0]?.toUpperCase()}
+            </span>
+            {ownerName}
+          </div>
+        )}
 
         {/* Favourite button: top-right */}
         {onToggleFavourite && (

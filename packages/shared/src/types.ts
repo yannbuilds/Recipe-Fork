@@ -67,3 +67,30 @@ export interface MealPlanRecipe {
 export interface MealPlanEntry extends MealPlanRecipe {
   recipe: Recipe;
 }
+
+export interface FamilyGroup {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface FamilyMember {
+  id: string;
+  group_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  joined_at: string;
+  profile?: { display_name: string };
+}
+
+export interface FamilyInvitation {
+  id: string;
+  group_id: string;
+  invited_by: string;
+  invited_email: string;
+  token: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  created_at: string;
+  expires_at: string;
+}

@@ -19,7 +19,13 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   if (user) {
-    navigate('/', { replace: true });
+    const pendingToken = sessionStorage.getItem('pending_invite_token');
+    if (pendingToken) {
+      sessionStorage.removeItem('pending_invite_token');
+      navigate(`/invite?token=${pendingToken}`, { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
     return null;
   }
 
@@ -60,7 +66,13 @@ export default function LoginPage() {
     } else if (isSignUp) {
       setSignUpSuccess(true);
     } else {
-      navigate('/', { replace: true });
+      const pendingToken = sessionStorage.getItem('pending_invite_token');
+      if (pendingToken) {
+        sessionStorage.removeItem('pending_invite_token');
+        navigate(`/invite?token=${pendingToken}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     }
   }
 

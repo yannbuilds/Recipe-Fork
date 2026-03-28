@@ -11,4 +11,7 @@ export type {
   MealPlan,
   MealPlanRecipe,
   MealPlanEntry,
+  FamilyGroup,
+  FamilyMember,
+  FamilyInvitation,
 } from './types.js';

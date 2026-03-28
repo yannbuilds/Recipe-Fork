@@ -8,6 +8,7 @@ import RecipeForm from "./pages/RecipeForm";
 import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import InvitePage from "./pages/InvitePage";
 import IconCompare from "./pages/IconCompare";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LandingPage from "./pages/LandingPage";
@@ -131,7 +132,7 @@ function AppShell() {
     return <MarketingShell />;
   }
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/privacy' || location.pathname === '/landing';
+  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/privacy' || location.pathname === '/landing';
 
   return (
     <NewRecipeModalProvider>
@@ -139,6 +140,7 @@ function AppShell() {
       <div className="min-h-screen">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/invite" element={<InvitePage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           {import.meta.env.DEV && <Route path="/landing" element={<LandingPage />} />}
           {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}

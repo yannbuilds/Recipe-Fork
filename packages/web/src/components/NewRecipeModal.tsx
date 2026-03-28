@@ -123,11 +123,12 @@ export default function NewRecipeModal() {
         throw new Error('Please sign in to import recipes');
       }
 
+      // RLS returns both own and family recipes, so this catches
+      // duplicates across the whole household automatically
       const { data: existing } = await supabase
         .from('recipes')
         .select('id')
         .eq('source_url', trimmed)
-        .eq('user_id', userId)
         .maybeSingle();
 
       if (existing) {

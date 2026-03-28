@@ -4,7 +4,16 @@ import { supabase } from '@recipe-aggregator/shared';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export default function ProfilePage() {
-  const { user, profile, refreshProfile, signOut } = useAuth();
+  const {
+    user,
+    profile,
+    refreshProfile,
+    signOut,
+    familyGroup,
+    familyMembers,
+    familyInvitations,
+    refreshFamily,
+  } = useAuth();
   const { canInstall, promptInstall } = useInstallPrompt();
 
   const [editing, setEditing] = useState(false);
@@ -153,7 +162,7 @@ export default function ProfilePage() {
               disabled={saving}
               className="rf-btn rf-btn-filled flex-1"
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Saving\u2026' : 'Save'}
             </button>
             <button
               type="button"
@@ -195,6 +204,17 @@ export default function ProfilePage() {
         </>
       )}
 
+      {/* ---- Family Sharing ---- */}
+      {user && !editing && (
+        <FamilySection
+          familyGroup={familyGroup}
+          familyMembers={familyMembers}
+          familyInvitations={familyInvitations}
+          currentUserId={user.id}
+          refreshFamily={refreshFamily}
+        />
+      )}
+
       {canInstall && (
         <button
           onClick={promptInstall}
@@ -213,6 +233,248 @@ export default function ProfilePage() {
           Sign out
         </button>
       )}
+    </div>
+  );
+}
+
+/* ================================================================
+   Family Sharing Section
+   ================================================================ */
+
+import type { FamilyGroup, FamilyMember, FamilyInvitation } from '@recipe-aggregator/shared';
+
+function FamilySection({
+  familyGroup,
+  familyMembers,
+  familyInvitations,
+  currentUserId,
+  refreshFamily,
+}: {
+  familyGroup: FamilyGroup | null;
+  familyMembers: FamilyMember[];
+  familyInvitations: FamilyInvitation[];
+  currentUserId: string;
+  refreshFamily: () => Promise<void>;
+}) {
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  const isOwner = familyMembers.find((m) => m.user_id === currentUserId)?.role === 'owner';
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    setSending(true);
+    setError(null);
+    setMessage(null);
+
+    const { data, error: fnError } = await supabase.functions.invoke('send-family-invite', {
+      body: { email: inviteEmail.trim() },
+    });
+
+    setSending(false);
+
+    if (fnError) {
+      setError(fnError.message || 'Failed to send invite');
+      return;
+    }
+
+    if (data?.error) {
+      setError(data.error);
+      return;
+    }
+
+    setMessage(data?.message || 'Invite sent!');
+    setInviteEmail('');
+    await refreshFamily();
+  }
+
+  async function handleRemoveMember(memberId: string) {
+    const { error } = await supabase
+      .from('family_members')
+      .delete()
+      .eq('id', memberId);
+
+    if (!error) await refreshFamily();
+  }
+
+  async function handleLeaveGroup() {
+    if (!confirm('Leave this family group? You will no longer see shared recipes.')) return;
+    setLeaving(true);
+
+    const myMembership = familyMembers.find((m) => m.user_id === currentUserId);
+    if (myMembership) {
+      await supabase.from('family_members').delete().eq('id', myMembership.id);
+    }
+
+    setLeaving(false);
+    await refreshFamily();
+  }
+
+  // No group yet – show invite CTA
+  if (!familyGroup) {
+    return (
+      <div className="w-full max-w-sm">
+        <div
+          className="rounded-xl p-5"
+          style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
+        >
+          <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
+            Family sharing
+          </h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+            Invite someone to share all your recipes. You'll both be able to view, edit, and organise the same collection.
+          </p>
+          <form onSubmit={handleInvite} className="flex gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Email address"
+              className="rf-input flex-1 text-sm"
+              required
+            />
+            <button
+              type="submit"
+              disabled={sending}
+              className="rf-btn rf-btn-filled text-sm"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {sending ? 'Sending\u2026' : 'Invite'}
+            </button>
+          </form>
+          {error && (
+            <p className="text-xs mt-2" style={{ color: 'var(--red)' }}>{error}</p>
+          )}
+          {message && (
+            <p className="text-xs mt-2" style={{ color: 'var(--green)' }}>{message}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Has a group – show members
+  return (
+    <div className="w-full max-w-sm">
+      <div
+        className="rounded-xl p-5"
+        style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
+      >
+        <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text)' }}>
+          Family sharing
+        </h3>
+
+        {/* Member list */}
+        <div className="space-y-2 mb-4">
+          {familyMembers.map((member) => {
+            const name = member.profile?.display_name || 'Unknown';
+            const memberInitial = name[0]?.toUpperCase() ?? '?';
+            const isMe = member.user_id === currentUserId;
+
+            return (
+              <div
+                key={member.id}
+                className="flex items-center gap-3"
+              >
+                <div
+                  className="flex items-center justify-center rounded-full shrink-0"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    background: isMe ? 'var(--green)' : 'var(--border)',
+                    color: isMe ? 'white' : 'var(--text)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {memberInitial}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>
+                    {name}{isMe ? ' (you)' : ''}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    {member.role === 'owner' ? 'Owner' : 'Member'}
+                  </p>
+                </div>
+                {isOwner && !isMe && (
+                  <button
+                    onClick={() => handleRemoveMember(member.id)}
+                    className="text-xs px-2 py-1 rounded"
+                    style={{ color: 'var(--red)', background: 'rgba(220,38,38,0.08)' }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pending invitations (owner only) */}
+        {isOwner && familyInvitations.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--muted)' }}>
+              Pending invites
+            </p>
+            {familyInvitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex items-center gap-2 text-xs py-1"
+                style={{ color: 'var(--muted)' }}
+              >
+                <span className="flex-1 truncate">{inv.invited_email}</span>
+                <span style={{ color: 'var(--orange, #d97706)' }}>Pending</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Invite form (owner only) */}
+        {isOwner && (
+          <form onSubmit={handleInvite} className="flex gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Invite by email"
+              className="rf-input flex-1 text-sm"
+              required
+            />
+            <button
+              type="submit"
+              disabled={sending}
+              className="rf-btn rf-btn-filled text-sm"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {sending ? 'Sending\u2026' : 'Invite'}
+            </button>
+          </form>
+        )}
+
+        {error && (
+          <p className="text-xs mt-2" style={{ color: 'var(--red)' }}>{error}</p>
+        )}
+        {message && (
+          <p className="text-xs mt-2" style={{ color: 'var(--green)' }}>{message}</p>
+        )}
+
+        {/* Leave group (member only) */}
+        {!isOwner && (
+          <button
+            onClick={handleLeaveGroup}
+            disabled={leaving}
+            className="rf-btn rf-btn-secondary text-sm w-full mt-3"
+          >
+            {leaving ? 'Leaving\u2026' : 'Leave family group'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
