@@ -11,97 +11,33 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// TheMealDB name for each ingredient (used in the CDN URL)
-const MEALDB_MAP: Record<string, string> = {
-  garlic: 'Garlic',
-  onion: 'Onion',
-  carrot: 'Carrots',
-  mushroom: 'Mushrooms',
-  egg: 'Egg',
-  cheese: 'Cheese',
-  lemon: 'Lemon',
-  bread: 'Bread',
-  chicken: 'Chicken',
-  fish: 'Salmon',
-  rice: 'Rice',
-  pasta: 'Rigatoni',
-  honey: 'Honey',
-  milk: 'Milk',
-  flour: 'Plain Flour',
-  tomato: 'Tomatoes',
-  beef: 'Beef',
-  pork: 'Pork',
-  cream: 'Double Cream',
-  stock: 'Vegetable Stock',
-  bacon: 'Bacon',
-  'olive oil': 'Olive Oil',
-  butter: 'Butter',
-  cumin: 'Cumin',
-  thyme: 'Thyme',
-  'soy sauce': 'Soy Sauce',
-  paprika: 'Paprika',
-  cinnamon: 'Cinnamon',
-  avocado: 'Avocado',
-  corn: 'Corn Flour',
-  potato: 'Potatoes',
-  broccoli: 'Broccoli',
-  spinach: 'Spinach',
-  celery: 'Celery',
-  ginger: 'Ginger',
-  chilli: 'Red Chilli Flakes',
-  cucumber: 'Cucumber',
-  capsicum: 'Red Pepper',
-  zucchini: 'Courgettes',
-  peas: 'Peas',
-  'sweet potato': 'Sweet Potatoes',
-  lime: 'Lime',
-  orange: 'Orange',
-  apple: 'Apples',
-  banana: 'Banana',
-  coconut: 'Coconut Cream',
-  lamb: 'Lamb',
-  prawns: 'King Prawns',
-  tofu: 'Tofu',
-  yoghurt: 'Natural Yoghurt',
-  parmesan: 'Parmesan',
-  sugar: 'Sugar',
-  salt: 'Salt',
-  pepper: 'Pepper',
-  vinegar: 'Vinegar',
-  'sesame oil': 'Sesame Seed Oil',
-  mustard: 'Mustard',
-  oregano: 'Oregano',
-  basil: 'Basil',
-  rosemary: 'Rosemary',
-  'bay leaves': 'Bay Leaves',
-  nutmeg: 'Nutmeg',
-  turmeric: 'Turmeric',
-  'chilli flakes': 'Red Chilli Flakes',
-  vanilla: 'Vanilla Extract',
-  chocolate: 'Dark Chocolate',
-  wine: 'Red Wine',
-  'coconut milk': 'Coconut Milk',
-  water: 'Water',
-  oil: 'Vegetable Oil',
-  spaghetti: 'Spaghetti',
-  guanciale: 'Bacon',
-  pancetta: 'Bacon',
-};
+/** Convert a TheMealDB ingredient name to a bucket filename */
+function toFilename(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '.png';
+}
 
 async function main() {
-  const entries = Object.entries(MEALDB_MAP);
+  // Fetch full ingredient list from TheMealDB API
+  console.log('Fetching ingredient list from TheMealDB...');
+  const listRes = await fetch('https://www.themealdb.com/api/json/v1/1/list.php?i=list');
+  const listData = await listRes.json() as { meals: { strIngredient: string }[] };
+  const ingredients = listData.meals.map((m) => m.strIngredient);
+  console.log(`Found ${ingredients.length} ingredients\n`);
+
   let success = 0;
   let failed = 0;
+  const failures: string[] = [];
 
-  for (let i = 0; i < entries.length; i++) {
-    const [key, mealdbName] = entries[i];
-    const filename = key.replace(/ /g, '-') + '.png';
-    const url = `https://www.themealdb.com/images/ingredients/${encodeURIComponent(mealdbName)}-Small.png`;
+  for (let i = 0; i < ingredients.length; i++) {
+    const name = ingredients[i];
+    const filename = toFilename(name);
+    const url = `https://www.themealdb.com/images/ingredients/${encodeURIComponent(name)}-Small.png`;
 
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        console.log(`[${i + 1}/${entries.length}] ${key} -> FAILED (HTTP ${res.status})`);
+        console.log(`[${i + 1}/${ingredients.length}] ${name} -> FAILED (HTTP ${res.status})`);
+        failures.push(name);
         failed++;
         continue;
       }
@@ -112,19 +48,25 @@ async function main() {
         .upload(filename, buffer, { contentType: 'image/png', upsert: true });
 
       if (error) {
-        console.log(`[${i + 1}/${entries.length}] ${key} -> UPLOAD ERROR: ${error.message}`);
+        console.log(`[${i + 1}/${ingredients.length}] ${name} -> UPLOAD ERROR: ${error.message}`);
+        failures.push(name);
         failed++;
       } else {
-        console.log(`[${i + 1}/${entries.length}] ${key} -> uploaded`);
+        console.log(`[${i + 1}/${ingredients.length}] ${name} -> ${filename}`);
         success++;
       }
     } catch (err) {
-      console.log(`[${i + 1}/${entries.length}] ${key} -> ERROR: ${(err as Error).message}`);
+      console.log(`[${i + 1}/${ingredients.length}] ${name} -> ERROR: ${(err as Error).message}`);
+      failures.push(name);
       failed++;
     }
   }
 
-  console.log(`\nDone: ${success} uploaded, ${failed} failed out of ${entries.length}`);
+  console.log(`\nDone: ${success} uploaded, ${failed} failed out of ${ingredients.length}`);
+  if (failures.length > 0) {
+    console.log('\nFailed ingredients:');
+    failures.forEach((f) => console.log(`  - ${f}`));
+  }
 }
 
 main();

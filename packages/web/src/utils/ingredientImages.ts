@@ -1,146 +1,76 @@
-// Maps ingredient substring keys to filenames in the ingredient-images bucket (without .png)
-// IMPORTANT: Order matters – more specific keys must come before generic ones
-// e.g. "tomato paste" before "tomato", "chicken breast" before "chicken"
-const INGREDIENT_IMAGE_MAP: Record<string, string> = {
-  // --- Composite / specific (must be before their generic counterparts) ---
-  'chicken breast': 'chicken-breast',
-  'chicken thigh': 'chicken-thighs',
-  'chicken stock': 'chicken-stock',
-  'beef stock': 'beef-stock',
+// Override map for ingredients where the name in our recipes doesn't match
+// the TheMealDB filename convention. Only add entries here when the automatic
+// name-to-filename conversion won't work (e.g. different wording, aliases).
+// IMPORTANT: Order matters – more specific keys must come before generic ones.
+const INGREDIENT_OVERRIDES: Record<string, string> = {
+  // --- Aliases where our recipe name differs from TheMealDB name ---
   'beef mince': 'minced-beef',
-  'beef fillet': 'beef-fillet',
-  'minced beef': 'minced-beef',
   'ground beef': 'minced-beef',
   'ground pork': 'ground-pork',
   'tomato paste': 'tomato-puree',
-  'tomato puree': 'tomato-puree',
-  'tomato sauce': 'tomato-sauce',
-  'tomato ketchup': 'tomato-ketchup',
-  'chopped tomato': 'chopped-tomatoes',
   'crushed tomato': 'chopped-tomatoes',
   'tinned tomato': 'chopped-tomatoes',
   'canned tomato': 'chopped-tomatoes',
-  'passata': 'passata',
-  'vegetable stock': 'vegetable-stock',
   'stock cube': 'vegetable-stock-cube',
   'bouillon': 'beef-stock',
-  'spring onion': 'spring-onions',
-  'red onion': 'red-onions',
-  'garlic powder': 'garlic-powder',
-  'smoked paprika': 'smoked-paprika',
+  'capsicum': 'red-pepper',
+  'prawn': 'king-prawns',
+  'guanciale': 'bacon',
+  'pancetta': 'bacon',
+  'yoghurt': 'natural-yoghurt',
   'cayenne': 'cayenne-pepper',
-  'black pepper': 'black-pepper',
-  'chilli powder': 'chilli-powder',
-  'chilli flakes': 'chilli-flakes',
-  'italian seasoning': 'italian-seasoning',
-  'fish sauce': 'fish-sauce',
-  'soy sauce': 'soy-sauce',
-  'coconut milk': 'coconut-milk',
-  'sesame oil': 'sesame-oil',
-  'olive oil': 'olive-oil',
-  'peanut oil': 'peanut-oil',
-  'rice vinegar': 'rice-vinegar',
-  'balsamic vinegar': 'balsamic-vinegar',
-  'white wine vinegar': 'white-wine-vinegar',
-  'red wine': 'red-wine',
-  'white wine': 'white-wine',
-  'sour cream': 'sour-cream',
-  'cream cheese': 'cream-cheese',
-  'brown sugar': 'brown-sugar',
-  'caster sugar': 'caster-sugar',
-  'icing sugar': 'icing-sugar',
-  'sweet potato': 'sweet-potato',
-  'dijon mustard': 'dijon-mustard',
-  'wholegrain mustard': 'wholegrain-mustard',
-  'mozzarella': 'mozzarella',
+  'chilli flakes': 'red-chilli-flakes',
   'cheddar': 'cheddar-cheese',
-  'feta': 'feta',
-  'bay leaves': 'bay-leaves',
-  'coriander': 'coriander',
-  'parsley': 'parsley',
-  'dill': 'dill',
-  'sage': 'sage',
-  'tarragon': 'tarragon',
-
-  // --- Generic (checked after composites) ---
-  garlic: 'garlic',
-  onion: 'onion',
-  carrot: 'carrot',
-  mushroom: 'mushroom',
-  egg: 'egg',
-  cheese: 'cheese',
-  lemon: 'lemon',
-  bread: 'bread',
-  chicken: 'chicken',
-  fish: 'fish',
-  rice: 'rice',
-  spaghetti: 'spaghetti',
-  pasta: 'pasta',
-  honey: 'honey',
-  milk: 'milk',
-  flour: 'flour',
-  tomato: 'tomato',
-  beef: 'beef',
-  pork: 'pork',
-  cream: 'cream',
-  stock: 'stock',
-  bacon: 'bacon',
-  guanciale: 'guanciale',
-  pancetta: 'pancetta',
-  oil: 'oil',
-  butter: 'butter',
-  cumin: 'cumin',
-  thyme: 'thyme',
-  paprika: 'paprika',
-  cinnamon: 'cinnamon',
-  avocado: 'avocado',
-  corn: 'corn',
-  potato: 'potato',
-  broccoli: 'broccoli',
-  spinach: 'spinach',
-  celery: 'celery',
-  ginger: 'ginger',
-  chilli: 'chilli',
-  cucumber: 'cucumber',
-  capsicum: 'capsicum',
-  zucchini: 'zucchini',
-  peas: 'peas',
-  lime: 'lime',
-  orange: 'orange',
-  apple: 'apple',
-  banana: 'banana',
-  coconut: 'coconut',
-  lamb: 'lamb',
-  prawns: 'prawns',
-  tofu: 'tofu',
-  yoghurt: 'yoghurt',
-  parmesan: 'parmesan',
-  sugar: 'sugar',
-  salt: 'salt',
-  pepper: 'pepper',
-  vinegar: 'vinegar',
-  mustard: 'mustard',
-  oregano: 'oregano',
-  basil: 'basil',
-  rosemary: 'rosemary',
-  nutmeg: 'nutmeg',
-  turmeric: 'turmeric',
-  vanilla: 'vanilla',
-  chocolate: 'chocolate',
-  wine: 'wine',
-  water: 'water',
+  'worcestershire': 'worcestershire-sauce',
+  'white sugar': 'sugar',
+  'cooking salt': 'salt',
+  'sea salt': 'sea-salt',
+  'dried bay': 'bay-leaves',
+  'bay leaf': 'bay-leaf',
+  'dry red wine': 'red-wine',
+  'dry white wine': 'white-wine',
+  'fresh thyme': 'thyme',
+  'fresh basil': 'basil',
+  'fresh rosemary': 'rosemary',
+  'fresh oregano': 'oregano',
+  'fresh parsley': 'parsley',
+  'fresh dill': 'dill',
+  'fresh coriander': 'coriander',
+  'fresh mint': 'fresh-mint',
+  'plain flour': 'plain-flour',
+  'self raising flour': 'self-raising-flour',
+  'self-raising flour': 'self-raising-flour',
 };
 
 const BUCKET_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/ingredient-images`;
 
-export function getIngredientImageUrl(item: string): string | null {
+/** Convert an ingredient name to the expected bucket filename (without .png) */
+function toFilename(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+/**
+ * Returns the Supabase storage URL for an ingredient image.
+ *
+ * Strategy:
+ * 1. Check the override map (substring match, specific-first)
+ * 2. Try a direct filename from the ingredient name
+ *
+ * The IngredientIcon component handles 404s gracefully with onError fallback.
+ */
+export function getIngredientImageUrl(item: string): string {
   const lower = item.toLowerCase();
-  for (const [key, filename] of Object.entries(INGREDIENT_IMAGE_MAP)) {
+
+  // 1. Check overrides first (substring match)
+  for (const [key, filename] of Object.entries(INGREDIENT_OVERRIDES)) {
     if (lower.includes(key)) {
       return `${BUCKET_BASE}/${filename}.png`;
     }
   }
-  return null;
+
+  // 2. Dynamic: construct filename directly from the ingredient name
+  const filename = toFilename(lower);
+  return `${BUCKET_BASE}/${filename}.png`;
 }
 
 export const FALLBACK_EMOJI = '🥘';

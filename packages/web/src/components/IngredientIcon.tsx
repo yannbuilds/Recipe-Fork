@@ -5,7 +5,7 @@ export default function IngredientIcon({ item }: { item: string }) {
   const imgUrl = getIngredientImageUrl(item);
   const [failed, setFailed] = useState(false);
 
-  if (!imgUrl || failed) {
+  if (failed) {
     return (
       <span
         className="flex items-center justify-center shrink-0 rounded-md text-sm"
