@@ -65,16 +65,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setFamilyGroup(group ?? null);
 
-    // Fetch all members with their profiles
+    // Fetch all members then look up profiles separately
+    // (family_members.user_id references auth.users, not profiles, so PostgREST can't infer the join)
     const { data: members } = await supabase
       .from('family_members')
-      .select('*, profile:profiles(display_name)')
+      .select('*')
       .eq('group_id', membership.group_id);
 
+    const memberList = members ?? [];
+    const userIds = memberList.map((m) => m.user_id);
+
+    const { data: profiles } = userIds.length > 0
+      ? await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', userIds)
+      : { data: [] };
+
+    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+
     setFamilyMembers(
-      (members ?? []).map((m) => ({
+      memberList.map((m) => ({
         ...m,
-        profile: Array.isArray(m.profile) ? m.profile[0] : m.profile,
+        profile: profileMap.get(m.user_id) ?? null,
       })),
     );
 
