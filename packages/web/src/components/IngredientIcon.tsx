@@ -9,7 +9,7 @@ export default function IngredientIcon({ item }: { item: string }) {
     return (
       <span
         className="flex items-center justify-center shrink-0 rounded-md text-sm"
-        style={{ width: 28, height: 28, background: 'var(--warm)' }}
+        style={{ width: 36, height: 36 }}
       >
         {FALLBACK_EMOJI}
       </span>
@@ -21,7 +21,7 @@ export default function IngredientIcon({ item }: { item: string }) {
       src={imgUrl}
       alt=""
       className="shrink-0 rounded-md"
-      style={{ width: 28, height: 28, objectFit: 'cover', background: 'var(--warm)' }}
+      style={{ width: 36, height: 36, objectFit: 'contain' }}
       onError={() => setFailed(true)}
     />
   );
