@@ -292,7 +292,7 @@ export default function RecipeList() {
       {/* Search bar + filter icon */}
       <div
         className="flex items-center gap-3 mb-4 relative"
-        style={{ animation: 'fadeUp 0.4s ease 0.08s both', zIndex: 10 }}
+        style={{ animation: 'fadeUp 0.4s ease 0.08s both', zIndex: filterOpen ? 50 : 10 }}
       >
         <div className="relative flex-1">
           <svg
