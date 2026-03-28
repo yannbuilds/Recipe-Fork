@@ -43,6 +43,14 @@ const INGREDIENT_OVERRIDES: Record<string, string> = {
   'cornflour': 'cornstarch',
   'scallion': 'spring-onions',
   'shallot': 'shallots',
+  'green bean': 'green-beans',
+  'lentil': 'lentils',
+  'chickpea': 'chickpeas',
+  'almond': 'almonds',
+  'walnut': 'walnuts',
+  'peanut': 'peanuts',
+  'cashew': 'cashews',
+  'noodle': 'noodles',
 };
 
 // Generic single-word ingredients for substring fallback matching.
@@ -50,19 +58,36 @@ const INGREDIENT_OVERRIDES: Record<string, string> = {
 // Specific composites (above) are checked first so "chicken breast" won't
 // accidentally match just "chicken".
 const GENERIC_KEYWORDS: string[] = [
+  // Proteins
   'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'prawn', 'shrimp',
+  'bacon', 'tofu',
+  // Vegetables
   'garlic', 'onion', 'carrot', 'mushroom', 'tomato', 'potato', 'celery',
   'broccoli', 'spinach', 'ginger', 'cucumber', 'zucchini', 'corn', 'peas',
+  'asparagus', 'leek', 'cabbage', 'kale', 'lettuce', 'beetroot', 'radish',
+  'pumpkin', 'squash', 'eggplant',
+  // Fruit
   'avocado', 'lemon', 'lime', 'orange', 'apple', 'banana', 'coconut',
+  'raisins', 'cranberries',
+  // Dairy & eggs
   'egg', 'cheese', 'parmesan', 'mozzarella', 'feta', 'butter', 'cream',
   'milk', 'yogurt',
-  'rice', 'pasta', 'spaghetti', 'noodle', 'bread', 'flour',
-  'sugar', 'salt', 'pepper', 'honey',
+  // Grains & legumes
+  'rice', 'pasta', 'spaghetti', 'noodles', 'bread', 'flour', 'oats',
+  'lentils', 'chickpeas', 'quinoa', 'couscous',
+  // Sweeteners & basics
+  'sugar', 'salt', 'pepper', 'honey', 'maple syrup',
+  // Oils, sauces & liquids
   'olive oil', 'sesame oil', 'soy sauce', 'vinegar', 'mustard',
-  'oil', 'stock', 'wine', 'water',
+  'oil', 'stock', 'wine', 'water', 'mirin', 'sherry',
+  // Herbs & spices
   'cumin', 'paprika', 'cinnamon', 'thyme', 'basil', 'oregano', 'rosemary',
   'parsley', 'coriander', 'dill', 'nutmeg', 'turmeric', 'chilli', 'vanilla',
-  'bacon', 'tofu', 'chocolate',
+  'baking powder',
+  // Nuts & seeds
+  'almonds', 'walnuts', 'peanuts', 'cashews', 'pine nuts', 'sesame seed',
+  // Other
+  'chocolate',
 ];
 
 const BUCKET_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/ingredient-images`;
