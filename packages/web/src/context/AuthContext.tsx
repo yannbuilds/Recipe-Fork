@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from('family_members')
       .select('group_id, role')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (!membership) {
       setFamilyGroup(null);

@@ -272,6 +272,9 @@ function FamilySection({
     setError(null);
     setMessage(null);
 
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    console.log('[invite] session exists:', !!currentSession, 'token prefix:', currentSession?.access_token?.substring(0, 20));
+
     const { data, error: fnError } = await supabase.functions.invoke('send-family-invite', {
       body: { email: inviteEmail.trim() },
     });
