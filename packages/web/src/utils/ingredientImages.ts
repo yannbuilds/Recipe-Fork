@@ -40,7 +40,30 @@ const INGREDIENT_OVERRIDES: Record<string, string> = {
   'plain flour': 'plain-flour',
   'self raising flour': 'self-raising-flour',
   'self-raising flour': 'self-raising-flour',
+  'cornflour': 'cornstarch',
+  'scallion': 'spring-onions',
+  'shallot': 'shallots',
 };
+
+// Generic single-word ingredients for substring fallback matching.
+// These catch cases like "chicken or vegetable broth" → matches "chicken".
+// Specific composites (above) are checked first so "chicken breast" won't
+// accidentally match just "chicken".
+const GENERIC_KEYWORDS: string[] = [
+  'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'prawn', 'shrimp',
+  'garlic', 'onion', 'carrot', 'mushroom', 'tomato', 'potato', 'celery',
+  'broccoli', 'spinach', 'ginger', 'cucumber', 'zucchini', 'corn', 'peas',
+  'avocado', 'lemon', 'lime', 'orange', 'apple', 'banana', 'coconut',
+  'egg', 'cheese', 'parmesan', 'mozzarella', 'feta', 'butter', 'cream',
+  'milk', 'yogurt',
+  'rice', 'pasta', 'spaghetti', 'noodle', 'bread', 'flour',
+  'sugar', 'salt', 'pepper', 'honey',
+  'olive oil', 'sesame oil', 'soy sauce', 'vinegar', 'mustard',
+  'oil', 'stock', 'wine', 'water',
+  'cumin', 'paprika', 'cinnamon', 'thyme', 'basil', 'oregano', 'rosemary',
+  'parsley', 'coriander', 'dill', 'nutmeg', 'turmeric', 'chilli', 'vanilla',
+  'bacon', 'tofu', 'chocolate',
+];
 
 const BUCKET_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/ingredient-images`;
 
@@ -52,9 +75,10 @@ function toFilename(name: string): string {
 /**
  * Returns the Supabase storage URL for an ingredient image.
  *
- * Strategy:
- * 1. Check the override map (substring match, specific-first)
- * 2. Try a direct filename from the ingredient name
+ * Strategy (first match wins):
+ * 1. Override map – substring match for known aliases (specific-first)
+ * 2. Exact dynamic – construct filename from the full ingredient name
+ * 3. Generic keyword – substring match against common ingredient words
  *
  * The IngredientIcon component handles 404s gracefully with onError fallback.
  */
@@ -68,9 +92,16 @@ export function getIngredientImageUrl(item: string): string {
     }
   }
 
-  // 2. Dynamic: construct filename directly from the ingredient name
-  const filename = toFilename(lower);
-  return `${BUCKET_BASE}/${filename}.png`;
+  // 2. Substring match against generic keywords
+  //    Catches "garlic cloves" → garlic, "chicken or vegetable broth" → chicken
+  for (const keyword of GENERIC_KEYWORDS) {
+    if (lower.includes(keyword)) {
+      return `${BUCKET_BASE}/${toFilename(keyword)}.png`;
+    }
+  }
+
+  // 3. Last resort: try a dynamic filename from the item name (onError handles 404)
+  return `${BUCKET_BASE}/${toFilename(lower)}.png`;
 }
 
 export const FALLBACK_EMOJI = '🥘';
