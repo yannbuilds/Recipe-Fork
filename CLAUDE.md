@@ -35,6 +35,12 @@ This overrides the parent folder identity while working here.
 
 ---
 
+## Git Workflow
+
+- Always commit and push after completing code changes. Don't wait to be asked.
+
+---
+
 ## Things to Remember
 
 - This is a real tool Yann uses, not a demo. Decisions should optimise for usability.
