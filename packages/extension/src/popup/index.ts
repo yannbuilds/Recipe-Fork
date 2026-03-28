@@ -1,14 +1,9 @@
 import { supabase } from "../lib/supabase";
 
-// Inline SVG logo – pie icon in sage green
-const LOGO_SVG = `<svg class="header-logo" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 3C7.03 3 3 7.03 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9z" fill="#3f7358" opacity="0.15"/>
-  <path d="M12 3C7.03 3 3 7.03 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9z" stroke="#3f7358" stroke-width="1.5" fill="none"/>
-  <path d="M12 3v9l6.36 6.36" stroke="#3f7358" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M12 12L5.64 18.36" stroke="#3f7358" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M8 3.5C8 3.5 7 1.5 6.5 1.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-  <path d="M12 3C12 3 12 1 12 0.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-  <path d="M16 3.5C16 3.5 17 1.5 17.5 1.5" stroke="#3f7358" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+// Inline SVG logo – sage green rounded square with white "PK" text (matches PWA icon)
+const LOGO_SVG = `<svg class="header-logo" width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <rect width="24" height="24" rx="5" fill="#3f7358"/>
+  <text x="12" y="16.5" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="white">PK</text>
 </svg>`;
 
 // DOM references
