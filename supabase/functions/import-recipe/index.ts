@@ -15,7 +15,7 @@ Return ONLY a JSON object with this exact structure:
   "steps": [
     { "order": 1, "instruction": "step instruction", "category": "optional grouping" }
   ],
-  "servings": null or number,
+  "servings": null or integer (if the recipe says "2-4 servings", use the lower number e.g. 2),
   "prep_time": null or number in minutes,
   "cook_time": null or number in minutes,
   "image_url": "full image URL or null",
@@ -47,6 +47,17 @@ Rules:
 - For tags: suggest 3–5 tags as objects with "name" (lowercase) and "emoji" (a single emoji that represents the tag). Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
 - For creator_name: extract the recipe author/creator name. Check JSON-LD "author.name", byline elements, or meta tags. Return the name as-is (e.g. "Nagi | RecipeTin Eats"). Return null if not found.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
+
+function parseServings(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value === "string") {
+    const match = value.match(/(\d+)/);
+    if (match) return parseInt(match[1], 10);
+  }
+  return null;
+}
 
 // --- HTML extraction helpers (server-side, regex-based) ---
 
@@ -348,9 +359,9 @@ Deno.serve(async (req) => {
       creator_name: parsed.creator_name ?? null,
       video_url: parsed.video_url ?? null,
       image_url: parsed.image_url ?? null,
-      servings: parsed.servings ?? null,
-      prep_time: parsed.prep_time ?? null,
-      cook_time: parsed.cook_time ?? null,
+      servings: parseServings(parsed.servings),
+      prep_time: parseServings(parsed.prep_time),
+      cook_time: parseServings(parsed.cook_time),
     };
 
     const rawTags = parsed.tags ?? [];
