@@ -40,13 +40,14 @@ export default function MealPlan() {
     setLoading(true);
     const weekStr = formatWeekStart(weekStart);
 
-    // Get or create meal plan for this week
-    let { data: existing } = await supabase
+    // Get or create meal plan for this week (RLS returns own + family plans)
+    const { data: existingList } = await supabase
       .from('meal_plans')
       .select('*')
-      .eq('user_id', user.id)
       .eq('week_start', weekStr)
-      .maybeSingle();
+      .order('created_at', { ascending: true });
+
+    let existing = existingList?.[0] ?? null;
 
     if (!existing) {
       const { data: created } = await supabase

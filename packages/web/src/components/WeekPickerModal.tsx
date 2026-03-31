@@ -40,11 +40,11 @@ export default function WeekPickerModal({
 
       // Fetch which weeks already have this recipe
       (async () => {
+        // RLS scopes to own + family plans automatically
         const { data } = await supabase
           .from('meal_plan_recipes')
           .select('meal_plan_id, meal_plans!inner(week_start)')
-          .eq('recipe_id', recipeId)
-          .eq('meal_plans.user_id', userId);
+          .eq('recipe_id', recipeId);
 
         if (data) {
           const weeks = new Set(
@@ -87,12 +87,14 @@ export default function WeekPickerModal({
     setSelectedLabel(label);
     setStep('adding');
 
-    let { data: plan } = await supabase
+    // RLS returns own + family plans; pick earliest
+    const { data: plans } = await supabase
       .from('meal_plans')
       .select('id')
-      .eq('user_id', userId)
       .eq('week_start', weekStart)
-      .maybeSingle();
+      .order('created_at', { ascending: true });
+
+    let plan = plans?.[0] ?? null;
 
     if (!plan) {
       const { data: created } = await supabase
@@ -134,12 +136,14 @@ export default function WeekPickerModal({
   async function handleRemove() {
     setStep('removing');
 
-    const { data: plan } = await supabase
+    // RLS returns own + family plans; pick earliest
+    const { data: plans } = await supabase
       .from('meal_plans')
       .select('id')
-      .eq('user_id', userId)
       .eq('week_start', selectedWeek)
-      .maybeSingle();
+      .order('created_at', { ascending: true });
+
+    const plan = plans?.[0] ?? null;
 
     if (!plan) {
       setStep('pick');
