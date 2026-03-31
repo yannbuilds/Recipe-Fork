@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [measurement, setMeasurement] = useState<'metric' | 'imperial'>('metric');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(new URLSearchParams(window.location.search).get('signup') === 'true');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
