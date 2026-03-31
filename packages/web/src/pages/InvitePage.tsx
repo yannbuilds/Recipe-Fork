@@ -24,7 +24,7 @@ export default function InvitePage() {
     // If not logged in, store token and redirect to login
     if (!authLoading && !user) {
       sessionStorage.setItem('pending_invite_token', token);
-      navigate('/login', { replace: true });
+      navigate('/login?signup=true', { replace: true });
       return;
     }
 
