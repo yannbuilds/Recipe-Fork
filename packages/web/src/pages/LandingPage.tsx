@@ -44,7 +44,7 @@ function LandingNav() {
           <a href={`${APP_URL}/login`} className="rf-btn rf-btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
             Sign in
           </a>
-          <a href={`${APP_URL}/login`} className="rf-btn rf-btn-filled" style={{ padding: "8px 16px", fontSize: 13 }}>
+          <a href={`${APP_URL}/login?signup=true`} className="rf-btn rf-btn-filled" style={{ padding: "8px 16px", fontSize: 13 }}>
             Get started
           </a>
         </div>
@@ -206,7 +206,7 @@ export default function LandingPage() {
             style={{ animation: "fadeUp 0.6s ease 0.3s both" }}
           >
             <a
-              href={`${APP_URL}/login`}
+              href={`${APP_URL}/login?signup=true`}
               className="rf-btn rf-btn-filled"
               style={{ padding: "12px 24px", fontSize: 15 }}
             >
@@ -397,9 +397,7 @@ export default function LandingPage() {
               margin: "0 0 32px",
             }}
           >
-            I used to lose recipes in screenshots and bookmarks. Now they're all
-            in one place, and Pie Keeper feels like a quiet companion in the
-            kitchen – one that helps me cherish the process as much as the meal.
+            My favourite recipes were everywhere – bookmarks, screenshots, scraps of paper. Now they're all in one place and I actually cook them again.
           </blockquote>
 
           {/* Avatar + attribution */}
@@ -468,7 +466,7 @@ export default function LandingPage() {
             Free to use. No credit card needed.
           </p>
           <a
-            href={`${APP_URL}/login`}
+            href={`${APP_URL}/login?signup=true`}
             className="rf-btn rf-btn-filled"
             style={{ padding: "14px 32px", fontSize: 16 }}
           >
