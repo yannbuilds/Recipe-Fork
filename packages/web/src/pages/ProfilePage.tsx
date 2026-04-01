@@ -429,26 +429,48 @@ function FamilySection({
               </div>
             );
           })}
+          {familyInvitations.map((inv) => {
+            const emailInitial = inv.invited_email[0]?.toUpperCase() ?? '?';
+            return (
+              <div key={inv.id} className="flex items-center gap-3">
+                <div
+                  className="flex items-center justify-center rounded-full shrink-0"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    background: 'var(--border)',
+                    color: 'var(--muted)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {emailInitial}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--muted)' }}>
+                    {inv.invited_email}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--orange, #d97706)' }}>
+                    Pending
+                  </p>
+                </div>
+                {isOwner && (
+                  <button
+                    onClick={async () => {
+                      await supabase.from('family_invitations').delete().eq('id', inv.id);
+                      await refreshFamily();
+                    }}
+                    className="text-xs px-2 py-1 rounded"
+                    style={{ color: 'var(--red)', background: 'rgba(220,38,38,0.08)' }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Pending invitations (owner only) */}
-        {isOwner && familyInvitations.length > 0 && (
-          <div className="mb-4">
-            <p className="text-xs font-medium mb-2" style={{ color: 'var(--muted)' }}>
-              Pending invites
-            </p>
-            {familyInvitations.map((inv) => (
-              <div
-                key={inv.id}
-                className="flex items-center gap-2 text-xs py-1"
-                style={{ color: 'var(--muted)' }}
-              >
-                <span className="flex-1 truncate">{inv.invited_email}</span>
-                <span style={{ color: 'var(--orange, #d97706)' }}>Pending</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Invite form (owner only) */}
         {isOwner && (
