@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${resendKey}`,
         },
         body: JSON.stringify({
-          from: "Pie Keeper <noreply@piekeeper.com>",
+          from: "Pie Keeper <noreply@app.piekeeper.com>",
           to: [trimmedEmail],
           subject: `${inviterName} invited you to share recipes on Pie Keeper`,
           html: `
