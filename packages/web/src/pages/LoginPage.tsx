@@ -46,8 +46,45 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    const { error } = isSignUp
-      ? await supabase.auth.signUp({
+    if (isSignUp) {
+      const pendingToken = sessionStorage.getItem('pending_invite_token');
+
+      if (pendingToken) {
+        // Invited user: auto-confirm via edge function (no confirmation email needed)
+        const { data, error: fnError } = await supabase.functions.invoke(
+          'auto-confirm-invited-signup',
+          {
+            body: {
+              email,
+              password,
+              display_name: displayName.trim(),
+              measurement_preference: measurement,
+              invite_token: pendingToken,
+            },
+          },
+        );
+
+        if (fnError || data?.error) {
+          setLoading(false);
+          setError(data?.error || fnError?.message || 'Failed to create account');
+          return;
+        }
+
+        // Sign in immediately — user is already confirmed
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        setLoading(false);
+
+        if (signInError) {
+          setError(signInError.message);
+        }
+        // AuthContext + existing redirect logic (lines 22–29) handles navigation to /invite
+      } else {
+        // Direct sign-up: standard flow with confirmation email
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -56,22 +93,31 @@ export default function LoginPage() {
               measurement_preference: measurement,
             },
           },
-        })
-      : await supabase.auth.signInWithPassword({ email, password });
+        });
 
-    setLoading(false);
+        setLoading(false);
 
-    if (error) {
-      setError(error.message);
-    } else if (isSignUp) {
-      setSignUpSuccess(true);
+        if (error) {
+          setError(error.message);
+        } else {
+          setSignUpSuccess(true);
+        }
+      }
     } else {
-      const pendingToken = sessionStorage.getItem('pending_invite_token');
-      if (pendingToken) {
-        sessionStorage.removeItem('pending_invite_token');
-        navigate(`/invite?token=${pendingToken}`, { replace: true });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      setLoading(false);
+
+      if (error) {
+        setError(error.message);
       } else {
-        navigate('/', { replace: true });
+        const pendingToken = sessionStorage.getItem('pending_invite_token');
+        if (pendingToken) {
+          sessionStorage.removeItem('pending_invite_token');
+          navigate(`/invite?token=${pendingToken}`, { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
       }
     }
   }
