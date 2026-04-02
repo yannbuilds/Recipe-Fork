@@ -137,11 +137,11 @@ Deno.serve(async (req) => {
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
-      console.error("[send-auth-email] RESEND_API_KEY not set");
-      return new Response(
-        JSON.stringify({ error: "Email service not configured" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+      console.error("[send-auth-email] RESEND_API_KEY not set — returning 200 to avoid blocking auth");
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const res = await fetch("https://api.resend.com/emails", {
@@ -161,10 +161,11 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       const body = await res.text();
       console.error(`[send-auth-email] Resend error (${res.status}):`, body);
-      return new Response(
-        JSON.stringify({ error: "Failed to send email" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+      // Return 200 anyway — auth hooks must not block the auth operation
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     console.log(`[send-auth-email] Sent ${email_data.email_action_type} email to ${user.email}`);
@@ -175,9 +176,10 @@ Deno.serve(async (req) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`[send-auth-email] Error: ${message}`);
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    // Return 200 anyway — auth hooks must not block the auth operation
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 });

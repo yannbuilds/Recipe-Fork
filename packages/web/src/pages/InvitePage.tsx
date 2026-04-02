@@ -37,7 +37,13 @@ export default function InvitePage() {
       });
 
       if (error || !data || data.error) {
-        const msg = data?.error || 'This invite is no longer valid. It may have expired or already been used.';
+        let msg = data?.error || 'This invite is no longer valid. It may have expired or already been used.';
+        if (!data?.error && error) {
+          try {
+            const body = await (error as any).context?.json();
+            if (body?.error) msg = body.error;
+          } catch { /* fall back to default message */ }
+        }
         setStatus('error');
         setErrorMessage(msg);
         return;
@@ -69,8 +75,15 @@ export default function InvitePage() {
     });
 
     if (error || data?.error) {
+      let msg = data?.error || 'Failed to accept invite';
+      if (!data?.error && error) {
+        try {
+          const body = await (error as any).context?.json();
+          if (body?.error) msg = body.error;
+        } catch { /* fall back to default message */ }
+      }
       setStatus('error');
-      setErrorMessage(data?.error || error?.message || 'Failed to accept invite');
+      setErrorMessage(msg);
       return;
     }
 

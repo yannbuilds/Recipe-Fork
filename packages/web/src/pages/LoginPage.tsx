@@ -65,8 +65,15 @@ export default function LoginPage() {
         );
 
         if (fnError || data?.error) {
+          let message = data?.error || 'Failed to create account';
+          if (!data?.error && fnError) {
+            try {
+              const body = await (fnError as any).context?.json();
+              if (body?.error) message = body.error;
+            } catch { /* fall back to default message */ }
+          }
           setLoading(false);
-          setError(data?.error || fnError?.message || 'Failed to create account');
+          setError(message);
           return;
         }
 
