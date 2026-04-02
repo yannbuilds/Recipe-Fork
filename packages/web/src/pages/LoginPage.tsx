@@ -88,6 +88,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
+            emailRedirectTo: window.location.origin,
             data: {
               display_name: displayName.trim(),
               measurement_preference: measurement,
