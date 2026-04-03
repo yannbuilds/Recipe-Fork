@@ -308,7 +308,8 @@ function FamilySection({
     await refreshFamily();
   }
 
-  async function handleRemoveMember(memberId: string) {
+  async function handleRemoveMember(memberId: string, memberName: string) {
+    if (!confirm(`Remove ${memberName} from the family group?`)) return;
     const { error } = await supabase
       .from('family_members')
       .delete()
@@ -419,7 +420,7 @@ function FamilySection({
                 </div>
                 {isOwner && !isMe && (
                   <button
-                    onClick={() => handleRemoveMember(member.id)}
+                    onClick={() => handleRemoveMember(member.id, name)}
                     className="text-xs px-2 py-1 rounded"
                     style={{ color: 'var(--red)', background: 'rgba(220,38,38,0.08)' }}
                   >
@@ -457,6 +458,7 @@ function FamilySection({
                 {isOwner && (
                   <button
                     onClick={async () => {
+                      if (!confirm(`Cancel invitation to ${inv.invited_email}?`)) return;
                       await supabase.from('family_invitations').delete().eq('id', inv.id);
                       await refreshFamily();
                     }}
