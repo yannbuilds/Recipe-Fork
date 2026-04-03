@@ -5,7 +5,11 @@ import type { Provider } from '@supabase/supabase-js';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('email') || sessionStorage.getItem('pending_invite_email') || '';
+  });
+  const isInvitedSignup = Boolean(sessionStorage.getItem('pending_invite_token'));
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -22,6 +26,7 @@ export default function LoginPage() {
     const pendingToken = sessionStorage.getItem('pending_invite_token');
     if (pendingToken) {
       sessionStorage.removeItem('pending_invite_token');
+      sessionStorage.removeItem('pending_invite_email');
       navigate(`/invite?token=${pendingToken}`, { replace: true });
     } else {
       navigate('/', { replace: true });
@@ -225,8 +230,10 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                readOnly={isInvitedSignup && email !== ''}
                 className="rf-input w-full"
                 placeholder="you@example.com"
+                style={isInvitedSignup && email !== '' ? { opacity: 0.7, cursor: 'default' } : undefined}
               />
             </div>
 

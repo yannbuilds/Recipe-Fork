@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
 
     // Build invite link
     const appUrl = Deno.env.get("APP_URL") || "https://piekeeper.com";
-    const inviteLink = `${appUrl}/invite?token=${invitation.token}`;
+    const inviteLink = `${appUrl}/invite?token=${invitation.token}&email=${encodeURIComponent(trimmedEmail)}`;
 
     // Send email via Resend
     const resendKey = Deno.env.get("RESEND_API_KEY");

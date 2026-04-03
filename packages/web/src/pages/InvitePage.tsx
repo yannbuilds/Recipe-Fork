@@ -24,7 +24,14 @@ export default function InvitePage() {
     // If not logged in, store token and redirect to login
     if (!authLoading && !user) {
       sessionStorage.setItem('pending_invite_token', token);
-      navigate('/login?signup=true', { replace: true });
+      const emailParam = searchParams.get('email');
+      if (emailParam) {
+        sessionStorage.setItem('pending_invite_email', emailParam);
+      }
+      const loginUrl = emailParam
+        ? `/login?signup=true&email=${encodeURIComponent(emailParam)}`
+        : '/login?signup=true';
+      navigate(loginUrl, { replace: true });
       return;
     }
 
