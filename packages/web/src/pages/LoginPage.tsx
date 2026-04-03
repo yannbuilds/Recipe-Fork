@@ -68,8 +68,17 @@ export default function LoginPage() {
           let message = data?.error || 'Failed to create account';
           if (!data?.error && fnError) {
             try {
-              const body = await (fnError as any).context?.json();
-              if (body?.error) message = body.error;
+              const resp = (fnError as any).context;
+              if (resp && typeof resp.json === 'function') {
+                const cloned = resp.clone();
+                try {
+                  const body = await cloned.json();
+                  if (body?.error) message = body.error;
+                } catch {
+                  const text = await resp.text();
+                  if (text) message = text;
+                }
+              }
             } catch { /* fall back to default message */ }
           }
           setLoading(false);

@@ -40,8 +40,17 @@ export default function InvitePage() {
         let msg = data?.error || 'This invite is no longer valid. It may have expired or already been used.';
         if (!data?.error && error) {
           try {
-            const body = await (error as any).context?.json();
-            if (body?.error) msg = body.error;
+            const resp = (error as any).context;
+            if (resp && typeof resp.json === 'function') {
+              const cloned = resp.clone();
+              try {
+                const body = await cloned.json();
+                if (body?.error) msg = body.error;
+              } catch {
+                const text = await resp.text();
+                if (text) msg = text;
+              }
+            }
           } catch { /* fall back to default message */ }
         }
         setStatus('error');
@@ -78,8 +87,17 @@ export default function InvitePage() {
       let msg = data?.error || 'Failed to accept invite';
       if (!data?.error && error) {
         try {
-          const body = await (error as any).context?.json();
-          if (body?.error) msg = body.error;
+          const resp = (error as any).context;
+          if (resp && typeof resp.json === 'function') {
+            const cloned = resp.clone();
+            try {
+              const body = await cloned.json();
+              if (body?.error) msg = body.error;
+            } catch {
+              const text = await resp.text();
+              if (text) msg = text;
+            }
+          }
         } catch { /* fall back to default message */ }
       }
       setStatus('error');
