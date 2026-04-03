@@ -459,7 +459,11 @@ function FamilySection({
                   <button
                     onClick={async () => {
                       if (!confirm(`Cancel invitation to ${inv.invited_email}?`)) return;
-                      await supabase.from('family_invitations').delete().eq('id', inv.id);
+                      const { error } = await supabase.from('family_invitations').delete().eq('id', inv.id);
+                      if (error) {
+                        alert('Failed to cancel invitation');
+                        return;
+                      }
                       await refreshFamily();
                     }}
                     className="text-xs px-2 py-1 rounded"

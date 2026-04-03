@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Check for existing pending invite to this email
+    // Remove any existing pending invite to this email so we can re-invite
     const { data: existingInvite } = await admin
       .from("family_invitations")
       .select("id")
@@ -141,10 +141,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (existingInvite) {
-      return new Response(
-        JSON.stringify({ error: "An invite has already been sent to this email" }),
-        { status: 409, headers },
-      );
+      await admin.from("family_invitations").delete().eq("id", existingInvite.id);
     }
 
     // Create the invitation
