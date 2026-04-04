@@ -13,6 +13,73 @@ import VideoPlayer from '../components/VideoPlayer';
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&ndash;/g, '–')
+    .replace(/&mdash;/g, '—')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&Prime;/g, '″')
+    .replace(/&prime;/g, '′')
+    .replace(/&deg;/g, '°')
+    .replace(/&frac12;/g, '½')
+    .replace(/&frac14;/g, '¼')
+    .replace(/&frac34;/g, '¾')
+    .replace(/&#\d+;/g, (m) => String.fromCharCode(parseInt(m.slice(2, -1), 10)));
+}
+
+function formatAuthorNotes(raw: string): React.ReactNode {
+  const decoded = decodeHtmlEntities(raw);
+
+  // Split into numbered sections (e.g. "1. Herbs – ...")
+  const sections = decoded.split(/(?=\n?\d+\.\s)/);
+
+  return sections.map((section, i) => {
+    const trimmed = section.trim();
+    if (!trimmed) return null;
+
+    // Check if this section starts with a numbered point
+    const numberedMatch = trimmed.match(/^(\d+\.\s*)(.+)/s);
+    if (numberedMatch) {
+      const [, num, rest] = numberedMatch;
+      // Bold up to the first colon, or the first 5 words if no colon in first line
+      const firstLine = rest.split('\n')[0];
+      const colonIdx = firstLine.indexOf(':');
+      let boldPart: string;
+      let remainderInLine: string;
+      if (colonIdx !== -1 && colonIdx < 60) {
+        boldPart = firstLine.slice(0, colonIdx + 1);
+        remainderInLine = firstLine.slice(colonIdx + 1);
+      } else {
+        const words = firstLine.split(/\s+/);
+        boldPart = words.slice(0, 4).join(' ');
+        remainderInLine = words.length > 4 ? ' ' + words.slice(4).join(' ') : '';
+      }
+      const afterFirstLine = rest.includes('\n') ? '\n' + rest.split('\n').slice(1).join('\n') : '';
+
+      return (
+        <div key={i} style={{ marginBottom: 16 }}>
+          <span style={{ fontWeight: 700 }}>{num}{boldPart}</span>
+          {remainderInLine}
+          {afterFirstLine && (
+            <span style={{ whiteSpace: 'pre-wrap' }}>{afterFirstLine}</span>
+          )}
+        </div>
+      );
+    }
+
+    // Non-numbered block (e.g. introductory text)
+    return (
+      <div key={i} style={{ whiteSpace: 'pre-wrap', marginBottom: 12 }}>
+        {trimmed}
+      </div>
+    );
+  });
+}
+
 function parseFraction(q: string): number | null {
   const parts = q.trim().split(/\s+/);
   let total = 0;
@@ -1078,12 +1145,9 @@ export default function RecipeDetail() {
             >
               Author's Notes
             </h2>
-            <p
-              className="text-sm leading-relaxed"
-              style={{ color: 'var(--text)', whiteSpace: 'pre-wrap' }}
-            >
-              {recipe.author_notes}
-            </p>
+            <div className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
+              {formatAuthorNotes(recipe.author_notes)}
+            </div>
             <div className="flex justify-end mt-6">
               <button
                 onClick={() => setShowAuthorNotes(false)}
