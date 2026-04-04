@@ -292,17 +292,25 @@ input[type="checkbox"] { accent-color: var(--green); }
   font-size: 13px;
   line-height: 1;
 }
+.rf-category-tab-has-selection {
+  background: var(--green-light);
+  border-color: var(--green);
+  color: var(--green);
+}
 .rf-reset-btn {
   margin-left: auto;
   flex-shrink: 0;
-  color: var(--red) !important;
-  border-color: transparent !important;
-  background: none !important;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
 }
 .rf-reset-btn:hover {
-  color: var(--red) !important;
-  border-color: var(--red) !important;
-  background: #fef2f0 !important;
+  text-decoration: underline;
 }
 
 /* ── Category section ────────────────────────── */

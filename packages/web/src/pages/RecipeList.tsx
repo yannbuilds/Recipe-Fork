@@ -265,12 +265,27 @@ export default function RecipeList() {
   }
 
   function toggleCategory(tagName: string) {
+    const tagCategory = TAG_CATEGORY[tagName];
     setActiveCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(tagName)) next.delete(tagName);
-      else next.add(tagName);
+      if (next.has(tagName)) {
+        next.delete(tagName);
+      } else {
+        // Remove any existing selection in the same category (single-select per category)
+        if (tagCategory) {
+          for (const existing of prev) {
+            if (TAG_CATEGORY[existing] === tagCategory) next.delete(existing);
+          }
+        }
+        next.add(tagName);
+      }
       return next;
     });
+  }
+
+  // Check if a category tab has a selected tag (for highlight)
+  function tabHasSelection(tabValue: TagCategory): boolean {
+    return [...activeCategories].some((tag) => TAG_CATEGORY[tag] === tabValue);
   }
 
   // Convert active category names to tag IDs for filtering
@@ -463,9 +478,9 @@ export default function RecipeList() {
         </div>
       </div>
 
-      {/* Owner filter pills */}
+      {/* Owner filter pills + Reset */}
       <div
-        className="flex gap-1.5 mb-4"
+        className="flex items-center gap-1.5 mb-4"
         style={{ animation: 'fadeUp 0.4s ease 0.12s both' }}
       >
         {([
@@ -486,6 +501,14 @@ export default function RecipeList() {
             {label}
           </button>
         ))}
+        {hasAnyFilter && (
+          <button
+            onClick={resetAllFilters}
+            className="rf-reset-btn"
+          >
+            Reset
+          </button>
+        )}
       </div>
 
       {/* Category tab pills */}
@@ -498,21 +521,13 @@ export default function RecipeList() {
             <button
               key={tab.value}
               onClick={() => setCategoryTab((prev) => prev === tab.value ? null : tab.value)}
-              className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''}`}
+              className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''} ${tabHasSelection(tab.value) ? 'rf-category-tab-has-selection' : ''}`}
             >
               <span className="rf-category-tab-emoji">{tab.emoji}</span>
               {tab.label}
             </button>
           ))}
         </div>
-        {hasAnyFilter && (
-          <button
-            onClick={resetAllFilters}
-            className="rf-category-tab rf-reset-btn"
-          >
-            Reset
-          </button>
-        )}
       </div>
 
       {/* Category bubbles – only when a tab is selected */}
