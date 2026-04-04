@@ -162,6 +162,53 @@ function extractIngredientSections(html: string): string | null {
   return parts.length > 0 ? parts.join("\n") : null;
 }
 
+/**
+ * Extract recipe notes/tips directly from page HTML.
+ * Targets WPRM (WordPress Recipe Maker) notes containers first,
+ * then falls back to generic heading-based extraction.
+ */
+function extractRecipeNotes(html: string): string | null {
+  // 1. WPRM notes container (most common recipe plugin)
+  const wprmMatch = html.match(
+    /<div[^>]*class="[^"]*wprm-recipe-notes"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+  );
+  if (wprmMatch) {
+    let text = wprmMatch[1];
+    // Convert <span> blocks and <br> to newlines
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/<\/span>\s*(<div[^>]*class="wprm-spacer"[^>]*><\/div>)?\s*/gi, "\n");
+    text = text.replace(/<[^>]+>/g, ""); // strip remaining tags
+    text = text.replace(/&rsquo;/g, "\u2019").replace(/&ldquo;/g, "\u201C").replace(/&rdquo;/g, "\u201D");
+    text = text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+    text = text.replace(/\n{3,}/g, "\n\n").trim();
+    if (text.length > 20) return text;
+  }
+
+  // 2. Generic: find a section headed "Notes", "Recipe Notes", "Tips", "Author's Notes"
+  const headingPattern = /<h[2-6][^>]*>[^<]*(?:Recipe\s+Notes?|Author'?s?\s+Notes?|Notes|Tips)[^<]*<\/h[2-6]>/gi;
+  let headingMatch;
+  while ((headingMatch = headingPattern.exec(html)) !== null) {
+    // Grab content after the heading until the next heading or major section
+    const afterHeading = html.slice(headingMatch.index + headingMatch[0].length, headingMatch.index + headingMatch[0].length + 5000);
+    const endMatch = afterHeading.match(/<h[2-6][^>]*>|<div[^>]*class="[^"]*(?:recipe-card|wprm-recipe-container|comment)/i);
+    const content = endMatch ? afterHeading.slice(0, endMatch.index) : afterHeading;
+
+    // Strip HTML tags and clean up
+    let text = content
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|li|div|span)>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&rsquo;/g, "\u2019").replace(/&ldquo;/g, "\u201C").replace(/&rdquo;/g, "\u201D")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    if (text.length > 20) return text;
+  }
+
+  return null;
+}
+
 function buildLlmPayload(html: string, url: string): string {
   const jsonLd = extractJsonLd(html);
   const videoUrls = extractVideoUrls(html);
@@ -278,6 +325,7 @@ Deno.serve(async (req) => {
     const html = await pageRes.text();
 
     // 2. Extract content for the LLM
+    const htmlExtractedNotes = extractRecipeNotes(html);
     const content = buildLlmPayload(html, url);
 
     if (content.length < 100) {
@@ -364,7 +412,7 @@ Deno.serve(async (req) => {
       servings: parseServings(parsed.servings),
       prep_time: parseServings(parsed.prep_time),
       cook_time: parseServings(parsed.cook_time),
-      author_notes: parsed.author_notes ?? null,
+      author_notes: htmlExtractedNotes ?? parsed.author_notes ?? null,
     };
 
     const rawTags = parsed.tags ?? [];
