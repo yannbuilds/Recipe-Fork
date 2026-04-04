@@ -583,10 +583,20 @@ export default function RecipeDetail() {
                 <span style={{ color: 'var(--border)' }}>·</span>
                 <button
                   onClick={() => setShowAuthorNotes(true)}
-                  className="hover:underline cursor-pointer"
-                  style={{ color: 'var(--green)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
+                  className="cursor-pointer"
+                  style={{
+                    color: 'var(--green)',
+                    background: 'var(--green-light)',
+                    border: '1px solid var(--green)',
+                    borderRadius: 20,
+                    padding: '2px 10px',
+                    font: 'inherit',
+                    fontSize: '0.8em',
+                    fontWeight: 600,
+                    lineHeight: 1.6,
+                  }}
                 >
-                  Author's Notes
+                  📝 Author's Notes
                 </button>
               </>
             )}
