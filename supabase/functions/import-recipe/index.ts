@@ -32,10 +32,14 @@ Example ingredient parsing — JSON-LD "recipeIngredient" contains flat strings.
 - "2-3 cloves garlic, minced" → { "original_text": "2-3 cloves garlic, minced", "item": "garlic, minced", "quantity": "2-3", "unit": "cloves", "category": "" }
 - "Fresh cilantro for garnish" → { "original_text": "Fresh cilantro for garnish", "item": "fresh cilantro for garnish", "quantity": "", "unit": "", "category": "" }
 - "400g canned tomatoes" → { "original_text": "400g canned tomatoes", "item": "canned tomatoes", "quantity": "400", "unit": "g", "category": "" }
+- "1.75 – 2 kg / 3.5 – 4lb whole chicken, patted dry" → { "original_text": "1.75 – 2 kg / 3.5 – 4lb whole chicken, patted dry", "item": "whole chicken, patted dry", "quantity": "1.75 – 2", "unit": "kg", "category": "" }
+- "100 g / 1 stick unsalted butter, melted" → { "original_text": "100 g / 1 stick unsalted butter, melted", "item": "unsalted butter, melted", "quantity": "100", "unit": "g", "category": "" }
+- "1 cup / 250 ml dry white wine" → { "original_text": "1 cup / 250 ml dry white wine", "item": "dry white wine", "quantity": "1", "unit": "cup", "category": "" }
 
 Rules:
 - Extract ALL ingredients and ALL steps from the recipe.
 - "original_text" MUST be the full ingredient line exactly as it appears on the page, with no modifications. Include fractions, parenthetical conversions, preparation notes, annotations, and qualifiers verbatim. For example: "2/3 cup (150 ml) yoghurt, plain" or "750g (1.5 lb) chicken thighs, skin on, bone in, halved along bone (Note 1)". Do NOT paraphrase or restructure.
+- When an ingredient has two measurements separated by "/" (e.g. "100 g / 1 stick unsalted butter" or "1 cup / 250 ml wine"), use ONLY the first measurement for "quantity" and "unit". Never mix numbers or units from different sides of the "/". The full dual-measurement text is preserved verbatim in "original_text".
 - IMPORTANT — Ingredient parsing: JSON-LD "recipeIngredient" contains flat strings like "1 cup flour". You MUST parse each string into separate fields: extract the leading number(s) as "quantity", the unit word as "unit", and the remaining text as "item". Do NOT put the full string into "item" with empty quantity/unit. "quantity" should be a string (e.g. "1/2", "2-3"). "unit" should be standardised (e.g. "cup", "tbsp", "g"). If no unit, use an empty string.
 - For steps: number them sequentially starting at 1. Keep the full instruction text.
 - IMPORTANT — Categories: If ingredients or steps are grouped into sections, you MUST set the "category" field for each item in that group.
@@ -250,6 +254,19 @@ function fixIngredientParsing(
       ing.original_text = parts.join(" ");
     }
     if (ing.quantity || ing.unit) return ing;
+
+    // Strip second measurement from dual-measurement strings like
+    // "100 g / 1 stick unsalted butter" before the regex runs,
+    // otherwise it can mix numbers/units from both sides.
+    if (ing.item?.includes(' / ')) {
+      const dualMatch = ing.item.match(
+        /^([\d\u00BC-\u00BE\u2150-\u215E\/\.\-–\s]+(?:cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|litres?|liters?|cloves?|large|medium|small|cans?|bunch(?:es)?|pieces?|slices?|sprigs?|stalks?|heads?|pinch(?:es)?|handfuls?|packets?|sticks?|rashers?|fillets?)?)\s*\/\s*[\d\u00BC-\u00BE\u2150-\u215E\/\.\-–\s]+(?:cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|litres?|liters?|cloves?|large|medium|small|cans?|bunch(?:es)?|pieces?|slices?|sprigs?|stalks?|heads?|pinch(?:es)?|handfuls?|packets?|sticks?|rashers?|fillets?)?\s+(.+)$/i
+      );
+      if (dualMatch) {
+        ing.item = `${dualMatch[1].trim()} ${dualMatch[2].trim()}`;
+      }
+    }
+
     const match = ing.item?.match(
       /^([\d\u00BC-\u00BE\u2150-\u215E\/\.\-–]+(?:\s*[\d\/\.]+)?)\s*(cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|litres?|liters?|cloves?|large|medium|small|cans?|bunch(?:es)?|pieces?|slices?|sprigs?|stalks?|heads?|pinch(?:es)?|handfuls?|packets?|sticks?|rashers?|fillets?)?\s+(.+)$/i,
     );
