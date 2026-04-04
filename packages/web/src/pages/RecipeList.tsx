@@ -82,6 +82,43 @@ const TAG_EMOJI: Record<string, string> = {
   side: '🥦',
 };
 
+type TagCategory = 'meal' | 'cuisine' | 'protein' | 'dietary' | 'style';
+
+const TAG_CATEGORY: Record<string, TagCategory> = {
+  // Meal type
+  dinner: 'meal', lunch: 'meal', breakfast: 'meal', brunch: 'meal',
+  snack: 'meal', dessert: 'meal', side: 'meal',
+  // Cuisine
+  indian: 'cuisine', italian: 'cuisine', mexican: 'cuisine', chinese: 'cuisine',
+  japanese: 'cuisine', thai: 'cuisine', korean: 'cuisine', greek: 'cuisine',
+  mediterranean: 'cuisine', vietnamese: 'cuisine', australian: 'cuisine',
+  caribbean: 'cuisine', african: 'cuisine', 'middle-eastern': 'cuisine',
+  french: 'cuisine', spanish: 'cuisine',
+  // Protein / main ingredient
+  chicken: 'protein', beef: 'protein', lamb: 'protein', pork: 'protein',
+  seafood: 'protein', fish: 'protein', tofu: 'protein', chickpea: 'protein',
+  lentil: 'protein', egg: 'protein',
+  // Dietary
+  vegetarian: 'dietary', vegan: 'dietary', 'gluten-free': 'dietary', healthy: 'dietary',
+  // Style / method / dish type
+  quick: 'style', slow: 'style', bbq: 'style', grilled: 'style', roast: 'style',
+  fried: 'style', baking: 'style', 'one-pot': 'style', comfort: 'style',
+  spicy: 'style', sweet: 'style', raw: 'style',
+  pasta: 'style', soup: 'style', stew: 'style', curry: 'style', salad: 'style',
+  rice: 'style', noodle: 'style', bread: 'style', pizza: 'style', burger: 'style',
+  taco: 'style', sushi: 'style', smoothie: 'style', drink: 'style', sauce: 'style',
+  dip: 'style', mushroom: 'style', avocado: 'style', banana: 'style', potato: 'style',
+};
+
+const CATEGORY_TABS: { value: 'all' | TagCategory; label: string; emoji: string }[] = [
+  { value: 'all', label: 'All', emoji: '🏷️' },
+  { value: 'meal', label: 'Meal', emoji: '🍽️' },
+  { value: 'cuisine', label: 'Cuisine', emoji: '🌍' },
+  { value: 'protein', label: 'Protein', emoji: '🥩' },
+  { value: 'dietary', label: 'Dietary', emoji: '🌿' },
+  { value: 'style', label: 'Style', emoji: '🍳' },
+];
+
 function getGreeting(): { text: string; punctuation: string } {
   const now = new Date();
   const hour = now.getHours();
@@ -136,6 +173,7 @@ export default function RecipeList() {
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [categoryTab, setCategoryTab] = useState<'all' | TagCategory>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -213,15 +251,32 @@ export default function RecipeList() {
 
   const MAX_VISIBLE_TAGS = 6;
 
+  const filteredByTab = useMemo(() => {
+    if (categoryTab === 'all') return allCategories;
+    return allCategories.filter((c) => TAG_CATEGORY[c.tag] === categoryTab);
+  }, [allCategories, categoryTab]);
+
   const visibleCategories = useMemo(() => {
+    if (categoryTab !== 'all') {
+      // Show all tags in the filtered category (typically 5-16)
+      return filteredByTab;
+    }
     const top = allCategories.slice(0, MAX_VISIBLE_TAGS);
     const topTags = new Set(top.map((c) => c.tag));
     // Promote any active tags not already in the top set
     const promoted = allCategories.filter((c) => activeCategories.has(c.tag) && !topTags.has(c.tag));
     return [...top, ...promoted];
-  }, [allCategories, activeCategories]);
+  }, [allCategories, filteredByTab, activeCategories, categoryTab]);
 
-  const hiddenCount = allCategories.length - visibleCategories.length;
+  const hiddenCount = categoryTab === 'all' ? allCategories.length - visibleCategories.length : 0;
+
+  // Only show tabs that have at least one tag in use
+  const visibleTabs = useMemo(() => {
+    return CATEGORY_TABS.filter((tab) => {
+      if (tab.value === 'all') return true;
+      return allCategories.some((c) => TAG_CATEGORY[c.tag] === tab.value);
+    });
+  }, [allCategories]);
 
   function handleToggleFavourite(recipeId: string, newValue: boolean) {
     setRecipes((prev) =>
@@ -449,6 +504,23 @@ export default function RecipeList() {
             }
           >
             {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Category tab pills */}
+      <div
+        className="rf-category-tabs mb-3"
+        style={{ animation: 'fadeUp 0.4s ease 0.14s both' }}
+      >
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setCategoryTab(tab.value)}
+            className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''}`}
+          >
+            <span className="rf-category-tab-emoji">{tab.emoji}</span>
+            {tab.label}
           </button>
         ))}
       </div>

@@ -246,6 +246,46 @@ input[type="checkbox"] { accent-color: var(--green); }
   transition: width 0.4s ease;
 }
 
+/* ── Category tab pills ──────────────────────── */
+.rf-category-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.rf-category-tabs::-webkit-scrollbar { display: none; }
+
+.rf-category-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.rf-category-tab:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+.rf-category-tab-active {
+  background: var(--green-light);
+  border-color: var(--green);
+  color: var(--green);
+}
+.rf-category-tab-emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* ── Category section ────────────────────────── */
 .rf-category-section {
   position: relative;
