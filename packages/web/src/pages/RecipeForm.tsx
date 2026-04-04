@@ -19,6 +19,7 @@ export default function RecipeForm() {
   const [imageUrl, setImageUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [creatorName, setCreatorName] = useState('');
+  const [authorNotes, setAuthorNotes] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     { item: '', quantity: '', unit: '', category: '' },
   ]);
@@ -59,6 +60,7 @@ export default function RecipeForm() {
         setImageUrl(recipe.image_url ?? '');
         setVideoUrl(recipe.video_url ?? '');
         setCreatorName(recipe.creator_name ?? '');
+        setAuthorNotes(recipe.author_notes ?? '');
         setIngredients(
           recipe.ingredients.length > 0
             ? recipe.ingredients.map((ing) => ({ ...ing, category: ing.category ?? '' }))
@@ -196,6 +198,7 @@ export default function RecipeForm() {
       image_url: imageUrl.trim() || null,
       ingredients: filteredIngredients,
       steps: filteredSteps,
+      author_notes: authorNotes.trim() || null,
     };
 
     let recipeId = id;
@@ -306,6 +309,18 @@ export default function RecipeForm() {
               className="rf-input w-full"
               rows={3}
               placeholder="Brief description"
+            />
+          </div>
+
+          {/* Author's Notes */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Author's Notes</label>
+            <textarea
+              value={authorNotes}
+              onChange={(e) => setAuthorNotes(e.target.value)}
+              className="rf-input w-full"
+              rows={4}
+              placeholder="Original author's tips, substitutions, or notes"
             />
           </div>
 

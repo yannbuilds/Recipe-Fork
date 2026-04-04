@@ -165,6 +165,7 @@ export default function RecipeDetail() {
   const [currentServings, setCurrentServings] = useState<number>(1);
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [showAuthorNotes, setShowAuthorNotes] = useState(false);
 
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
@@ -576,6 +577,18 @@ export default function RecipeDetail() {
               >
                 View original ↗
               </a>
+            )}
+            {recipe.author_notes && (
+              <>
+                <span style={{ color: 'var(--border)' }}>·</span>
+                <button
+                  onClick={() => setShowAuthorNotes(true)}
+                  className="hover:underline cursor-pointer"
+                  style={{ color: 'var(--green)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
+                >
+                  Author's Notes
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1034,6 +1047,44 @@ export default function RecipeDetail() {
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteModal(false)}
       />
+
+      {/* ── Author's Notes modal ─────────────────────────────── */}
+      {showAuthorNotes && recipe?.author_notes && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: 50 }}
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowAuthorNotes(false)}
+          />
+          <div
+            className="rf-card relative w-full"
+            style={{ maxWidth: 520, maxHeight: '80vh', overflow: 'auto', padding: 24, zIndex: 1 }}
+          >
+            <h2
+              className="font-bold mb-4"
+              style={{ fontFamily: "'Lora', serif", fontSize: 18, color: 'var(--text)' }}
+            >
+              Author's Notes
+            </h2>
+            <p
+              className="text-sm leading-relaxed"
+              style={{ color: 'var(--text)', whiteSpace: 'pre-wrap' }}
+            >
+              {recipe.author_notes}
+            </p>
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowAuthorNotes(false)}
+                className="rf-btn-secondary rounded-lg px-4 py-2 text-sm font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {user && id && recipe && (
         <WeekPickerModal

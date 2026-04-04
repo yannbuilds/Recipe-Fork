@@ -21,6 +21,7 @@ export interface Recipe {
   steps: Step[];
   source_url: string;
   creator_name: string | null;
+  author_notes: string | null;
   video_url: string | null;
   image_url: string | null;
   servings: number | null;
