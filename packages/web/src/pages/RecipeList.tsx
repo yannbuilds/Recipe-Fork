@@ -400,33 +400,6 @@ export default function RecipeList() {
 
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
 
-              {/* Owner filter */}
-              <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                Show
-              </p>
-              <div className="flex gap-1 px-3 py-1">
-                {([
-                  ['all', 'All'],
-                  ['mine', 'Mine'],
-                  ['shared', 'Shared'],
-                ] as [OwnerFilter, string][]).map(([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() => setOwnerFilter(value)}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                    style={
-                      ownerFilter === value
-                        ? { background: 'var(--green-light)', color: 'var(--green)' }
-                        : { background: 'var(--warm)', color: 'var(--muted)' }
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-
               {/* Sort options */}
               <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
                 Sort by
@@ -453,6 +426,31 @@ export default function RecipeList() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Owner filter pills */}
+      <div
+        className="flex gap-1.5 mb-4"
+        style={{ animation: 'fadeUp 0.4s ease 0.12s both' }}
+      >
+        {([
+          ['all', 'All recipes'],
+          ['mine', 'Mine'],
+          ['shared', 'Shared'],
+        ] as [OwnerFilter, string][]).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setOwnerFilter(value)}
+            className="px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors"
+            style={
+              ownerFilter === value
+                ? { background: 'var(--green-light)', color: 'var(--green)', border: '1px solid var(--green)' }
+                : { background: 'var(--card)', color: 'var(--muted)', border: '1px solid var(--border)' }
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Category bubbles */}
