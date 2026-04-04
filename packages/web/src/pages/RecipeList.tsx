@@ -122,6 +122,7 @@ function getGreeting(): { text: string; punctuation: string } {
 }
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
+type OwnerFilter = 'all' | 'mine' | 'shared';
 
 export default function RecipeList() {
   const { user, profile, familyMembers } = useAuth();
@@ -131,6 +132,7 @@ export default function RecipeList() {
   const [activeCategories, setActiveCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
@@ -243,6 +245,8 @@ export default function RecipeList() {
 
   let filteredRecipes = recipes.filter((r) => {
     if (showFavouritesOnly && !r.is_favourite) return false;
+    if (ownerFilter === 'mine' && r.user_id !== user?.id) return false;
+    if (ownerFilter === 'shared' && r.user_id === user?.id) return false;
     if (activeTagIds.size > 0) {
       const recipeTagIds = recipeTags.filter((rt) => rt.recipe_id === r.id).map((rt) => rt.tag_id);
       const hasAllTags = [...activeTagIds].every((tagId) => recipeTagIds.includes(tagId));
@@ -271,7 +275,7 @@ export default function RecipeList() {
     }
   });
 
-  const hasActiveFilters = showFavouritesOnly || sortBy !== 'newest';
+  const hasActiveFilters = showFavouritesOnly || ownerFilter !== 'all' || sortBy !== 'newest';
   const greeting = getGreeting();
 
   // Build a map of family member user_id -> display_name (excludes current user)
@@ -393,6 +397,33 @@ export default function RecipeList() {
                 </svg>
                 Favourites only
               </button>
+
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+
+              {/* Owner filter */}
+              <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                Show
+              </p>
+              <div className="flex gap-1 px-3 py-1">
+                {([
+                  ['all', 'All'],
+                  ['mine', 'Mine'],
+                  ['shared', 'Shared'],
+                ] as [OwnerFilter, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setOwnerFilter(value)}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    style={
+                      ownerFilter === value
+                        ? { background: 'var(--green-light)', color: 'var(--green)' }
+                        : { background: 'var(--warm)', color: 'var(--muted)' }
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
 
