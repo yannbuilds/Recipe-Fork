@@ -25,9 +25,18 @@ function parseFraction(q: string): number | null {
       parsedAny = true;
     } else {
       const n = Number(p);
-      if (isNaN(n)) break; // stop at non-numeric parts (e.g. unit text)
-      total += n;
-      parsedAny = true;
+      if (!isNaN(n)) {
+        total += n;
+        parsedAny = true;
+      } else {
+        // Try extracting leading digits (e.g. "750g" → 750)
+        const leading = p.match(/^(\d+(?:\.\d+)?)/);
+        if (leading) {
+          total += Number(leading[1]);
+          parsedAny = true;
+        }
+        break; // stop after first non-pure-numeric token
+      }
     }
   }
   return parsedAny ? total : null;
@@ -61,7 +70,10 @@ function scaleQuantity(
   const parsed = parseFraction(quantity);
   if (parsed === null) return quantity;
   const scaled = parsed * (currentServings / originalServings);
-  return formatQuantity(scaled);
+  // Preserve trailing unit suffix glued to the number (e.g. "750g" → "1500g")
+  const suffixMatch = quantity.match(/[a-zA-Z]+$/);
+  const suffix = suffixMatch ? suffixMatch[0] : '';
+  return formatQuantity(scaled) + suffix;
 }
 
 function renderOriginalText(
@@ -73,28 +85,46 @@ function renderOriginalText(
   const qty = ing.quantity;
   const unit = ing.unit;
 
-  // If there's no meaningful quantity, just show the original text as-is
-  if (!qty || qty === '0') {
-    return <>{text}</>;
+  // Try to locate and scale the quantity in the original text.
+  // First attempt: use the stored quantity+unit fields from the DB.
+  // Fallback: parse the leading number directly from the original text.
+  let matchedQty = qty;
+  let matchedUnit = unit;
+  let match: RegExpMatchArray | null = null;
+
+  if (matchedQty && matchedQty !== '0') {
+    const escapedQty = matchedQty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedUnit = matchedUnit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = matchedUnit
+      ? new RegExp(`(${escapedQty}\\s*${escapedUnit})`)
+      : new RegExp(`(${escapedQty})`);
+    match = text.match(pattern);
+
+    // If qty+unit didn't match, try just the quantity
+    if (!match && matchedUnit) {
+      match = text.match(new RegExp(`(${escapedQty})`));
+      if (match) matchedUnit = '';
+    }
   }
 
-  // Build a regex to locate the quantity+unit portion in the original text
-  const escapedQty = qty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = unit
-    ? new RegExp(`(${escapedQty}\\s*${escapedUnit})`)
-    : new RegExp(`(${escapedQty})`);
+  // Fallback: parse leading number from original text when qty is missing or regex failed
+  if (!match) {
+    const leadingMatch = text.match(/^([\d]+(?:\s+\d+\/\d+|\s*\/\s*\d+)?(?:\.\d+)?)/);
+    if (leadingMatch) {
+      matchedQty = leadingMatch[1];
+      matchedUnit = '';
+      match = leadingMatch;
+    }
+  }
 
-  const match = text.match(pattern);
   if (!match || match.index === undefined) {
-    // Fallback: show original text without bolding
     return <>{text}</>;
   }
 
   const before = text.slice(0, match.index);
   const after = text.slice(match.index + match[0].length);
-  const scaledQty = scaleQuantity(qty, originalServings, currentServings);
-  const boldPart = unit ? `${scaledQty} ${unit}` : scaledQty;
+  const scaledQty = scaleQuantity(matchedQty, originalServings, currentServings);
+  const boldPart = matchedUnit ? `${scaledQty} ${matchedUnit}` : scaledQty;
 
   return (
     <>
