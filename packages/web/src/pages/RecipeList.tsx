@@ -110,8 +110,7 @@ const TAG_CATEGORY: Record<string, TagCategory> = {
   dip: 'style', mushroom: 'style', avocado: 'style', banana: 'style', potato: 'style',
 };
 
-const CATEGORY_TABS: { value: 'all' | TagCategory; label: string; emoji: string }[] = [
-  { value: 'all', label: 'All', emoji: '🏷️' },
+const CATEGORY_TABS: { value: TagCategory; label: string; emoji: string }[] = [
   { value: 'meal', label: 'Meal', emoji: '🍽️' },
   { value: 'cuisine', label: 'Cuisine', emoji: '🌍' },
   { value: 'protein', label: 'Protein', emoji: '🥩' },
@@ -172,12 +171,10 @@ export default function RecipeList() {
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [tagsExpanded, setTagsExpanded] = useState(false);
-  const [categoryTab, setCategoryTab] = useState<'all' | TagCategory>('all');
+  const [categoryTab, setCategoryTab] = useState<TagCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
-  const tagsExpandedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -218,17 +215,6 @@ export default function RecipeList() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [filterOpen]);
 
-  // Close tags expanded panel on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (tagsExpandedRef.current && !tagsExpandedRef.current.contains(e.target as Node)) {
-        setTagsExpanded(false);
-      }
-    }
-    if (tagsExpanded) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [tagsExpanded]);
-
   // Build a map from tag name -> tag id for category filtering
   const tagNameToId = new Map(tags.map((t) => [t.name.toLowerCase(), t.id]));
 
@@ -249,34 +235,28 @@ export default function RecipeList() {
       }));
   }, [tags, recipeTags]);
 
-  const MAX_VISIBLE_TAGS = 6;
-
-  const filteredByTab = useMemo(() => {
-    if (categoryTab === 'all') return allCategories;
+  const visibleCategories = useMemo(() => {
+    if (!categoryTab) return [];
     return allCategories.filter((c) => TAG_CATEGORY[c.tag] === categoryTab);
   }, [allCategories, categoryTab]);
-
-  const visibleCategories = useMemo(() => {
-    if (categoryTab !== 'all') {
-      // Show all tags in the filtered category (typically 5-16)
-      return filteredByTab;
-    }
-    const top = allCategories.slice(0, MAX_VISIBLE_TAGS);
-    const topTags = new Set(top.map((c) => c.tag));
-    // Promote any active tags not already in the top set
-    const promoted = allCategories.filter((c) => activeCategories.has(c.tag) && !topTags.has(c.tag));
-    return [...top, ...promoted];
-  }, [allCategories, filteredByTab, activeCategories, categoryTab]);
-
-  const hiddenCount = categoryTab === 'all' ? allCategories.length - visibleCategories.length : 0;
 
   // Only show tabs that have at least one tag in use
   const visibleTabs = useMemo(() => {
     return CATEGORY_TABS.filter((tab) => {
-      if (tab.value === 'all') return true;
       return allCategories.some((c) => TAG_CATEGORY[c.tag] === tab.value);
     });
   }, [allCategories]);
+
+  const hasAnyFilter = activeCategories.size > 0 || searchQuery || showFavouritesOnly || ownerFilter !== 'all' || sortBy !== 'newest';
+
+  function resetAllFilters() {
+    setActiveCategories(new Set());
+    setCategoryTab(null);
+    setSearchQuery('');
+    setShowFavouritesOnly(false);
+    setOwnerFilter('all');
+    setSortBy('newest');
+  }
 
   function handleToggleFavourite(recipeId: string, newValue: boolean) {
     setRecipes((prev) =>
@@ -513,82 +493,49 @@ export default function RecipeList() {
         className="rf-category-tabs mb-3"
         style={{ animation: 'fadeUp 0.4s ease 0.14s both' }}
       >
-        {visibleTabs.map((tab) => (
+        <div className="rf-category-tabs-scroll">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setCategoryTab((prev) => prev === tab.value ? null : tab.value)}
+              className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''}`}
+            >
+              <span className="rf-category-tab-emoji">{tab.emoji}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {hasAnyFilter && (
           <button
-            key={tab.value}
-            onClick={() => setCategoryTab(tab.value)}
-            className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''}`}
+            onClick={resetAllFilters}
+            className="rf-category-tab rf-reset-btn"
           >
-            <span className="rf-category-tab-emoji">{tab.emoji}</span>
-            {tab.label}
+            Reset
           </button>
-        ))}
+        )}
       </div>
 
-      {/* Category bubbles */}
-      <div
-        className="rf-category-section mb-6"
-        style={{ animation: 'fadeUp 0.4s ease 0.16s both' }}
-        ref={tagsExpandedRef}
-      >
-        <div className="rf-category-scroll">
-          {loading && Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="rf-category-bubble" style={{ cursor: 'default' }}>
-              <span
-                className="rf-category-icon"
-                style={{
-                  background: 'var(--warm)',
-                  animation: 'skeleton-pulse 1.5s ease-in-out infinite',
-                  animationDelay: `${i * 0.1}s`,
-                }}
-              />
-              <span
-                style={{
-                  height: 10,
-                  width: 40,
-                  borderRadius: 4,
-                  background: 'var(--border)',
-                  animation: 'skeleton-pulse 1.5s ease-in-out infinite',
-                  animationDelay: `${i * 0.1 + 0.15}s`,
-                }}
-              />
-            </div>
-          ))}
-          {!loading && visibleCategories.map((cat) => (
-            <button
-              key={cat.tag}
-              onClick={() => toggleCategory(cat.tag)}
-              className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
-            >
-              <span className="rf-category-icon">{cat.emoji}</span>
-              <span className="rf-category-label">{cat.label}</span>
-            </button>
-          ))}
-          {!loading && hiddenCount > 0 && (
-            <button
-              onClick={() => setTagsExpanded((prev) => !prev)}
-              className={`rf-category-bubble ${tagsExpanded ? 'rf-category-active' : ''}`}
-            >
-              <span className="rf-category-icon rf-category-icon-more">+{hiddenCount}</span>
-              <span className="rf-category-label">More</span>
-            </button>
-          )}
-        </div>
-
-        {tagsExpanded && (
-          <div className="rf-tags-expanded">
-            {allCategories.map((cat) => (
+      {/* Category bubbles – only when a tab is selected */}
+      {categoryTab && visibleCategories.length > 0 && (
+        <div
+          className="rf-category-section mb-6"
+          style={{ animation: 'fadeUp 0.15s ease both' }}
+        >
+          <div className="rf-category-scroll">
+            {visibleCategories.map((cat) => (
               <button
                 key={cat.tag}
                 onClick={() => toggleCategory(cat.tag)}
-                className={`rf-tag rf-tag-clickable ${activeCategories.has(cat.tag) ? 'rf-tag-active' : ''}`}
+                className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
               >
-                {cat.emoji} {cat.label}
+                <span className="rf-category-icon">{cat.emoji}</span>
+                <span className="rf-category-label">{cat.label}</span>
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {!categoryTab && <div className="mb-4" />}
 
       {/* Loading skeletons */}
       {loading && (

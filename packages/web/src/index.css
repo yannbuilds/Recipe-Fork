@@ -249,12 +249,19 @@ input[type="checkbox"] { accent-color: var(--green); }
 /* ── Category tab pills ──────────────────────── */
 .rf-category-tabs {
   display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rf-category-tabs-scroll {
+  display: flex;
   gap: 6px;
   overflow-x: auto;
+  flex: 1;
+  min-width: 0;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.rf-category-tabs::-webkit-scrollbar { display: none; }
+.rf-category-tabs-scroll::-webkit-scrollbar { display: none; }
 
 .rf-category-tab {
   display: flex;
@@ -284,6 +291,18 @@ input[type="checkbox"] { accent-color: var(--green); }
 .rf-category-tab-emoji {
   font-size: 13px;
   line-height: 1;
+}
+.rf-reset-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--red) !important;
+  border-color: transparent !important;
+  background: none !important;
+}
+.rf-reset-btn:hover {
+  color: var(--red) !important;
+  border-color: var(--red) !important;
+  background: #fef2f0 !important;
 }
 
 /* ── Category section ────────────────────────── */
