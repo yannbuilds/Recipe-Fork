@@ -114,7 +114,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
             {recipe.title}
           </h2>
           {(totalTime != null || recipe.servings != null) && (
-            <div className="flex items-center gap-3 mt-1" style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <div className="flex items-center gap-3 mt-auto" style={{ fontSize: 12, color: 'var(--muted)' }}>
               {totalTime != null && (
                 <span className="flex items-center gap-1">
                   🕐 {formatTime(totalTime)}
