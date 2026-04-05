@@ -87,6 +87,7 @@
   .rd-hero-text .rd-hero-desc { font-size: 14px !important; color: var(--muted); }
   .rd-hero .rd-hero-title-overlay { display: none; }
   .rd-hero-title { max-width: 100%; }
+  .rd-attribution { display: none; }
   .rd-hero .rd-hero-bottom-overlay {
     background: none !important;
     -webkit-backdrop-filter: none !important;

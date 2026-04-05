@@ -420,7 +420,7 @@ export default function RecipeDetail() {
           className="rd-hero-split"
           style={{ animation: 'fadeUp 0.4s ease both' }}
         >
-          {/* Desktop-only left column: title + description */}
+          {/* Desktop-only left column: title + description + attribution */}
           <div className="rd-hero-text">
             <h1
               className="font-bold leading-snug"
@@ -436,6 +436,54 @@ export default function RecipeDetail() {
               >
                 {recipe.description}
               </p>
+            )}
+            {(recipe.creator_name || recipe.source_url) && (
+              <div
+                className="flex items-center gap-2 text-sm flex-wrap"
+                style={{ color: 'var(--muted)', marginTop: 24 }}
+              >
+                {recipe.creator_name && (
+                  <span>
+                    👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+                  </span>
+                )}
+                {recipe.creator_name && recipe.source_url && (
+                  <span style={{ color: 'var(--border)' }}>·</span>
+                )}
+                {recipe.source_url && (
+                  <a
+                    href={recipe.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    style={{ color: 'var(--green)' }}
+                  >
+                    View original ↗
+                  </a>
+                )}
+                {recipe.author_notes && (
+                  <>
+                    <span style={{ color: 'var(--border)' }}>·</span>
+                    <button
+                      onClick={() => setShowAuthorNotes(true)}
+                      className="cursor-pointer"
+                      style={{
+                        color: 'var(--green)',
+                        background: 'var(--green-light)',
+                        border: '1px solid var(--green)',
+                        borderRadius: 20,
+                        padding: '2px 10px',
+                        font: 'inherit',
+                        fontSize: '0.8em',
+                        fontWeight: 600,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      📝 Author's Notes
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
@@ -654,10 +702,10 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {/* ── Attribution ─────────────────────────────────────────── */}
+        {/* ── Attribution (mobile only — desktop version is in the hero text column) */}
         {(recipe.creator_name || recipe.source_url) && (
           <div
-            className="flex items-center gap-2 mt-4 text-sm flex-wrap"
+            className="rd-attribution flex items-center gap-2 mt-4 text-sm flex-wrap"
             style={{ color: 'var(--muted)' }}
           >
             {recipe.creator_name && (
