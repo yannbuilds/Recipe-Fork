@@ -245,6 +245,7 @@ export default function RecipeDetail() {
   const [descExpanded, setDescExpanded] = useState(false);
   const [descTruncated, setDescTruncated] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
+  const descRefMobile = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!supportsWakeLock) return;
@@ -329,8 +330,10 @@ export default function RecipeDetail() {
   }
 
   // Check if description is truncated (needs "more" button)
+  // Uses two refs: descRef (desktop) and descRefMobile (mobile overlay).
+  // Only the visible one will have non-zero dimensions.
   useEffect(() => {
-    const el = descRef.current;
+    const el = descRef.current?.scrollHeight ? descRef.current : descRefMobile.current;
     if (!el) return;
     const lh = parseFloat(getComputedStyle(el).lineHeight) || 16;
     setDescTruncated(el.scrollHeight > lh * 2 + 2);
@@ -414,178 +417,242 @@ export default function RecipeDetail() {
     <div>
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div
-          className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
-          style={{
-            animation: 'fadeUp 0.4s ease both',
-          }}
+          className="rd-hero-split"
+          style={{ animation: 'fadeUp 0.4s ease both' }}
         >
-          {/* Image or placeholder */}
-          {recipe.image_url ? (
-            <img
-              src={recipe.image_url}
-              alt={recipe.title}
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-          ) : (
-            <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)' }}
+          {/* Desktop-only left column: title + description */}
+          <div className="rd-hero-text">
+            <h1
+              className="font-bold leading-snug"
+              style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
             >
-              <span className="text-6xl">🍴</span>
-            </div>
-          )}
-
-          {/* Gradient scrim */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
-            }}
-          />
-
-          {/* Top-right: source badge + favourite */}
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            {recipe.source_url && (
-              <a
-                href={recipe.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-white px-3 py-1.5 rounded-full"
-                style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                }}
-              >
-                {getDomain(recipe.source_url)}
-              </a>
-            )}
-            <FavouriteButton
-              recipeId={recipe.id}
-              isFavourite={recipe.is_favourite}
-              onToggle={(val) =>
-                setRecipe((prev) => (prev ? { ...prev, is_favourite: val } : prev))
-              }
-              size="md"
-            />
-          </div>
-
-          {/* Bottom overlay: title card + meta cards */}
-          <div
-            className="absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
-            style={{ padding: '32px 20px 20px' }}
-          >
-            {/* Title card */}
-            <div className="rd-hero-title">
-              <h1
-                className="font-bold leading-snug"
-                style={{ fontFamily: "'Lora', serif", fontSize: 20, color: 'var(--text)' }}
-              >
-                {recipe.title}
-              </h1>
-              {recipe.description && (
-                <>
-                  <div
-                    className="relative mt-1"
-                    style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '2rem' }}
+              {recipe.title}
+            </h1>
+            {recipe.description && (
+              <>
+                <div
+                  className="relative mt-2"
+                  style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '3.4rem' }}
+                >
+                  <p
+                    ref={descRef}
+                    className="rd-hero-desc"
+                    style={{ color: 'var(--muted)', fontSize: 14 }}
                   >
-                    <p
-                      ref={descRef}
-                      className="text-xs"
-                      style={{ color: 'var(--muted)' }}
-                    >
-                      {recipe.description}
-                    </p>
-                    {!descExpanded && descTruncated && (
-                      <button
-                        onClick={() => setDescExpanded(true)}
-                        className="absolute text-xs cursor-pointer"
-                        style={{
-                          bottom: 0,
-                          right: 0,
-                          color: 'var(--muted)',
-                          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.92) 35%)',
-                          border: 'none',
-                          paddingLeft: '2rem',
-                          paddingRight: 0,
-                          textDecoration: 'underline',
-                          textUnderlineOffset: 2,
-                        }}
-                      >
-                        more
-                      </button>
-                    )}
-                  </div>
-                  {descExpanded && (
+                    {recipe.description}
+                  </p>
+                  {!descExpanded && descTruncated && (
                     <button
-                      onClick={() => setDescExpanded(false)}
-                      className="text-xs mt-0.5 cursor-pointer"
+                      onClick={() => setDescExpanded(true)}
+                      className="absolute text-sm cursor-pointer"
                       style={{
+                        bottom: 0,
+                        right: 0,
                         color: 'var(--muted)',
-                        background: 'none',
+                        background: 'linear-gradient(to right, transparent, var(--bg) 35%)',
                         border: 'none',
-                        padding: 0,
+                        paddingLeft: '2rem',
+                        paddingRight: 0,
                         textDecoration: 'underline',
                         textUnderlineOffset: 2,
                       }}
                     >
-                      less
+                      more
                     </button>
                   )}
-                </>
+                </div>
+                {descExpanded && (
+                  <button
+                    onClick={() => setDescExpanded(false)}
+                    className="text-sm mt-0.5 cursor-pointer"
+                    style={{
+                      color: 'var(--muted)',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 2,
+                    }}
+                  >
+                    less
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Image (right column on desktop, full-width on mobile) */}
+          <div
+            className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
+          >
+            {/* Image or placeholder */}
+            {recipe.image_url ? (
+              <img
+                src={recipe.image_url}
+                alt={recipe.title}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : (
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)' }}
+              >
+                <span className="text-6xl">🍴</span>
+              </div>
+            )}
+
+            {/* Gradient scrim */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
+              }}
+            />
+
+            {/* Top-right: source badge + favourite */}
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              {recipe.source_url && (
+                <a
+                  href={recipe.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-white px-3 py-1.5 rounded-full"
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                  }}
+                >
+                  {getDomain(recipe.source_url)}
+                </a>
               )}
+              <FavouriteButton
+                recipeId={recipe.id}
+                isFavourite={recipe.is_favourite}
+                onToggle={(val) =>
+                  setRecipe((prev) => (prev ? { ...prev, is_favourite: val } : prev))
+                }
+                size="md"
+              />
             </div>
 
-            {/* Meta cards */}
-            <div className="rd-hero-meta flex gap-2 shrink-0">
-              {recipe.prep_time != null && (
-                <div
-                  className="text-center px-3 py-2"
-                  style={{
-                    background: 'rgba(255,255,255,0.78)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    borderRadius: 10,
-                  }}
+            {/* Bottom overlay: title card (mobile only) + meta cards */}
+            <div
+              className="rd-hero-bottom-overlay absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
+              style={{ padding: '32px 20px 20px' }}
+            >
+              {/* Title card – visible on mobile, hidden on desktop via CSS */}
+              <div className="rd-hero-title rd-hero-title-overlay">
+                <h1
+                  className="font-bold leading-snug"
+                  style={{ fontFamily: "'Lora', serif", fontSize: 20, color: 'var(--text)' }}
                 >
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
-                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                    {formatTime(recipe.prep_time)}
+                  {recipe.title}
+                </h1>
+                {recipe.description && (
+                  <>
+                    <div
+                      className="relative mt-1"
+                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '2rem' }}
+                    >
+                      <p
+                        ref={descRefMobile}
+                        className="text-xs"
+                        style={{ color: 'var(--muted)' }}
+                      >
+                        {recipe.description}
+                      </p>
+                      {!descExpanded && descTruncated && (
+                        <button
+                          onClick={() => setDescExpanded(true)}
+                          className="absolute text-xs cursor-pointer"
+                          style={{
+                            bottom: 0,
+                            right: 0,
+                            color: 'var(--muted)',
+                            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.92) 35%)',
+                            border: 'none',
+                            paddingLeft: '2rem',
+                            paddingRight: 0,
+                            textDecoration: 'underline',
+                            textUnderlineOffset: 2,
+                          }}
+                        >
+                          more
+                        </button>
+                      )}
+                    </div>
+                    {descExpanded && (
+                      <button
+                        onClick={() => setDescExpanded(false)}
+                        className="text-xs mt-0.5 cursor-pointer"
+                        style={{
+                          color: 'var(--muted)',
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 2,
+                        }}
+                      >
+                        less
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Meta cards */}
+              <div className="rd-hero-meta flex gap-2 shrink-0">
+                {recipe.prep_time != null && (
+                  <div
+                    className="text-center px-3 py-2"
+                    style={{
+                      background: 'rgba(255,255,255,0.78)',
+                      backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
+                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                      {formatTime(recipe.prep_time)}
+                    </div>
                   </div>
-                </div>
-              )}
-              {recipe.cook_time != null && (
-                <div
-                  className="text-center px-3 py-2"
-                  style={{
-                    background: 'rgba(255,255,255,0.78)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    borderRadius: 10,
-                  }}
-                >
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
-                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                    {formatTime(recipe.cook_time)}
+                )}
+                {recipe.cook_time != null && (
+                  <div
+                    className="text-center px-3 py-2"
+                    style={{
+                      background: 'rgba(255,255,255,0.78)',
+                      backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
+                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                      {formatTime(recipe.cook_time)}
+                    </div>
                   </div>
-                </div>
-              )}
-              {recipe.servings != null && (
-                <div
-                  className="text-center px-3 py-2"
-                  style={{
-                    background: 'rgba(255,255,255,0.78)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    borderRadius: 10,
-                  }}
-                >
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
-                  <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                    {recipe.servings}
+                )}
+                {recipe.servings != null && (
+                  <div
+                    className="text-center px-3 py-2"
+                    style={{
+                      background: 'rgba(255,255,255,0.78)',
+                      backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
+                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                      {recipe.servings}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
