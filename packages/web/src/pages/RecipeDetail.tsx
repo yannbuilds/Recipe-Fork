@@ -323,8 +323,8 @@ export default function RecipeDetail() {
   function updateServings(newServings: number) {
     setCurrentServings(newServings);
     clearTimeout(saveServingsRef.current);
-    saveServingsRef.current = setTimeout(() => {
-      supabase.from('recipes').update({ custom_servings: newServings }).eq('id', id!);
+    saveServingsRef.current = setTimeout(async () => {
+      await supabase.from('recipes').update({ custom_servings: newServings }).eq('id', id!);
     }, 500);
   }
 
