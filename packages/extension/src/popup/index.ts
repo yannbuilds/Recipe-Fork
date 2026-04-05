@@ -424,7 +424,17 @@ async function init() {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // If no session in chrome.storage.local, try syncing from the web app
+  // Validate the cached session is still usable
+  if (session) {
+    const { error } = await supabase.auth.getUser();
+    if (error) {
+      // Stale/expired session — clear it so we can try syncing
+      await supabase.auth.signOut();
+      session = null;
+    }
+  }
+
+  // If no valid session in chrome.storage.local, try syncing from the web app
   if (!session) {
     session = await syncSessionFromWebApp();
   }
