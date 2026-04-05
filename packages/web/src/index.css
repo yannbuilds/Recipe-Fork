@@ -64,6 +64,9 @@
 .rd-ingredients { grid-column: 1; grid-row: 1; }
 .rd-steps       { grid-column: 2; grid-row: 1; }
 .rd-awake-tooltip { left: 0; }
+@media (max-width: 768px) {
+  .rd-awake-tooltip { left: auto; } /* let inline right: 0 take effect — tooltip stays within screen */
+}
 
 @media (min-width: 769px) {
   .rd-ingredients {
