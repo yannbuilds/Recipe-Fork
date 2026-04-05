@@ -380,7 +380,13 @@ async function handleSaveRecipe() {
 async function syncSessionFromWebApp() {
   try {
     // Find a tab running the web app
-    const tabs = await chrome.tabs.query({ url: ["https://piekeeper.com/*"] });
+    const tabs = await chrome.tabs.query({
+      url: [
+        "https://piekeeper.com/*",
+        "https://www.piekeeper.com/*",
+        "https://app.piekeeper.com/*",
+      ],
+    });
     if (tabs.length === 0 || !tabs[0].id) return null;
 
     const response = await chrome.tabs.sendMessage(tabs[0].id, {

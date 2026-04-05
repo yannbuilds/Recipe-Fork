@@ -2,14 +2,18 @@
 // Used to sync auth sessions from the web app to the extension.
 
 /**
- * Find the Supabase auth session in this page's localStorage.
+ * Find the Supabase auth session in this page's cookies.
+ * The web app stores the session as a cookie (not localStorage).
  * Returns the raw JSON string if found, null otherwise.
  */
 function getSupabaseSession(): string | null {
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
-      return localStorage.getItem(key);
+  const cookies = document.cookie.split("; ");
+  for (const cookie of cookies) {
+    const eqIndex = cookie.indexOf("=");
+    if (eqIndex === -1) continue;
+    const name = decodeURIComponent(cookie.substring(0, eqIndex));
+    if (name.startsWith("sb-") && name.endsWith("-auth-token")) {
+      return decodeURIComponent(cookie.substring(eqIndex + 1));
     }
   }
   return null;

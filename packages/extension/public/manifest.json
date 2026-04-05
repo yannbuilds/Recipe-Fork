@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "Save recipes from any website with AI-powered parsing",
   "permissions": ["activeTab", "storage", "identity"],
-  "host_permissions": ["https://piekeeper.com/*"],
+  "host_permissions": ["https://piekeeper.com/*", "https://*.piekeeper.com/*"],
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_title": "Pie Keeper"
