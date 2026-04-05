@@ -424,6 +424,23 @@ export default function RecipeDetail() {
           <div className="rd-hero-text">
             {/* Top group — centred in available space */}
             <div className="rd-hero-top-group">
+              {tags.length > 0 && (
+                <div className="hidden md:flex flex-wrap gap-2 mb-3">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="text-xs px-3 py-1 rounded-full"
+                      style={{
+                        background: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--muted)',
+                      }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
               <h1
                 className="font-bold leading-snug"
                 style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
@@ -1221,7 +1238,7 @@ export default function RecipeDetail() {
 
         {/* ── Tags row ───────────────────────────────────────────── */}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-8">
+          <div className="flex md:hidden flex-wrap gap-2 mt-8">
             {tags.map((tag) => (
               <span
                 key={tag.id}
