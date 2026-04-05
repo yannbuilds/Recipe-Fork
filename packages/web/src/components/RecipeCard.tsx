@@ -100,10 +100,10 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
 
         {/* Title + meta overlay at bottom */}
         <div
-          className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-end"
+          className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-start"
           style={{
             padding: '36px 12px 16px',
-            minHeight: 90,
+            height: 120,
             borderRadius: '0 0 var(--radius) var(--radius)',
           }}
         >
@@ -114,7 +114,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
             {recipe.title}
           </h2>
           {(totalTime != null || recipe.servings != null) && (
-            <div className="flex items-center gap-3 mt-auto" style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <div className="flex items-center gap-3 mt-1" style={{ fontSize: 12, color: 'var(--muted)' }}>
               {totalTime != null && (
                 <span className="flex items-center gap-1">
                   🕐 {formatTime(totalTime)}
