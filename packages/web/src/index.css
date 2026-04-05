@@ -80,14 +80,14 @@
   .rd-hero-text {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    padding-bottom: 20px;
+    justify-content: flex-start;
+    padding-top: 0;
   }
   .rd-hero-text h1 { font-size: 26px !important; }
   .rd-hero-text .rd-hero-desc { font-size: 14px !important; color: var(--muted); }
   .rd-hero .rd-hero-title-overlay { display: none; }
   .rd-hero-title { max-width: 100%; }
-  .rd-hero .rd-hero-bottom-overlay { justify-content: flex-end; }
+  .rd-hero .rd-hero-bottom-overlay { display: none; }
 }
 
 @media (max-width: 768px) {

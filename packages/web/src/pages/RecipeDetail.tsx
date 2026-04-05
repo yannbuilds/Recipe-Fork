@@ -429,55 +429,13 @@ export default function RecipeDetail() {
               {recipe.title}
             </h1>
             {recipe.description && (
-              <>
-                <div
-                  className="relative mt-2"
-                  style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '3.4rem' }}
-                >
-                  <p
-                    ref={descRef}
-                    className="rd-hero-desc"
-                    style={{ color: 'var(--muted)', fontSize: 14 }}
-                  >
-                    {recipe.description}
-                  </p>
-                  {!descExpanded && descTruncated && (
-                    <button
-                      onClick={() => setDescExpanded(true)}
-                      className="absolute text-sm cursor-pointer"
-                      style={{
-                        bottom: 0,
-                        right: 0,
-                        color: 'var(--muted)',
-                        background: 'linear-gradient(to right, transparent, var(--bg) 35%)',
-                        border: 'none',
-                        paddingLeft: '2rem',
-                        paddingRight: 0,
-                        textDecoration: 'underline',
-                        textUnderlineOffset: 2,
-                      }}
-                    >
-                      more
-                    </button>
-                  )}
-                </div>
-                {descExpanded && (
-                  <button
-                    onClick={() => setDescExpanded(false)}
-                    className="text-sm mt-0.5 cursor-pointer"
-                    style={{
-                      color: 'var(--muted)',
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      textDecoration: 'underline',
-                      textUnderlineOffset: 2,
-                    }}
-                  >
-                    less
-                  </button>
-                )}
-              </>
+              <p
+                ref={descRef}
+                className="rd-hero-desc mt-2"
+                style={{ color: 'var(--muted)', fontSize: 14 }}
+              >
+                {recipe.description}
+              </p>
             )}
           </div>
 
