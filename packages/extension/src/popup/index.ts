@@ -21,7 +21,7 @@ function renderLogin(root: HTMLElement) {
           ${LOGO_SVG}
           <h1>Pie Keeper</h1>
         </div>
-        <span class="header-version">v1.0.0</span>
+        <span class="header-version">v${chrome.runtime.getManifest().version}</span>
       </header>
 
       <div class="login-card">
@@ -170,7 +170,7 @@ function render(tab: chrome.tabs.Tab | undefined) {
           ${LOGO_SVG}
           <h1>Pie Keeper</h1>
         </div>
-        <span class="header-version">v1.0.0</span>
+        <span class="header-version">v${chrome.runtime.getManifest().version}</span>
       </header>
 
       <div class="page-info-card">
@@ -379,23 +379,20 @@ async function handleSaveRecipe() {
  */
 async function syncSessionFromWebApp() {
   try {
-    // Find a tab running the web app
-    const tabs = await chrome.tabs.query({
-      url: [
-        "https://piekeeper.com/*",
-        "https://www.piekeeper.com/*",
-        "https://app.piekeeper.com/*",
-      ],
-    });
-    if (tabs.length === 0 || !tabs[0].id) return null;
+    // Read the auth cookie directly from piekeeper.com using the cookies API.
+    // This works without needing an open web app tab.
+    const url = import.meta.env.VITE_SUPABASE_URL as string;
+    const projectId = new URL(url).hostname.split(".")[0];
+    const cookieName = `sb-${projectId}-auth-token`;
 
-    const response = await chrome.tabs.sendMessage(tabs[0].id, {
-      type: "GET_SUPABASE_SESSION",
+    const cookie = await chrome.cookies.get({
+      url: "https://piekeeper.com",
+      name: cookieName,
     });
 
-    if (!response?.session) return null;
+    if (!cookie?.value) return null;
 
-    const parsed = JSON.parse(response.session);
+    const parsed = JSON.parse(decodeURIComponent(cookie.value));
     const accessToken = parsed.access_token;
     const refreshToken = parsed.refresh_token;
 
