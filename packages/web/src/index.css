@@ -87,7 +87,15 @@
   .rd-hero-text .rd-hero-desc { font-size: 14px !important; color: var(--muted); }
   .rd-hero .rd-hero-title-overlay { display: none; }
   .rd-hero-title { max-width: 100%; }
-  .rd-hero .rd-hero-bottom-overlay { display: none; }
+  .rd-hero .rd-hero-bottom-overlay {
+    background: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+    justify-content: flex-end;
+    padding-top: 0;
+  }
 }
 
 @media (max-width: 768px) {
