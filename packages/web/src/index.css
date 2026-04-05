@@ -80,10 +80,14 @@
   .rd-hero-text {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 24px;
     position: relative;
     z-index: 20;
+  }
+  .rd-hero-top-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
   .rd-meal-plan-row { display: none; }
   .rd-grid { margin-top: 20px; }

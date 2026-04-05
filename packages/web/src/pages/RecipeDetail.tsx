@@ -422,8 +422,8 @@ export default function RecipeDetail() {
         >
           {/* Desktop-only left column: title + description + attribution (top), meal plan + screen on (bottom) */}
           <div className="rd-hero-text">
-            {/* Top group */}
-            <div>
+            {/* Top group — centred in available space */}
+            <div className="rd-hero-top-group">
               <h1
                 className="font-bold leading-snug"
                 style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
