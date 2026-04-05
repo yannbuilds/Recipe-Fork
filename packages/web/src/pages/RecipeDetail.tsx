@@ -233,6 +233,7 @@ export default function RecipeDetail() {
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
+  const saveServingsRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
@@ -303,7 +304,7 @@ export default function RecipeDetail() {
       } else {
         const data = recipeResult.data as Recipe;
         setRecipe(data);
-        if (data.servings) setCurrentServings(data.servings);
+        setCurrentServings(data.custom_servings ?? data.servings ?? 1);
       }
 
       if (!tagsResult.error && tagsResult.data) {
@@ -318,6 +319,14 @@ export default function RecipeDetail() {
 
     fetchRecipe();
   }, [id]);
+
+  function updateServings(newServings: number) {
+    setCurrentServings(newServings);
+    clearTimeout(saveServingsRef.current);
+    saveServingsRef.current = setTimeout(() => {
+      supabase.from('recipes').update({ custom_servings: newServings }).eq('id', id!);
+    }, 500);
+  }
 
   // Check if description is truncated (needs "more" button)
   useEffect(() => {
@@ -798,7 +807,7 @@ export default function RecipeDetail() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() =>
-                        setCurrentServings((s) => Math.max(1, s - 1))
+                        updateServings(Math.max(1, currentServings - 1))
                       }
                       className="flex items-center justify-center text-sm font-bold transition-colors"
                       style={{
@@ -821,7 +830,7 @@ export default function RecipeDetail() {
                       −
                     </button>
                     <button
-                      onClick={() => setCurrentServings((s) => s + 1)}
+                      onClick={() => updateServings(currentServings + 1)}
                       className="flex items-center justify-center text-sm font-bold transition-colors"
                       style={{
                         width: 28,
