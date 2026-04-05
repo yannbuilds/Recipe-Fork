@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
 
+type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
+
 interface AddRecipeModalProps {
   open: boolean;
   existingRecipeIds: Set<string>;
@@ -20,10 +22,14 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('a-z');
+  const [filterOpen, setFilterOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   const filters = useRecipeFilters({
-    recipes,
+    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
     tags,
     recipeTags,
     userId: user?.id,
@@ -32,7 +38,21 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
 
   useEffect(() => {
     if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    if (filterOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open, filterOpen]);
+
+  useEffect(() => {
+    if (!open) return;
     setSearch('');
+    setShowFavouritesOnly(false);
+    setSortBy('a-z');
+    setFilterOpen(false);
     filters.resetFilters();
     setLoading(true);
     Promise.all([
@@ -63,6 +83,15 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
 
   if (!open) return null;
 
+  const sortedRecipes = [...filters.filteredRecipes].sort((a, b) => {
+    switch (sortBy) {
+      case 'z-a': return b.title.localeCompare(a.title);
+      case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      default: return a.title.localeCompare(b.title);
+    }
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
@@ -82,14 +111,68 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
               &times;
             </button>
           </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipes..."
-            className="rf-input w-full"
-          />
+          <div className="flex items-center gap-3 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes..."
+              className="rf-input w-full"
+            />
+            <div className="relative shrink-0" ref={filterRef}>
+              <button
+                onClick={() => setFilterOpen((prev) => !prev)}
+                className="flex items-center justify-center w-10 h-10 rounded-xl transition-colors"
+                style={
+                  filterOpen || showFavouritesOnly || sortBy !== 'a-z'
+                    ? { background: 'var(--green-light)', border: '1px solid var(--green)', color: 'var(--green)' }
+                    : { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', boxShadow: 'var(--shadow-sm)' }
+                }
+                aria-label="Filters"
+              >
+                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="8" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                  <circle cx="6" cy="6" r="2" fill="currentColor" />
+                  <circle cx="14" cy="12" r="2" fill="currentColor" />
+                  <circle cx="8" cy="18" r="2" fill="currentColor" />
+                </svg>
+              </button>
+              {filterOpen && (
+                <div className="rf-filter-dropdown">
+                  <button
+                    onClick={() => setShowFavouritesOnly((prev) => !prev)}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors"
+                    style={showFavouritesOnly ? { background: '#fef2f0', color: 'var(--red)' } : { color: 'var(--text)' }}
+                  >
+                    <svg width={16} height={16} viewBox="0 0 24 24" fill={showFavouritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                    Favourites only
+                  </button>
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+                  <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Sort by</p>
+                  {([
+                    ['a-z', 'A – Z'],
+                    ['z-a', 'Z – A'],
+                    ['newest', 'Newest first'],
+                    ['oldest', 'Oldest first'],
+                  ] as [SortOption, string][]).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setSortBy(value)}
+                      className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
+                      style={sortBy === value ? { background: 'var(--green-light)', color: 'var(--green)', fontWeight: 600 } : { color: 'var(--text)' }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <RecipeFilterBar {...filters} />
         </div>
 
@@ -97,10 +180,10 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
           {loading && (
             <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>Loading...</p>
           )}
-          {!loading && filters.filteredRecipes.length === 0 && (
+          {!loading && sortedRecipes.length === 0 && (
             <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>No recipes found.</p>
           )}
-          {filters.filteredRecipes.map((recipe) => {
+          {sortedRecipes.map((recipe) => {
             const alreadyAdded = existingRecipeIds.has(recipe.id);
             return (
               <button
