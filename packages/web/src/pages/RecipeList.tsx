@@ -3,120 +3,10 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
 import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
+import RecipeFilterBar from '../components/RecipeFilterBar';
 import { useAuth } from '../context/AuthContext';
-
-interface RecipeTagRow {
-  recipe_id: string;
-  tag_id: string;
-}
-
-const TAG_EMOJI: Record<string, string> = {
-  dinner: '🍽️',
-  lunch: '🥪',
-  breakfast: '🥞',
-  brunch: '🧇',
-  snack: '🥜',
-  dessert: '🍰',
-  quick: '⚡',
-  healthy: '🥗',
-  vegetarian: '🌱',
-  vegan: '🌿',
-  'gluten-free': '🌾',
-  pasta: '🍝',
-  chicken: '🍗',
-  beef: '🥩',
-  lamb: '🍖',
-  pork: '🥓',
-  seafood: '🐟',
-  fish: '🐟',
-  tofu: '🫘',
-  chickpea: '🫘',
-  lentil: '🫘',
-  egg: '🥚',
-  avocado: '🥑',
-  banana: '🍌',
-  potato: '🥔',
-  mushroom: '🍄',
-  rice: '🍚',
-  noodle: '🍜',
-  soup: '🍲',
-  stew: '🍲',
-  curry: '🍛',
-  salad: '🥗',
-  baking: '🧁',
-  bread: '🍞',
-  pizza: '🍕',
-  burger: '🍔',
-  taco: '🌮',
-  sushi: '🍣',
-  indian: '🍛',
-  italian: '🇮🇹',
-  mexican: '🌮',
-  chinese: '🥡',
-  japanese: '🇯🇵',
-  thai: '🇹🇭',
-  korean: '🇰🇷',
-  greek: '🇬🇷',
-  mediterranean: '🫒',
-  vietnamese: '🇻🇳',
-  australian: '🇦🇺',
-  caribbean: '🏝️',
-  african: '🌍',
-  'middle-eastern': '🧆',
-  french: '🇫🇷',
-  spanish: '🇪🇸',
-  bbq: '🔥',
-  comfort: '🛋️',
-  spicy: '🌶️',
-  sweet: '🍯',
-  'one-pot': '🫕',
-  slow: '🐢',
-  grilled: '🔥',
-  roast: '🍗',
-  fried: '🍳',
-  raw: '🥬',
-  smoothie: '🥤',
-  drink: '🥤',
-  sauce: '🫙',
-  dip: '🫕',
-  side: '🥦',
-};
-
-type TagCategory = 'meal' | 'cuisine' | 'protein' | 'dietary' | 'style';
-
-const TAG_CATEGORY: Record<string, TagCategory> = {
-  // Meal type
-  dinner: 'meal', lunch: 'meal', breakfast: 'meal', brunch: 'meal',
-  snack: 'meal', dessert: 'meal', side: 'meal',
-  // Cuisine
-  indian: 'cuisine', italian: 'cuisine', mexican: 'cuisine', chinese: 'cuisine',
-  japanese: 'cuisine', thai: 'cuisine', korean: 'cuisine', greek: 'cuisine',
-  mediterranean: 'cuisine', vietnamese: 'cuisine', australian: 'cuisine',
-  caribbean: 'cuisine', african: 'cuisine', 'middle-eastern': 'cuisine',
-  french: 'cuisine', spanish: 'cuisine',
-  // Protein / main ingredient
-  chicken: 'protein', beef: 'protein', lamb: 'protein', pork: 'protein',
-  seafood: 'protein', fish: 'protein', tofu: 'protein', chickpea: 'protein',
-  lentil: 'protein', egg: 'protein',
-  // Dietary
-  vegetarian: 'dietary', vegan: 'dietary', 'gluten-free': 'dietary', healthy: 'dietary',
-  // Style / method / dish type
-  quick: 'style', slow: 'style', bbq: 'style', grilled: 'style', roast: 'style',
-  fried: 'style', baking: 'style', 'one-pot': 'style', comfort: 'style',
-  spicy: 'style', sweet: 'style', raw: 'style',
-  pasta: 'style', soup: 'style', stew: 'style', curry: 'style', salad: 'style',
-  rice: 'style', noodle: 'style', bread: 'style', pizza: 'style', burger: 'style',
-  taco: 'style', sushi: 'style', smoothie: 'style', drink: 'style', sauce: 'style',
-  dip: 'style', mushroom: 'style', avocado: 'style', banana: 'style', potato: 'style',
-};
-
-const CATEGORY_TABS: { value: TagCategory; label: string; emoji: string }[] = [
-  { value: 'meal', label: 'Meal', emoji: '🍽️' },
-  { value: 'cuisine', label: 'Cuisine', emoji: '🌍' },
-  { value: 'protein', label: 'Protein', emoji: '🥩' },
-  { value: 'dietary', label: 'Dietary', emoji: '🌿' },
-  { value: 'style', label: 'Style', emoji: '🍳' },
-];
+import useRecipeFilters from '../hooks/useRecipeFilters';
+import type { RecipeTagRow } from '../constants/tagMeta';
 
 function getGreeting(): { text: string; punctuation: string } {
   const now = new Date();
@@ -158,23 +48,27 @@ function getGreeting(): { text: string; punctuation: string } {
 }
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
-type OwnerFilter = 'all' | 'mine' | 'shared';
 
 export default function RecipeList() {
   const { user, profile, familyMembers } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
-  const [activeCategories, setActiveCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
-  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [categoryTab, setCategoryTab] = useState<TagCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  const filters = useRecipeFilters({
+    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
+    tags,
+    recipeTags,
+    userId: user?.id,
+    searchQuery,
+  });
 
   useEffect(() => {
     async function fetchData() {
@@ -215,46 +109,12 @@ export default function RecipeList() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [filterOpen]);
 
-  // Build a map from tag name -> tag id for category filtering
-  const tagNameToId = new Map(tags.map((t) => [t.name.toLowerCase(), t.id]));
-
-  // Derive dynamic category bubbles from tags actually in use
-  const allCategories = useMemo(() => {
-    const countByTagId = new Map<string, number>();
-    for (const rt of recipeTags) {
-      countByTagId.set(rt.tag_id, (countByTagId.get(rt.tag_id) ?? 0) + 1);
-    }
-
-    return tags
-      .filter((t) => (countByTagId.get(t.id) ?? 0) > 0)
-      .sort((a, b) => (countByTagId.get(b.id) ?? 0) - (countByTagId.get(a.id) ?? 0))
-      .map((t) => ({
-        tag: t.name.toLowerCase(),
-        label: t.name.charAt(0).toUpperCase() + t.name.slice(1),
-        emoji: t.emoji || TAG_EMOJI[t.name.toLowerCase()] || '🏷️',
-      }));
-  }, [tags, recipeTags]);
-
-  const visibleCategories = useMemo(() => {
-    if (!categoryTab) return [];
-    return allCategories.filter((c) => TAG_CATEGORY[c.tag] === categoryTab);
-  }, [allCategories, categoryTab]);
-
-  // Only show tabs that have at least one tag in use
-  const visibleTabs = useMemo(() => {
-    return CATEGORY_TABS.filter((tab) => {
-      return allCategories.some((c) => TAG_CATEGORY[c.tag] === tab.value);
-    });
-  }, [allCategories]);
-
-  const hasAnyFilter = activeCategories.size > 0 || searchQuery || showFavouritesOnly || ownerFilter !== 'all' || sortBy !== 'newest';
+  const hasAnyFilter = filters.hasActiveFilter || searchQuery !== '' || showFavouritesOnly || sortBy !== 'newest';
 
   function resetAllFilters() {
-    setActiveCategories(new Set());
-    setCategoryTab(null);
+    filters.resetFilters();
     setSearchQuery('');
     setShowFavouritesOnly(false);
-    setOwnerFilter('all');
     setSortBy('newest');
   }
 
@@ -264,55 +124,8 @@ export default function RecipeList() {
     );
   }
 
-  function toggleCategory(tagName: string) {
-    const tagCategory = TAG_CATEGORY[tagName];
-    setActiveCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(tagName)) {
-        next.delete(tagName);
-      } else {
-        // Remove any existing selection in the same category (single-select per category)
-        if (tagCategory) {
-          for (const existing of prev) {
-            if (TAG_CATEGORY[existing] === tagCategory) next.delete(existing);
-          }
-        }
-        next.add(tagName);
-      }
-      return next;
-    });
-  }
-
-  // Check if a category tab has a selected tag (for highlight)
-  function tabHasSelection(tabValue: TagCategory): boolean {
-    return [...activeCategories].some((tag) => TAG_CATEGORY[tag] === tabValue);
-  }
-
-  // Convert active category names to tag IDs for filtering
-  const activeTagIds = new Set(
-    [...activeCategories].map((name) => tagNameToId.get(name)).filter(Boolean) as string[]
-  );
-
-  let filteredRecipes = recipes.filter((r) => {
-    if (showFavouritesOnly && !r.is_favourite) return false;
-    if (ownerFilter === 'mine' && r.user_id !== user?.id) return false;
-    if (ownerFilter === 'shared' && r.user_id === user?.id) return false;
-    if (activeTagIds.size > 0) {
-      const recipeTagIds = recipeTags.filter((rt) => rt.recipe_id === r.id).map((rt) => rt.tag_id);
-      const hasAllTags = [...activeTagIds].every((tagId) => recipeTagIds.includes(tagId));
-      if (!hasAllTags) return false;
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const titleMatch = r.title.toLowerCase().includes(q);
-      const ingredientMatch = r.ingredients.some((ing) => ing.item.toLowerCase().includes(q));
-      if (!titleMatch && !ingredientMatch) return false;
-    }
-    return true;
-  });
-
   // Sort
-  filteredRecipes = [...filteredRecipes].sort((a, b) => {
+  const sortedRecipes = [...filters.filteredRecipes].sort((a, b) => {
     switch (sortBy) {
       case 'oldest':
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -325,7 +138,7 @@ export default function RecipeList() {
     }
   });
 
-  const hasActiveFilters = showFavouritesOnly || ownerFilter !== 'all' || sortBy !== 'newest';
+  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'newest';
   const greeting = getGreeting();
 
   // Build a map of family member user_id -> display_name (excludes current user)
@@ -478,79 +291,12 @@ export default function RecipeList() {
         </div>
       </div>
 
-      {/* Owner filter pills + Reset */}
-      <div
-        className="flex items-center gap-1.5 mb-4"
-        style={{ animation: 'fadeUp 0.4s ease 0.12s both' }}
-      >
-        {([
-          ['all', 'All recipes'],
-          ['mine', 'Mine'],
-          ['shared', 'Shared'],
-        ] as [OwnerFilter, string][]).map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setOwnerFilter(value)}
-            className="px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style={
-              ownerFilter === value
-                ? { background: 'var(--green-light)', color: 'var(--green)', border: '1px solid var(--green)' }
-                : { background: 'var(--card)', color: 'var(--muted)', border: '1px solid var(--border)' }
-            }
-          >
-            {label}
-          </button>
-        ))}
-        {hasAnyFilter && (
-          <button
-            onClick={resetAllFilters}
-            className="rf-reset-btn"
-          >
-            Reset
-          </button>
-        )}
-      </div>
-
-      {/* Category tab pills */}
-      <div
-        className="rf-category-tabs mb-3"
-        style={{ animation: 'fadeUp 0.4s ease 0.14s both' }}
-      >
-        <div className="rf-category-tabs-scroll">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setCategoryTab((prev) => prev === tab.value ? null : tab.value)}
-              className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''} ${tabHasSelection(tab.value) ? 'rf-category-tab-has-selection' : ''}`}
-            >
-              <span className="rf-category-tab-emoji">{tab.emoji}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Category bubbles – only when a tab is selected */}
-      {categoryTab && visibleCategories.length > 0 && (
-        <div
-          className="rf-category-section mb-6"
-          style={{ animation: 'fadeUp 0.15s ease both' }}
-        >
-          <div className="rf-category-scroll">
-            {visibleCategories.map((cat) => (
-              <button
-                key={cat.tag}
-                onClick={() => toggleCategory(cat.tag)}
-                className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
-              >
-                <span className="rf-category-icon">{cat.emoji}</span>
-                <span className="rf-category-label">{cat.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {!categoryTab && <div className="mb-4" />}
+      <RecipeFilterBar
+        {...filters}
+        animated
+        showReset={hasAnyFilter}
+        onReset={resetAllFilters}
+      />
 
       {/* Loading skeletons */}
       {loading && (
@@ -569,7 +315,7 @@ export default function RecipeList() {
       )}
 
       {/* Empty state */}
-      {!loading && !error && filteredRecipes.length === 0 && (
+      {!loading && !error && sortedRecipes.length === 0 && (
         <div
           className="text-center py-16"
           style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
@@ -585,9 +331,9 @@ export default function RecipeList() {
       )}
 
       {/* Card grid */}
-      {!loading && !error && filteredRecipes.length > 0 && (
+      {!loading && !error && sortedRecipes.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {filteredRecipes.map((recipe, index) => (
+          {sortedRecipes.map((recipe, index) => (
             <RecipeCard
               key={recipe.id}
               recipe={recipe}

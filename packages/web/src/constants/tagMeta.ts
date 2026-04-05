@@ -1,0 +1,113 @@
+export interface RecipeTagRow {
+  recipe_id: string;
+  tag_id: string;
+}
+
+export type TagCategory = 'meal' | 'cuisine' | 'protein' | 'dietary' | 'style';
+export type OwnerFilter = 'all' | 'mine' | 'shared';
+
+export const TAG_EMOJI: Record<string, string> = {
+  dinner: '🍽️',
+  lunch: '🥪',
+  breakfast: '🥞',
+  brunch: '🧇',
+  snack: '🥜',
+  dessert: '🍰',
+  quick: '⚡',
+  healthy: '🥗',
+  vegetarian: '🌱',
+  vegan: '🌿',
+  'gluten-free': '🌾',
+  pasta: '🍝',
+  chicken: '🍗',
+  beef: '🥩',
+  lamb: '🍖',
+  pork: '🥓',
+  seafood: '🐟',
+  fish: '🐟',
+  tofu: '🫘',
+  chickpea: '🫘',
+  lentil: '🫘',
+  egg: '🥚',
+  avocado: '🥑',
+  banana: '🍌',
+  potato: '🥔',
+  mushroom: '🍄',
+  rice: '🍚',
+  noodle: '🍜',
+  soup: '🍲',
+  stew: '🍲',
+  curry: '🍛',
+  salad: '🥗',
+  baking: '🧁',
+  bread: '🍞',
+  pizza: '🍕',
+  burger: '🍔',
+  taco: '🌮',
+  sushi: '🍣',
+  indian: '🍛',
+  italian: '🇮🇹',
+  mexican: '🌮',
+  chinese: '🥡',
+  japanese: '🇯🇵',
+  thai: '🇹🇭',
+  korean: '🇰🇷',
+  greek: '🇬🇷',
+  mediterranean: '🫒',
+  vietnamese: '🇻🇳',
+  australian: '🇦🇺',
+  caribbean: '🏝️',
+  african: '🌍',
+  'middle-eastern': '🧆',
+  french: '🇫🇷',
+  spanish: '🇪🇸',
+  bbq: '🔥',
+  comfort: '🛋️',
+  spicy: '🌶️',
+  sweet: '🍯',
+  'one-pot': '🫕',
+  slow: '🐢',
+  grilled: '🔥',
+  roast: '🍗',
+  fried: '🍳',
+  raw: '🥬',
+  smoothie: '🥤',
+  drink: '🥤',
+  sauce: '🫙',
+  dip: '🫕',
+  side: '🥦',
+};
+
+export const TAG_CATEGORY: Record<string, TagCategory> = {
+  // Meal type
+  dinner: 'meal', lunch: 'meal', breakfast: 'meal', brunch: 'meal',
+  snack: 'meal', dessert: 'meal', side: 'meal',
+  // Cuisine
+  indian: 'cuisine', italian: 'cuisine', mexican: 'cuisine', chinese: 'cuisine',
+  japanese: 'cuisine', thai: 'cuisine', korean: 'cuisine', greek: 'cuisine',
+  mediterranean: 'cuisine', vietnamese: 'cuisine', australian: 'cuisine',
+  caribbean: 'cuisine', african: 'cuisine', 'middle-eastern': 'cuisine',
+  french: 'cuisine', spanish: 'cuisine',
+  // Protein / main ingredient
+  chicken: 'protein', beef: 'protein', lamb: 'protein', pork: 'protein',
+  seafood: 'protein', fish: 'protein', tofu: 'protein', chickpea: 'protein',
+  lentil: 'protein', egg: 'protein',
+  // Dietary
+  vegetarian: 'dietary', vegan: 'dietary', 'gluten-free': 'dietary', healthy: 'dietary',
+  // Style / method / dish type
+  quick: 'style', slow: 'style', bbq: 'style', grilled: 'style', roast: 'style',
+  fried: 'style', baking: 'style', 'one-pot': 'style', comfort: 'style',
+  spicy: 'style', sweet: 'style', raw: 'style',
+  pasta: 'style', soup: 'style', stew: 'style', curry: 'style', salad: 'style',
+  rice: 'style', noodle: 'style', bread: 'style', pizza: 'style', burger: 'style',
+  taco: 'style', sushi: 'style', smoothie: 'style', drink: 'style', sauce: 'style',
+  dip: 'style', mushroom: 'style', avocado: 'style', banana: 'style', potato: 'style',
+};
+
+export const CATEGORY_TABS: { value: TagCategory; label: string; emoji: string }[] = [
+  { value: 'meal', label: 'Meal', emoji: '🍽️' },
+  { value: 'cuisine', label: 'Cuisine', emoji: '🌍' },
+  { value: 'protein', label: 'Protein', emoji: '🥩' },
+  { value: 'dietary', label: 'Dietary', emoji: '🌿' },
+  { value: 'style', label: 'Style', emoji: '🍳' },
+];

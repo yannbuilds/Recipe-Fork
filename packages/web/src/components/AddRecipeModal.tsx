@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe } from '@recipe-aggregator/shared';
+import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import RecipeFilterBar from './RecipeFilterBar';
+import { useAuth } from '../context/AuthContext';
+import useRecipeFilters from '../hooks/useRecipeFilters';
+import type { RecipeTagRow } from '../constants/tagMeta';
 
 interface AddRecipeModalProps {
   open: boolean;
@@ -10,23 +14,41 @@ interface AddRecipeModalProps {
 }
 
 export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose }: AddRecipeModalProps) {
+  const { user } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const filters = useRecipeFilters({
+    recipes,
+    tags,
+    recipeTags,
+    userId: user?.id,
+    searchQuery: search,
+  });
+
   useEffect(() => {
     if (!open) return;
     setSearch('');
+    filters.resetFilters();
     setLoading(true);
-    supabase
-      .from('recipes')
-      .select('*')
-      .order('title')
-      .then(({ data }) => {
-        setRecipes((data as Recipe[]) || []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from('recipes').select('*').order('title'),
+      supabase.from('tags').select('*').order('name'),
+      supabase.from('recipe_tags').select('recipe_id, tag_id'),
+    ]).then(([recipesResult, tagsResult, recipeTagsResult]) => {
+      setRecipes((recipesResult.data as Recipe[]) || []);
+      if (!tagsResult.error && tagsResult.data) {
+        setTags(tagsResult.data as Tag[]);
+      }
+      if (!recipeTagsResult.error && recipeTagsResult.data) {
+        setRecipeTags(recipeTagsResult.data as RecipeTagRow[]);
+      }
+      setLoading(false);
+    });
     setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
@@ -40,11 +62,6 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
   }, [open, onClose]);
 
   if (!open) return null;
-
-  const q = search.toLowerCase();
-  const filtered = recipes.filter(
-    (r) => r.title.toLowerCase().includes(q) || r.ingredients.some((ing) => ing.item.toLowerCase().includes(q))
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -73,16 +90,17 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
             placeholder="Search recipes..."
             className="rf-input w-full"
           />
+          <RecipeFilterBar {...filters} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-2">
           {loading && (
             <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>Loading...</p>
           )}
-          {!loading && filtered.length === 0 && (
+          {!loading && filters.filteredRecipes.length === 0 && (
             <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>No recipes found.</p>
           )}
-          {filtered.map((recipe) => {
+          {filters.filteredRecipes.map((recipe) => {
             const alreadyAdded = existingRecipeIds.has(recipe.id);
             return (
               <button
