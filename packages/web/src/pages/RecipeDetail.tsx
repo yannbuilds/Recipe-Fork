@@ -420,71 +420,153 @@ export default function RecipeDetail() {
           className="rd-hero-split"
           style={{ animation: 'fadeUp 0.4s ease both' }}
         >
-          {/* Desktop-only left column: title + description + attribution */}
+          {/* Desktop-only left column: title + description + attribution (top), meal plan + screen on (bottom) */}
           <div className="rd-hero-text">
-            <h1
-              className="font-bold leading-snug"
-              style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
-            >
-              {recipe.title}
-            </h1>
-            {recipe.description && (
-              <p
-                ref={descRef}
-                className="rd-hero-desc mt-2"
-                style={{ color: 'var(--muted)', fontSize: 14 }}
+            {/* Top group */}
+            <div>
+              <h1
+                className="font-bold leading-snug"
+                style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
               >
-                {recipe.description}
-              </p>
-            )}
-            {(recipe.creator_name || recipe.source_url) && (
-              <div
-                className="flex items-center gap-2 text-sm flex-wrap"
-                style={{ color: 'var(--muted)', marginTop: 24 }}
-              >
-                {recipe.creator_name && (
-                  <span>
-                    👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
-                  </span>
-                )}
-                {recipe.creator_name && recipe.source_url && (
-                  <span style={{ color: 'var(--border)' }}>·</span>
-                )}
-                {recipe.source_url && (
-                  <a
-                    href={recipe.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline"
-                    style={{ color: 'var(--green)' }}
-                  >
-                    View original ↗
-                  </a>
-                )}
-                {recipe.author_notes && (
-                  <>
+                {recipe.title}
+              </h1>
+              {recipe.description && (
+                <p
+                  ref={descRef}
+                  className="rd-hero-desc mt-2"
+                  style={{ color: 'var(--muted)', fontSize: 14 }}
+                >
+                  {recipe.description}
+                </p>
+              )}
+              {(recipe.creator_name || recipe.source_url) && (
+                <div
+                  className="flex items-center gap-2 text-sm flex-wrap"
+                  style={{ color: 'var(--muted)', marginTop: 24 }}
+                >
+                  {recipe.creator_name && (
+                    <span>
+                      👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+                    </span>
+                  )}
+                  {recipe.creator_name && recipe.source_url && (
                     <span style={{ color: 'var(--border)' }}>·</span>
-                    <button
-                      onClick={() => setShowAuthorNotes(true)}
-                      className="cursor-pointer"
+                  )}
+                  {recipe.source_url && (
+                    <a
+                      href={recipe.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                      style={{ color: 'var(--green)' }}
+                    >
+                      View original ↗
+                    </a>
+                  )}
+                  {recipe.author_notes && (
+                    <>
+                      <span style={{ color: 'var(--border)' }}>·</span>
+                      <button
+                        onClick={() => setShowAuthorNotes(true)}
+                        className="cursor-pointer"
+                        style={{
+                          color: 'var(--green)',
+                          background: 'var(--green-light)',
+                          border: '1px solid var(--green)',
+                          borderRadius: 20,
+                          padding: '2px 10px',
+                          font: 'inherit',
+                          fontSize: '0.8em',
+                          fontWeight: 600,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        📝 Author's Notes
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom group: meal plan + screen on (desktop only) */}
+            <div className="flex items-center justify-between" style={{ position: 'relative', zIndex: 10 }}>
+              <button
+                onClick={() => setShowWeekPicker(true)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+                style={{
+                  background: 'var(--card)',
+                  border: '1px solid var(--green)',
+                  color: 'var(--green)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--green-light)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
+              >
+                + Meal Plan
+              </button>
+              {supportsWakeLock && (
+                <div className="relative flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const next = !isAwake;
+                      setIsAwake(next);
+                      if (next) {
+                        setShowAwakeTooltip(true);
+                        setTimeout(() => setShowAwakeTooltip(false), 4000);
+                      } else {
+                        setShowAwakeTooltip(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-sm font-semibold"
+                    style={{ color: isAwake ? 'var(--green)' : 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                  >
+                    <span>{isAwake ? '⚡' : '💤'} Screen on</span>
+                    <span
                       style={{
-                        color: 'var(--green)',
-                        background: 'var(--green-light)',
-                        border: '1px solid var(--green)',
-                        borderRadius: 20,
-                        padding: '2px 10px',
-                        font: 'inherit',
-                        fontSize: '0.8em',
-                        fontWeight: 600,
-                        lineHeight: 1.6,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        width: 44,
+                        height: 24,
+                        borderRadius: 12,
+                        background: isAwake ? 'var(--green)' : 'var(--border)',
+                        transition: 'background 0.25s ease',
+                        padding: 2,
+                        flexShrink: 0,
                       }}
                     >
-                      📝 Author's Notes
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+                      <span
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: '50%',
+                          background: '#fff',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          transform: isAwake ? 'translateX(20px)' : 'translateX(0)',
+                          transition: 'transform 0.25s ease',
+                        }}
+                      />
+                    </span>
+                  </button>
+                  {showAwakeTooltip && (
+                    <div
+                      onClick={() => setShowAwakeTooltip(false)}
+                      className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+                      style={{
+                        background: 'var(--text)',
+                        color: 'var(--card)',
+                        width: 220,
+                        animation: 'fadeUp 0.2s ease both',
+                        cursor: 'pointer',
+                        zIndex: 9999,
+                        right: 0,
+                      }}
+                    >
+                      Screen will stay on while you cook. This may use more battery.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Image (right column on desktop, full-width on mobile) */}
@@ -752,9 +834,9 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {/* ── Meal Plan + Screen On row ─────────────────────────── */}
+        {/* ── Meal Plan + Screen On row (mobile only — desktop version is in the hero text column) */}
         <div
-          className="flex items-center justify-between flex-wrap gap-3 mt-6"
+          className="rd-meal-plan-row flex items-center justify-between flex-wrap gap-3 mt-6"
           style={{ position: 'relative', zIndex: 10 }}
         >
           <button

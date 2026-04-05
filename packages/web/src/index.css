@@ -80,9 +80,11 @@
   .rd-hero-text {
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: space-between;
     padding-top: 0;
   }
+  .rd-meal-plan-row { display: none; }
+  .rd-grid { margin-top: 20px; }
   .rd-hero-text h1 { font-size: 26px !important; }
   .rd-hero-text .rd-hero-desc { font-size: 14px !important; color: var(--muted); }
   .rd-hero .rd-hero-title-overlay { display: none; }
