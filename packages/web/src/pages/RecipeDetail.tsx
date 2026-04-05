@@ -441,8 +441,8 @@ export default function RecipeDetail() {
               )}
               {(recipe.creator_name || recipe.source_url) && (
                 <div
-                  className="flex items-center gap-2 text-sm flex-wrap"
-                  style={{ color: 'var(--muted)', marginTop: 24 }}
+                  className="flex items-center gap-2 text-sm flex-wrap mt-6"
+                  style={{ color: 'var(--muted)' }}
                 >
                   {recipe.creator_name && (
                     <span>
