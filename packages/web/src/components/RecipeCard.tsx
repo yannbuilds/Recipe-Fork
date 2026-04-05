@@ -39,6 +39,9 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
             src={recipe.image_url}
             alt={recipe.title}
             className="absolute inset-0 w-full h-full object-cover"
+            loading={index < 4 ? 'eager' : 'lazy'}
+            fetchPriority={index < 4 ? 'high' : 'auto'}
+            decoding="async"
           />
         ) : (
           <div

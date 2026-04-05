@@ -73,7 +73,7 @@ export default function RecipeList() {
   useEffect(() => {
     async function fetchData() {
       const [recipesResult, tagsResult, recipeTagsResult] = await Promise.all([
-        supabase.from('recipes').select('*').order('created_at', { ascending: false }),
+        supabase.from('recipes').select('id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients').order('created_at', { ascending: false }),
         supabase.from('tags').select('*').order('name'),
         supabase.from('recipe_tags').select('recipe_id, tag_id'),
       ]);
