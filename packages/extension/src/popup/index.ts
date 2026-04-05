@@ -40,8 +40,6 @@ function renderLogin(root: HTMLElement) {
 
         <div class="oauth-buttons">
           <button id="oauth-google" class="oauth-btn">Google</button>
-          <button id="oauth-facebook" class="oauth-btn">Facebook</button>
-          <button id="oauth-apple" class="oauth-btn">Apple</button>
         </div>
 
         <p class="login-toggle">
@@ -155,12 +153,6 @@ function renderLogin(root: HTMLElement) {
   document
     .getElementById("oauth-google")!
     .addEventListener("click", () => handleOAuth("google"));
-  document
-    .getElementById("oauth-facebook")!
-    .addEventListener("click", () => handleOAuth("facebook"));
-  document
-    .getElementById("oauth-apple")!
-    .addEventListener("click", () => handleOAuth("apple"));
 }
 
 // Render the popup UI (save mode)
