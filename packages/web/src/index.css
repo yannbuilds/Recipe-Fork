@@ -480,6 +480,26 @@ input[type="checkbox"] { accent-color: var(--green); }
   border: 1px solid rgba(63,115,88,0.15);
 }
 
+/* ── Accordion ──────────────────────────────── */
+.lp-accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+}
+.lp-accordion-body.open {
+  grid-template-rows: 1fr;
+}
+.lp-accordion-body > div {
+  overflow: hidden;
+}
+.lp-accordion-chevron {
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+.lp-accordion-chevron.open {
+  transform: rotate(180deg);
+}
+
 /* ── Tags expanded overlay ───────────────────── */
 .rf-tags-expanded {
   position: absolute;

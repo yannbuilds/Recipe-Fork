@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
-import { Scissors, Search, CalendarDays, Chrome, Sparkles, Tag, ListChecks, ChefHat, ShoppingCart, LayoutGrid } from "lucide-react";
+import { Scissors, Search, CalendarDays, Chrome, Sparkles, Tag, ListChecks, ChefHat, ShoppingCart, LayoutGrid, ChevronDown } from "lucide-react";
 
 /* ── Scroll-reveal hook ──────────────────────── */
 function useReveal() {
@@ -153,6 +153,60 @@ function FeatureRow({
   );
 }
 
+/* ── Accordion item ─────────────────────────── */
+function AccordionItem({
+  question,
+  answer,
+  isOpen,
+  onToggle,
+}: {
+  question: string;
+  answer: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rf-card" style={{ padding: 0, overflow: "hidden" }}>
+      <button
+        onClick={onToggle}
+        className="flex items-center justify-between w-full text-left"
+        style={{
+          padding: "20px 24px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
+        <span
+          className="rf-heading font-semibold"
+          style={{ fontSize: 16, color: "var(--text)", paddingRight: 16 }}
+        >
+          {question}
+        </span>
+        <ChevronDown
+          size={20}
+          className={`lp-accordion-chevron ${isOpen ? "open" : ""}`}
+          style={{ color: "var(--green)" }}
+        />
+      </button>
+      <div className={`lp-accordion-body ${isOpen ? "open" : ""}`}>
+        <div>
+          <p
+            style={{
+              padding: "0 24px 20px",
+              color: "var(--muted)",
+              fontSize: 15,
+              lineHeight: 1.7,
+            }}
+          >
+            {answer}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main landing page ───────────────────────── */
 export default function LandingPage() {
   useReveal();
@@ -160,6 +214,46 @@ export default function LandingPage() {
   const scrollToFeatures = () => {
     document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const howToItems = [
+    {
+      question: "How do I install the Chrome extension?",
+      answer:
+        "Visit the Chrome Web Store and search for Pie Keeper, or click the link in your dashboard after signing up. Click 'Add to Chrome', then pin the extension to your toolbar for easy access. The extension icon will appear next to your address bar.",
+    },
+    {
+      question: "How do I save a recipe from a website?",
+      answer:
+        "Navigate to any recipe page and click the Pie Keeper extension icon in your toolbar. The extension uses AI to read the page and extract the recipe title, ingredients, steps, and photo. Review the details, add any tags you like, and hit Save. The recipe appears in your collection instantly.",
+    },
+    {
+      question: "Can I add a recipe manually?",
+      answer:
+        "Yes! Open your Pie Keeper collection and tap the + button. You can paste in a URL to import a recipe, or type in a title, ingredients, and steps by hand. This is handy for family recipes, handwritten cards, or anything not published online.",
+    },
+    {
+      question: "How do I add Pie Keeper to my phone's home screen?",
+      answer:
+        "Pie Keeper is a web app that works like a native app on your phone. On iPhone, open Pie Keeper in Safari, tap the Share button, and choose 'Add to Home Screen'. On Android, open it in Chrome, tap the three-dot menu, and select 'Add to Home screen'. You'll get a full-screen app experience with no browser bar.",
+    },
+    {
+      question: "How does the weekly meal planner work?",
+      answer:
+        "Open the Meal Plan tab and add recipes from your collection onto any day of the week. Once your plan is set, Pie Keeper automatically combines every ingredient into a single shopping list, grouped for easy shopping. Adjust servings per meal and the list updates on the fly.",
+    },
+    {
+      question: "How do I share my recipes with family?",
+      answer:
+        "Go to your Profile and tap 'Family Sharing'. Enter the email address of the person you'd like to invite. Once they accept, you'll share a single recipe collection that everyone can add to, edit, and meal plan from. Perfect for households that cook together.",
+    },
+    {
+      question: "What happens to my recipes if a website goes down?",
+      answer:
+        "When you save a recipe, Pie Keeper stores a complete copy \u2013 title, ingredients, steps, and photo. Your saved recipes don't depend on the original website, so they'll always be available in your collection even if the source page disappears.",
+    },
+  ];
 
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
@@ -445,6 +539,41 @@ export default function LandingPage() {
               </span>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── How To ──────────────────────────────── */}
+      <section
+        className="mx-auto"
+        style={{ maxWidth: 700, padding: "80px 24px" }}
+      >
+        <div className="lp-reveal" style={{ textAlign: "center", marginBottom: 40 }}>
+          <h2
+            className="rf-heading font-bold"
+            style={{
+              fontSize: "clamp(24px, 4vw, 36px)",
+              color: "var(--text)",
+              marginBottom: 12,
+            }}
+          >
+            How to use Pie Keeper
+          </h2>
+          <p style={{ color: "var(--muted)", fontSize: 16 }}>
+            Everything you need to know to get started.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {howToItems.map((item, i) => (
+            <div key={i} className="lp-reveal" style={{ transitionDelay: `${i * 0.06}s` }}>
+              <AccordionItem
+                question={item.question}
+                answer={item.answer}
+                isOpen={openFaq === i}
+                onToggle={() => setOpenFaq(openFaq === i ? null : i)}
+              />
+            </div>
+          ))}
         </div>
       </section>
 
