@@ -34,7 +34,7 @@ function AppLayout() {
   return (
     <>
       <Header />
-      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}>
+      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px', paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
         <Outlet />
       </main>
     </>
