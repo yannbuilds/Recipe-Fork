@@ -29,7 +29,9 @@ export async function categoriseIngredients(
 
   for (const ing of ingredients) {
     const key = ing.item.toLowerCase().trim();
-    if (!key || merged[key]) continue;
+    if (!key) continue;
+    // Re-classify items previously stuck as "Other" from the old LLM-based flow
+    if (merged[key] && merged[key] !== 'Other') continue;
     merged[key] = classifyIngredient(ing.item);
   }
 
