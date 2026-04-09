@@ -20,6 +20,10 @@ type Category =
 // These are checked before single-keyword matching so that e.g. "coconut milk"
 // resolves to Canned & Jarred rather than Dairy.
 const PHRASE_RULES: [string, Category][] = [
+  // Substring-safety: these must match before shorter keywords like "pepper", "corn", "butter", "milk"
+  ['peppercorn', 'Spices & Seasonings'],
+  ['buttermilk', 'Dairy & Eggs'],
+
   // Canned & Jarred — check before Dairy/Produce to win ties
   ['coconut milk', 'Canned & Jarred'],
   ['coconut cream', 'Canned & Jarred'],
