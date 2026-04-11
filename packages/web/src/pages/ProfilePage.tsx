@@ -215,6 +215,9 @@ export default function ProfilePage() {
         />
       )}
 
+      {/* ---- Friend Invite ---- */}
+      {user && !editing && <FriendInviteSection />}
+
       {canInstall && (
         <button
           onClick={promptInstall}
@@ -294,6 +297,7 @@ function FamilySection({
       } catch {
         msg = fnError.message || msg;
       }
+      console.error('[invite] function error:', fnError, 'extracted msg:', msg);
       setError(msg);
       return;
     }
@@ -343,7 +347,7 @@ function FamilySection({
             Family sharing
           </h3>
           <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
-            Invite someone to share all your recipes. You'll both be able to view, edit, and organise the same collection.
+            Share your recipe collection with a partner or family member. You'll both see and edit the same recipes.
           </p>
           <form onSubmit={handleInvite} className="flex gap-2">
             <input
@@ -381,9 +385,12 @@ function FamilySection({
         className="rounded-xl p-5"
         style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
       >
-        <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text)' }}>
+        <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
           Family sharing
         </h3>
+        <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
+          Share your recipe collection with a partner or family member. You'll both see and edit the same recipes.
+        </p>
 
         {/* Member list */}
         <div className="space-y-2 mb-4">
@@ -516,6 +523,96 @@ function FamilySection({
           >
             {leaving ? 'Leaving\u2026' : 'Leave family group'}
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   Friend Invite Section
+   ================================================================ */
+
+function FriendInviteSection() {
+  const [friendEmail, setFriendEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!friendEmail.trim()) return;
+
+    setSending(true);
+    setError(null);
+    setMessage(null);
+
+    const { data, error: fnError } = await supabase.functions.invoke('send-friend-invite', {
+      body: { email: friendEmail.trim() },
+    });
+
+    setSending(false);
+
+    if (fnError) {
+      let msg = 'Failed to send invite';
+      try {
+        if (fnError.context instanceof Response) {
+          const body = await fnError.context.clone().json();
+          msg = body?.error || msg;
+        } else if (fnError.message) {
+          msg = fnError.message;
+        }
+      } catch {
+        msg = fnError.message || msg;
+      }
+      setError(msg);
+      return;
+    }
+
+    if (data?.error) {
+      setError(data.error);
+      return;
+    }
+
+    setMessage(data?.message || 'Invite sent!');
+    setFriendEmail('');
+  }
+
+  return (
+    <div className="w-full max-w-sm">
+      <div
+        className="rounded-xl p-5"
+        style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
+      >
+        <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
+          Invite a friend
+        </h3>
+        <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+          Know someone who'd love Pie Keeper? Send them an invite to create an account.
+        </p>
+        <form onSubmit={handleSend} className="flex gap-2">
+          <input
+            type="email"
+            value={friendEmail}
+            onChange={(e) => setFriendEmail(e.target.value)}
+            placeholder="Email address"
+            className="rf-input flex-1 text-sm"
+            required
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="rf-btn rf-btn-filled text-sm"
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {sending ? 'Sending\u2026' : 'Send'}
+          </button>
+        </form>
+        {error && (
+          <p className="text-xs mt-2" style={{ color: 'var(--red)' }}>{error}</p>
+        )}
+        {message && (
+          <p className="text-xs mt-2" style={{ color: 'var(--green)' }}>{message}</p>
         )}
       </div>
     </div>

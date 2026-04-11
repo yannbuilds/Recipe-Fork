@@ -140,8 +140,11 @@ Deno.serve(async (req) => {
       .eq("status", "pending")
       .single();
 
+    console.log("[send-family-invite] existing pending invite:", existingInvite?.id || "none");
+
     if (existingInvite) {
-      await admin.from("family_invitations").delete().eq("id", existingInvite.id);
+      const { error: delErr } = await admin.from("family_invitations").delete().eq("id", existingInvite.id);
+      console.log("[send-family-invite] deleted old invite:", delErr ? `ERROR: ${delErr.message}` : "ok");
     }
 
     // Create the invitation
