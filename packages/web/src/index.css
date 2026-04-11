@@ -548,3 +548,22 @@ input[type="checkbox"] { accent-color: var(--green); }
   background: var(--warm);
 }
 
+/* ── Tiptap rich-text editor (My Notes) ─────────────── */
+.prose-notes {
+  outline: none;
+  min-height: 120px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.prose-notes p { margin: 0 0 8px; }
+.prose-notes ul, .prose-notes ol { padding-left: 24px; margin: 0 0 8px; }
+.prose-notes li { margin: 2px 0; }
+.prose-notes p.is-editor-empty:first-child::before {
+  content: 'Add your notes about this recipe...';
+  color: var(--muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+

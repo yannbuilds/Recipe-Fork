@@ -8,6 +8,7 @@ import WeekPickerModal from '../components/WeekPickerModal';
 import FavouriteButton from '../components/FavouriteButton';
 import IngredientIcon from '../components/IngredientIcon';
 import VideoPlayer from '../components/VideoPlayer';
+import MyNotesModal from '../components/MyNotesModal';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -233,7 +234,11 @@ export default function RecipeDetail() {
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
+  const [showMyNotes, setShowMyNotes] = useState(false);
+  const [myNotesSaveStatus, setMyNotesSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveServingsRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const saveNotesRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
@@ -327,6 +332,19 @@ export default function RecipeDetail() {
     saveServingsRef.current = setTimeout(async () => {
       await supabase.from('recipes').update({ custom_servings: newServings }).eq('id', id!);
     }, 500);
+  }
+
+  function handleNotesUpdate(html: string) {
+    clearTimeout(saveNotesRef.current);
+    clearTimeout(savedTimerRef.current);
+    setMyNotesSaveStatus('saving');
+    saveNotesRef.current = setTimeout(async () => {
+      const cleanHtml = html === '<p></p>' ? null : html;
+      await supabase.from('recipes').update({ user_notes: cleanHtml }).eq('id', id!);
+      setRecipe(prev => prev ? { ...prev, user_notes: cleanHtml } : prev);
+      setMyNotesSaveStatus('saved');
+      savedTimerRef.current = setTimeout(() => setMyNotesSaveStatus('idle'), 1500);
+    }, 1000);
   }
 
   // Check if description is truncated (needs "more" button)
@@ -502,6 +520,24 @@ export default function RecipeDetail() {
                       </button>
                     </>
                   )}
+                  <span style={{ color: 'var(--border)' }}>·</span>
+                  <button
+                    onClick={() => setShowMyNotes(true)}
+                    className="cursor-pointer"
+                    style={{
+                      color: 'var(--green)',
+                      background: 'var(--green-light)',
+                      border: '1px solid var(--green)',
+                      borderRadius: 20,
+                      padding: '2px 10px',
+                      font: 'inherit',
+                      fontSize: '0.8em',
+                      fontWeight: 600,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    📒 My Notes
+                  </button>
                 </div>
               )}
             </div>
@@ -848,6 +884,24 @@ export default function RecipeDetail() {
                 </button>
               </>
             )}
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <button
+              onClick={() => setShowMyNotes(true)}
+              className="cursor-pointer"
+              style={{
+                color: 'var(--green)',
+                background: 'var(--green-light)',
+                border: '1px solid var(--green)',
+                borderRadius: 20,
+                padding: '2px 10px',
+                font: 'inherit',
+                fontSize: '0.8em',
+                fontWeight: 600,
+                lineHeight: 1.6,
+              }}
+            >
+              📒 My Notes
+            </button>
           </div>
         )}
 
@@ -1339,6 +1393,17 @@ export default function RecipeDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── My Notes modal ──────────────────────────────────── */}
+      {recipe && (
+        <MyNotesModal
+          open={showMyNotes}
+          content={recipe.user_notes}
+          onSave={handleNotesUpdate}
+          onClose={() => setShowMyNotes(false)}
+          saveStatus={myNotesSaveStatus}
+        />
       )}
 
       {user && id && recipe && (
