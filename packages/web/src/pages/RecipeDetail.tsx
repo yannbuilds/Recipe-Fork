@@ -337,14 +337,15 @@ export default function RecipeDetail() {
   function handleNotesUpdate(html: string) {
     clearTimeout(saveNotesRef.current);
     clearTimeout(savedTimerRef.current);
-    setMyNotesSaveStatus('saving');
+    setMyNotesSaveStatus('idle');
     saveNotesRef.current = setTimeout(async () => {
+      setMyNotesSaveStatus('saving');
       const cleanHtml = html === '<p></p>' ? null : html;
       await supabase.from('recipes').update({ user_notes: cleanHtml }).eq('id', id!);
       setRecipe(prev => prev ? { ...prev, user_notes: cleanHtml } : prev);
       setMyNotesSaveStatus('saved');
       savedTimerRef.current = setTimeout(() => setMyNotesSaveStatus('idle'), 1500);
-    }, 1000);
+    }, 2000);
   }
 
   // Check if description is truncated (needs "more" button)
