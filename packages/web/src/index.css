@@ -557,7 +557,8 @@ input[type="checkbox"] { accent-color: var(--green); }
   color: var(--text);
 }
 .prose-notes p { margin: 0 0 8px; }
-.prose-notes ul, .prose-notes ol { padding-left: 24px; margin: 0 0 8px; }
+.prose-notes ul { list-style-type: disc; padding-left: 24px; margin: 0 0 8px; }
+.prose-notes ol { list-style-type: decimal; padding-left: 24px; margin: 0 0 8px; }
 .prose-notes li { margin: 2px 0; }
 .prose-notes p.is-editor-empty:first-child::before {
   content: 'Add your notes about this recipe...';
