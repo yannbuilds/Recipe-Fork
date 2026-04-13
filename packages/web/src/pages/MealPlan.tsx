@@ -584,7 +584,7 @@ export default function MealPlan() {
                         className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
-                        onClick={() => setExpandedItem(isExpanded ? null : key)}
+                        onClick={() => toggleShoppingItem(key)}
                       >
                         {/* Custom checkbox */}
                         <div
@@ -597,10 +597,6 @@ export default function MealPlan() {
                             borderColor: checked ? 'var(--green)' : 'var(--border)',
                             background: checked ? 'var(--green)' : 'transparent',
                             transition: 'all 0.15s ease',
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleShoppingItem(key);
                           }}
                         >
                           {checked && (
@@ -621,7 +617,7 @@ export default function MealPlan() {
                           <span className="font-medium">{ing.item}</span>
                         </span>
 
-                        {/* Chevron */}
+                        {/* Chevron — tap to expand, does not tick */}
                         <svg
                           width={14}
                           height={14}
@@ -635,6 +631,12 @@ export default function MealPlan() {
                             transition: 'transform 0.2s ease',
                             transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                             flexShrink: 0,
+                            padding: 4,
+                            margin: -4,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedItem(isExpanded ? null : key);
                           }}
                         >
                           <polyline points="6 9 12 15 18 9" />
