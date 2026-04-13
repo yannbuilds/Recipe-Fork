@@ -236,8 +236,8 @@ export default function WeekPickerModal({
                     disabled={displayStep === 'adding'}
                     className="w-full text-left rounded-lg px-4 py-3 transition-all"
                     style={{
-                      background: week.isCurrent ? 'var(--green-light)' : 'var(--bg)',
-                      border: week.isCurrent
+                      background: week.isDefault ? 'var(--green-light)' : 'var(--bg)',
+                      border: week.isDefault
                         ? '2px solid var(--green)'
                         : '1px solid var(--border)',
                       opacity: displayStep === 'adding' && !isAdding ? 0.5 : 1,
@@ -245,13 +245,13 @@ export default function WeekPickerModal({
                     }}
                     onMouseEnter={(e) => {
                       if (displayStep !== 'adding') {
-                        e.currentTarget.style.background = week.isCurrent
+                        e.currentTarget.style.background = week.isDefault
                           ? 'var(--green-light)'
                           : 'var(--warm)';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = week.isCurrent
+                      e.currentTarget.style.background = week.isDefault
                         ? 'var(--green-light)'
                         : 'var(--bg)';
                     }}
@@ -261,9 +261,20 @@ export default function WeekPickerModal({
                         {week.isCurrent && (
                           <span
                             className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                            style={{ background: 'var(--green)', color: '#fff' }}
+                            style={week.isDefault
+                              ? { background: 'var(--green)', color: '#fff' }
+                              : { background: 'var(--warm)', color: 'var(--muted)' }
+                            }
                           >
                             This week
+                          </span>
+                        )}
+                        {week.isDefault && !week.isCurrent && (
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                            style={{ background: 'var(--green)', color: '#fff' }}
+                          >
+                            Next week
                           </span>
                         )}
                         {isAdded && (
@@ -281,7 +292,7 @@ export default function WeekPickerModal({
                       </div>
                       <span
                         className="text-sm font-medium"
-                        style={{ color: week.isCurrent ? 'var(--green)' : 'var(--text)' }}
+                        style={{ color: week.isDefault ? 'var(--green)' : 'var(--text)' }}
                       >
                         {isAdding ? 'Adding...' : week.label}
                       </span>

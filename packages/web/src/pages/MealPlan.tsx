@@ -4,9 +4,9 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
-import { combineIngredients } from '../utils/combineIngredients';
+import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
-import { getMonday, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
+import { getMonday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import { CATEGORY_EMOJI_MAP } from '../utils/ingredientEmojis';
 import IngredientIcon from '../components/IngredientIcon';
 
@@ -16,7 +16,7 @@ export default function MealPlan() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getDefaultWeekStart());
   const [plan, setPlan] = useState<MealPlanType | null>(null);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +29,7 @@ export default function MealPlan() {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [categorising, setCategorising] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   // Debounce timer for persisting checked items
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,7 +85,13 @@ export default function MealPlan() {
 
   // Derived data
   const uncookedEntries = entries.filter((e) => !e.is_cooked);
-  const allIngredients = uncookedEntries.flatMap((e) => e.recipe?.ingredients || []);
+  const allIngredients: IngredientWithRecipe[] = uncookedEntries.flatMap((e) =>
+    (e.recipe?.ingredients || []).map((ing) => ({
+      ...ing,
+      _recipeTitle: e.recipe?.title || 'Unknown',
+      _recipeId: e.recipe?.id || '',
+    }))
+  );
   const combined = combineIngredients(allIngredients);
   const cookedCount = entries.filter((e) => e.is_cooked).length;
   const cookedPercentage = entries.length > 0 ? Math.round((cookedCount / entries.length) * 100) : 0;
@@ -192,6 +199,8 @@ export default function MealPlan() {
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id));
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
+  const isNextWeek = formatWeekStart(shiftWeek(getMonday(new Date()), 1)) === formatWeekStart(weekStart);
+  const showPlanningLabel = isPlanningMode() && isNextWeek;
 
   return (
     <div className="space-y-5">
@@ -238,6 +247,14 @@ export default function MealPlan() {
                 style={{ background: 'var(--green-light)', color: 'var(--green)' }}
               >
                 This week
+              </span>
+            )}
+            {showPlanningLabel && (
+              <span
+                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
+                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
+              >
+                Planning next week
               </span>
             )}
           </div>
