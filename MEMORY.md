@@ -22,4 +22,4 @@ _Last updated: 2026-03-15_
 ## Memory
 <!-- Things Yann has asked to remember. Persistent — only remove or change if asked. -->
 
-- **Git workflow:** Push directly to main. No PRs — this is Yann's own project.
+- **Git workflow:** Push directly to main. No PRs — this is Yann's own project. Always merge feature branches to main when done.
