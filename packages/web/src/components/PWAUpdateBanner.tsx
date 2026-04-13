@@ -49,7 +49,7 @@ export default function PWAUpdateBanner() {
         <button
           onClick={() => setShowUpdate(false)}
           className="text-sm px-3 py-1 rounded-lg"
-          style={{ background: 'rgba(255,255,255,0.2)' }}
+          style={{ background: 'rgba(255,255,255,0.15)' }}
         >
           Later
         </button>

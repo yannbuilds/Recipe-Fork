@@ -242,7 +242,7 @@ export default function RecipeList() {
                 className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors"
                 style={
                   showFavouritesOnly
-                    ? { background: '#fef2f0', color: 'var(--red)' }
+                    ? { background: 'var(--red-light)', color: 'var(--red)' }
                     : { color: 'var(--text)' }
                 }
               >

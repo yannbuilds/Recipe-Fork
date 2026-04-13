@@ -712,7 +712,7 @@ export default function RecipeDetail() {
                             bottom: 0,
                             right: 0,
                             color: 'var(--muted)',
-                            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.92) 35%)',
+                            background: `linear-gradient(to right, transparent, var(--glass-bg) 35%)`,
                             border: 'none',
                             paddingLeft: '2rem',
                             paddingRight: 0,
@@ -750,7 +750,7 @@ export default function RecipeDetail() {
                   <div
                     className="text-center px-3 py-2"
                     style={{
-                      background: 'rgba(255,255,255,0.78)',
+                      background: 'var(--glass-card)',
                       backdropFilter: 'blur(12px)',
                       WebkitBackdropFilter: 'blur(12px)',
                       borderRadius: 10,
@@ -766,7 +766,7 @@ export default function RecipeDetail() {
                   <div
                     className="text-center px-3 py-2"
                     style={{
-                      background: 'rgba(255,255,255,0.78)',
+                      background: 'var(--glass-card)',
                       backdropFilter: 'blur(12px)',
                       WebkitBackdropFilter: 'blur(12px)',
                       borderRadius: 10,
@@ -782,7 +782,7 @@ export default function RecipeDetail() {
                   <div
                     className="text-center px-3 py-2"
                     style={{
-                      background: 'rgba(255,255,255,0.78)',
+                      background: 'var(--glass-card)',
                       backdropFilter: 'blur(12px)',
                       WebkitBackdropFilter: 'blur(12px)',
                       borderRadius: 10,
@@ -966,8 +966,8 @@ export default function RecipeDetail() {
                       width: 20,
                       height: 20,
                       borderRadius: '50%',
-                      background: '#fff',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      background: 'var(--card)',
+                      boxShadow: 'var(--shadow-sm)',
                       transform: isAwake ? 'translateX(20px)' : 'translateX(0)',
                       transition: 'transform 0.25s ease',
                     }}
@@ -1337,11 +1337,11 @@ export default function RecipeDetail() {
             className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
             style={{
               background: 'var(--card)',
-              border: '1px solid #f5c6c0',
+              border: '1px solid var(--red-border)',
               color: 'var(--red)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#fef2f0';
+              e.currentTarget.style.background = 'var(--red-light)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'var(--card)';

@@ -62,7 +62,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
           <div
             className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full"
             style={{
-              background: 'rgba(255,255,255,0.85)',
+              background: 'var(--glass-bg)',
               backdropFilter: 'blur(4px)',
               fontSize: 11,
               color: 'var(--muted)',
@@ -109,7 +109,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
         >
           <h2
             className="rf-heading font-semibold leading-snug line-clamp-2"
-            style={{ fontSize: 18, color: 'var(--text)', textShadow: '0 0 8px rgba(255,255,255,0.9)' }}
+            style={{ fontSize: 18, color: 'var(--text)' }}
           >
             {recipe.title}
           </h2>

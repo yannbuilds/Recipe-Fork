@@ -27,7 +27,7 @@ function LandingNav() {
     <nav
       className="sticky top-0 z-50"
       style={{
-        background: "rgba(255,255,255,0.92)",
+        background: "var(--glass-bg)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid var(--border)",

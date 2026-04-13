@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTheme } from "./hooks/useTheme";
 import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NewRecipeModalProvider } from "./context/NewRecipeModalContext";
@@ -60,7 +61,7 @@ function Header() {
       className="sticky top-0 z-50"
       style={{
         height: 56,
-        background: 'rgba(255,255,255,0.92)',
+        background: 'var(--glass-bg)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--border)',
@@ -127,6 +128,7 @@ function ScrollToTop() {
 
 function AppShell() {
   const location = useLocation();
+  useTheme();
 
   if (isMarketingSite) {
     return <MarketingShell />;

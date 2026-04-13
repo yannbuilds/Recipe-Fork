@@ -25,7 +25,7 @@ export default function RecipeCardSkeleton({ index = 0 }: { index?: number }) {
           style={{
             padding: '10px 12px',
             borderRadius: '0 0 var(--radius) var(--radius)',
-            background: 'rgba(255,255,255,0.7)',
+            background: 'var(--glass-bg)',
           }}
         >
           {/* Title placeholder */}

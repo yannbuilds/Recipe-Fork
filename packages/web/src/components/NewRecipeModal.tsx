@@ -268,7 +268,7 @@ export default function NewRecipeModal() {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--green)';
-                  e.currentTarget.style.background = 'var(--green-light, #f0faf4)';
+                  e.currentTarget.style.background = 'var(--green-light)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border)';
@@ -300,7 +300,7 @@ export default function NewRecipeModal() {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--green)';
-                  e.currentTarget.style.background = 'var(--green-light, #f0faf4)';
+                  e.currentTarget.style.background = 'var(--green-light)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border)';
@@ -389,7 +389,7 @@ export default function NewRecipeModal() {
         {/* Step: Error */}
         {step === 'error' && (
           <div className="text-center py-2">
-            <p className="text-sm mb-4" style={{ color: 'var(--red, #e53e3e)' }}>
+            <p className="text-sm mb-4" style={{ color: 'var(--red)' }}>
               {errorMessage}
             </p>
             <div className="flex gap-3 justify-center">

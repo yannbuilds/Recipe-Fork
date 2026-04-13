@@ -15,6 +15,31 @@
     --radius: 16px;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    --glass-bg: rgba(255,255,255,0.92);
+    --glass-card: rgba(255,255,255,0.78);
+    --red-light: #fef2f0;
+    --red-border: #f5c6c0;
+    --orange: #d97706;
+  }
+
+  .dark {
+    --bg: #1a1a1e;
+    --card: #252529;
+    --green: #4a8e6b;
+    --green-light: #2a3a30;
+    --warm: #2a2a2d;
+    --warm-dark: #222225;
+    --border: #3a3a3e;
+    --text: #e8e8e6;
+    --muted: #9a9a96;
+    --red: #e55a47;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.25), 0 1px 4px rgba(0,0,0,0.15);
+    --glass-bg: rgba(30,30,34,0.92);
+    --glass-card: rgba(37,37,41,0.78);
+    --red-light: rgba(229,90,71,0.12);
+    --red-border: rgba(229,90,71,0.3);
+    --orange: #f59e0b;
   }
 
   body {
@@ -199,10 +224,10 @@
 .rf-btn-secondary:hover { background: var(--warm); }
 .rf-btn-danger {
   background: var(--card);
-  border: 1px solid #f5c6c0;
+  border: 1px solid var(--red-border);
   color: var(--red);
 }
-.rf-btn-danger:hover { background: #fef2f0; }
+.rf-btn-danger:hover { background: var(--red-light); }
 
 /* ── Tags ──────────────────────────────────────── */
 .rf-tag {
@@ -266,9 +291,9 @@ input[type="checkbox"] { accent-color: var(--green); }
 /* ── Tile info gradient ───────────────────────── */
 .rf-glass {
   background: linear-gradient(to top,
-    rgba(255,255,255,0.95) 0%,
-    rgba(255,255,255,0.82) 60%,
-    rgba(255,255,255,0.0) 100%);
+    var(--glass-bg) 0%,
+    color-mix(in srgb, var(--glass-bg) 82%, transparent) 60%,
+    transparent 100%);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   -webkit-mask-image: linear-gradient(to top, black 85%, transparent 100%);
@@ -278,6 +303,9 @@ input[type="checkbox"] { accent-color: var(--green); }
   background: rgba(255,255,255,0.2);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+.dark .rf-glass-dark {
+  background: rgba(255,255,255,0.1);
 }
 
 /* ── Gradient scrim ───────────────────────────── */
@@ -392,13 +420,13 @@ input[type="checkbox"] { accent-color: var(--green); }
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   font-size: 24px;
   transition: background 0.15s, box-shadow 0.15s;
 }
 
 .rf-category-bubble:hover .rf-category-icon {
-  background: #f5f5f5;
+  background: var(--warm);
 }
 
 .rf-category-active .rf-category-icon {

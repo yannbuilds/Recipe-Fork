@@ -21,7 +21,7 @@ export default function OfflineBanner() {
   return (
     <div
       className="fixed top-0 left-0 right-0 z-[70] text-center text-sm font-medium py-2 px-4"
-      style={{ background: '#f5c542', color: '#1c1c1a' }}
+      style={{ background: '#f5c542', color: '#1c1c1a' }} /* always high-contrast yellow regardless of theme */
     >
       You're offline – some features may not be available.
     </div>

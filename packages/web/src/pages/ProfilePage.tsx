@@ -82,7 +82,7 @@ export default function ProfilePage() {
           {error && (
             <div
               className="p-3 text-sm rounded-lg"
-              style={{ background: '#fef2f0', color: 'var(--red)', border: '1px solid #f5c6c0' }}
+              style={{ background: 'var(--red-light)', color: 'var(--red)', border: '1px solid var(--red-border)' }}
             >
               {error}
             </div>
@@ -429,7 +429,7 @@ function FamilySection({
                   <button
                     onClick={() => handleRemoveMember(member.id, name)}
                     className="text-xs px-2 py-1 rounded"
-                    style={{ color: 'var(--red)', background: 'rgba(220,38,38,0.08)' }}
+                    style={{ color: 'var(--red)', background: 'var(--red-light)' }}
                   >
                     Remove
                   </button>
@@ -458,7 +458,7 @@ function FamilySection({
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--muted)' }}>
                     {inv.invited_email}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--orange, #d97706)' }}>
+                  <p className="text-xs" style={{ color: 'var(--orange)' }}>
                     Pending
                   </p>
                 </div>
@@ -474,7 +474,7 @@ function FamilySection({
                       await refreshFamily();
                     }}
                     className="text-xs px-2 py-1 rounded"
-                    style={{ color: 'var(--red)', background: 'rgba(220,38,38,0.08)' }}
+                    style={{ color: 'var(--red)', background: 'var(--red-light)' }}
                   >
                     Cancel
                   </button>
