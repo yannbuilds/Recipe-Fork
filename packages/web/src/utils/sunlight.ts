@@ -59,7 +59,7 @@ export function getSunTimes(
   const tSet = N + (18 - lngHour) / 24;
 
   function toLocalDate(T: number, H: number): Date {
-    let UT = H + RA - 0.06571 * T - 6.622;
+    let UT = H + RA - 0.06571 * T - 6.622 - lngHour;
     UT = ((UT % 24) + 24) % 24;
 
     // Convert UT to local time using JS timezone offset
