@@ -1,10 +1,23 @@
 import type { Ingredient } from '@recipe-aggregator/shared';
 
+export interface IngredientSource {
+  recipeTitle: string;
+  recipeId: string;
+  quantity: string;
+  unit: string;
+}
+
 export interface AggregatedIngredient {
   item: string;
   quantity: string;
   unit: string;
   shoppingCategory?: string;
+  sources: IngredientSource[];
+}
+
+export interface IngredientWithRecipe extends Ingredient {
+  _recipeTitle: string;
+  _recipeId: string;
 }
 
 function normalise(s: string): string {
@@ -29,8 +42,8 @@ function parseQty(q: string): number | null {
   return total;
 }
 
-export function combineIngredients(ingredients: Ingredient[]): AggregatedIngredient[] {
-  const map = new Map<string, Map<string, { display: string; unit: string; quantities: string[] }>>();
+export function combineIngredients(ingredients: IngredientWithRecipe[]): AggregatedIngredient[] {
+  const map = new Map<string, Map<string, { display: string; unit: string; quantities: string[]; sources: IngredientSource[] }>>();
 
   for (const ing of ingredients) {
     if (!ing.item.trim()) continue;
@@ -41,9 +54,16 @@ export function combineIngredients(ingredients: Ingredient[]): AggregatedIngredi
     const unitMap = map.get(normItem)!;
 
     if (!unitMap.has(normUnit)) {
-      unitMap.set(normUnit, { display: ing.item, unit: ing.unit, quantities: [] });
+      unitMap.set(normUnit, { display: ing.item, unit: ing.unit, quantities: [], sources: [] });
     }
-    unitMap.get(normUnit)!.quantities.push(ing.quantity);
+    const entry = unitMap.get(normUnit)!;
+    entry.quantities.push(ing.quantity);
+    entry.sources.push({
+      recipeTitle: ing._recipeTitle,
+      recipeId: ing._recipeId,
+      quantity: ing.quantity,
+      unit: ing.unit,
+    });
   }
 
   const result: AggregatedIngredient[] = [];
@@ -53,9 +73,9 @@ export function combineIngredients(ingredients: Ingredient[]): AggregatedIngredi
       if (parsed.every((p) => p !== null)) {
         const sum = parsed.reduce((a, b) => a! + b!, 0)!;
         const formatted = Number.isInteger(sum) ? String(sum) : sum.toFixed(1);
-        result.push({ item: entry.display, quantity: formatted, unit: entry.unit });
+        result.push({ item: entry.display, quantity: formatted, unit: entry.unit, sources: entry.sources });
       } else {
-        result.push({ item: entry.display, quantity: entry.quantities.join(' + '), unit: entry.unit });
+        result.push({ item: entry.display, quantity: entry.quantities.join(' + '), unit: entry.unit, sources: entry.sources });
       }
     }
   }

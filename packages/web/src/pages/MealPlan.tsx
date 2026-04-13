@@ -570,55 +570,110 @@ export default function MealPlan() {
                 {group.items.map((ing, i) => {
                   const key = `${ing.item}-${ing.unit}`;
                   const checked = checkedItems.has(key);
+                  const isExpanded = expandedItem === key;
                   return (
-                    <label
+                    <div
                       key={key}
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
                       style={{
                         borderBottom: i < group.items.length - 1 ? '1px solid var(--border)' : 'none',
                         opacity: checked ? 0.5 : 1,
                         transition: 'opacity 0.3s, background 0.15s',
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
-                      {/* Custom checkbox */}
                       <div
-                        className="flex items-center justify-center shrink-0"
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 6,
-                          border: '2px solid',
-                          borderColor: checked ? 'var(--green)' : 'var(--border)',
-                          background: checked ? 'var(--green)' : 'transparent',
-                          transition: 'all 0.15s ease',
-                        }}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
+                        onClick={() => setExpandedItem(isExpanded ? null : key)}
                       >
-                        {checked && (
-                          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
+                        {/* Custom checkbox */}
+                        <div
+                          className="flex items-center justify-center shrink-0"
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 6,
+                            border: '2px solid',
+                            borderColor: checked ? 'var(--green)' : 'var(--border)',
+                            background: checked ? 'var(--green)' : 'transparent',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleShoppingItem(key);
+                          }}
+                        >
+                          {checked && (
+                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </div>
+
+                        <IngredientIcon item={ing.item} />
+
+                        {/* Item text */}
+                        <span
+                          className={`flex-1 text-sm ${checked ? 'line-through' : ''}`}
+                          style={{ color: checked ? 'var(--muted)' : 'var(--text)' }}
+                        >
+                          {ing.quantity} {ing.unit}{' '}
+                          <span className="font-medium">{ing.item}</span>
+                        </span>
+
+                        {/* Chevron */}
+                        <svg
+                          width={14}
+                          height={14}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--muted)"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{
+                            transition: 'transform 0.2s ease',
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleShoppingItem(key)}
-                        className="sr-only"
-                      />
 
-                      <IngredientIcon item={ing.item} />
-
-                      {/* Item text */}
-                      <span
-                        className={`flex-1 text-sm ${checked ? 'line-through' : ''}`}
-                        style={{ color: checked ? 'var(--muted)' : 'var(--text)' }}
-                      >
-                        {ing.quantity} {ing.unit}{' '}
-                        <span className="font-medium">{ing.item}</span>
-                      </span>
-                    </label>
+                      {/* Expanded recipe sources */}
+                      {isExpanded && (
+                        <div
+                          style={{
+                            padding: '0 16px 12px 59px',
+                            borderTop: '1px solid var(--border)',
+                            marginTop: -1,
+                          }}
+                        >
+                          {ing.sources.map((src, si) => (
+                            <div
+                              key={`${src.recipeId}-${si}`}
+                              className="flex items-center justify-between py-1.5"
+                              style={{ color: 'var(--muted)', fontSize: 13 }}
+                            >
+                              <span
+                                className="cursor-pointer"
+                                style={{ color: 'var(--green)' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/recipe/${src.recipeId}`);
+                                }}
+                              >
+                                {src.recipeTitle}
+                              </span>
+                              <span style={{ fontSize: 12 }}>
+                                {src.quantity} {src.unit}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
