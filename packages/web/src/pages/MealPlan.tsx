@@ -504,16 +504,16 @@ export default function MealPlan() {
                     </div>
                   )}
 
-                  {/* Title overlay: bottom, frosted glass */}
+                  {/* Title overlay: bottom, solid scrim (meal plan only) */}
                   <div className="absolute bottom-0 left-0 right-0">
-                    <div className="rf-glass" style={{ padding: '8px 12px' }}>
+                    <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.72)' }}>
                       <h3
                         className={`rf-heading font-semibold text-sm ${entry.is_cooked ? 'line-through' : ''}`}
-                        style={{ color: 'var(--text)' }}
+                        style={{ color: '#fff' }}
                       >
                         {entry.recipe?.title}
                       </h3>
-                      <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                      <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
                         {entry.recipe?.prep_time != null && <span>Prep: {entry.recipe.prep_time}m</span>}
                         {entry.recipe?.cook_time != null && <span>Cook: {entry.recipe.cook_time}m</span>}
                         {entry.recipe?.servings != null && <span>Serves {entry.recipe.servings}</span>}
