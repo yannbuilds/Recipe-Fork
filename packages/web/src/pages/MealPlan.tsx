@@ -200,6 +200,7 @@ export default function MealPlan() {
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id));
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
   const isNextWeek = formatWeekStart(shiftWeek(getMonday(new Date()), 1)) === formatWeekStart(weekStart);
+  const isLastWeek = formatWeekStart(shiftWeek(getMonday(new Date()), -1)) === formatWeekStart(weekStart);
   const showPlanningLabel = isPlanningMode() && isNextWeek;
 
   return (
@@ -241,12 +242,28 @@ export default function MealPlan() {
             <p className="text-sm" style={{ color: 'var(--muted)' }}>
               Week of {formatWeekLabel(weekStart)}
             </p>
+            {isLastWeek && (
+              <span
+                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
+                style={{ background: 'var(--border)', color: 'var(--muted)' }}
+              >
+                Last week
+              </span>
+            )}
             {isCurrentWeek && (
               <span
                 className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
                 style={{ background: 'var(--green-light)', color: 'var(--green)' }}
               >
                 This week
+              </span>
+            )}
+            {isNextWeek && !showPlanningLabel && (
+              <span
+                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
+                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
+              >
+                Next week
               </span>
             )}
             {showPlanningLabel && (
