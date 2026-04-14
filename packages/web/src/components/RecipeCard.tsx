@@ -102,19 +102,20 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
         <div
           className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-start"
           style={{
-            padding: '36px 12px 16px',
-            height: 120,
+            padding: '86px 12px 16px',
+            height: 170,
             borderRadius: '0 0 var(--radius) var(--radius)',
+            ['--glass-bg' as string]: 'rgba(20, 20, 22, 0.92)',
           }}
         >
           <h2
             className="rf-heading leading-snug line-clamp-2"
-            style={{ fontSize: 16, color: 'var(--text)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600 }}
+            style={{ fontSize: 16, color: 'rgba(255,255,255,0.95)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600 }}
           >
             {recipe.title}
           </h2>
           {(totalTime != null || recipe.servings != null) && (
-            <div className="flex items-center gap-3 mt-auto" style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <div className="flex items-center gap-3 mt-auto" style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
               {totalTime != null && (
                 <span className="flex items-center gap-1">
                   🕐 {formatTime(totalTime)}

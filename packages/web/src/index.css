@@ -292,12 +292,13 @@ input[type="checkbox"] { accent-color: var(--green); }
 .rf-glass {
   background: linear-gradient(to top,
     var(--glass-bg) 0%,
-    color-mix(in srgb, var(--glass-bg) 82%, transparent) 60%,
-    transparent 100%);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  -webkit-mask-image: linear-gradient(to top, black 85%, transparent 100%);
-  mask-image: linear-gradient(to top, black 85%, transparent 100%);
+    color-mix(in srgb, var(--glass-bg) 90%, transparent) 25%,
+    color-mix(in srgb, var(--glass-bg) 15%, transparent) 55%,
+    transparent 75%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(to top, black 50%, transparent 75%);
+  mask-image: linear-gradient(to top, black 50%, transparent 75%);
 }
 .rf-glass-dark {
   background: rgba(255,255,255,0.2);
