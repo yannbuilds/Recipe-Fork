@@ -163,9 +163,11 @@ export default function RecipeList() {
           {greeting.text}{profile?.display_name ? `, ${profile.display_name}` : ''}{greeting.punctuation}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          {familyMembers.length > 1
-            ? `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} in your family collection.`
-            : `You have ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} saved.`
+          {hasAnyFilter
+            ? `Showing ${sortedRecipes.length} of ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''}.`
+            : familyMembers.length > 1
+              ? `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} in your family collection.`
+              : `You have ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} saved.`
           }
         </p>
       </div>
