@@ -236,7 +236,7 @@ export default function RecipeDetail() {
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
   const [showMyNotes, setShowMyNotes] = useState(false);
   const [myNotesSaveStatus, setMyNotesSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const saveServingsRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [savedServings, setSavedServings] = useState<number>(1);
   const saveNotesRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -310,7 +310,9 @@ export default function RecipeDetail() {
       } else {
         const data = recipeResult.data as Recipe;
         setRecipe(data);
-        setCurrentServings(data.custom_servings ?? data.servings ?? 1);
+        const initialServings = data.custom_servings ?? data.servings ?? 1;
+        setCurrentServings(initialServings);
+        setSavedServings(initialServings);
       }
 
       if (!tagsResult.error && tagsResult.data) {
@@ -328,10 +330,11 @@ export default function RecipeDetail() {
 
   function updateServings(newServings: number) {
     setCurrentServings(newServings);
-    clearTimeout(saveServingsRef.current);
-    saveServingsRef.current = setTimeout(async () => {
-      await supabase.from('recipes').update({ custom_servings: newServings }).eq('id', id!);
-    }, 500);
+  }
+
+  async function saveServings() {
+    await supabase.from('recipes').update({ custom_servings: currentServings }).eq('id', id!);
+    setSavedServings(currentServings);
   }
 
   function handleNotesUpdate(html: string) {
@@ -1024,61 +1027,84 @@ export default function RecipeDetail() {
 
               {/* Serving row */}
               {recipe.servings != null && (
-                <div className="flex items-center justify-between mb-4">
-                  <span
-                    className="text-sm font-semibold"
-                    style={{ color: 'var(--green)' }}
-                  >
-                    {currentServings} serving{currentServings !== 1 ? 's' : ''}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        updateServings(Math.max(1, currentServings - 1))
-                      }
-                      className="flex items-center justify-center text-sm font-bold transition-colors"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        border: '1px solid var(--border)',
-                        background: 'var(--card)',
-                        color: 'var(--muted)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--green)';
-                        e.currentTarget.style.color = 'var(--green)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border)';
-                        e.currentTarget.style.color = 'var(--muted)';
-                      }}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: 'var(--green)' }}
                     >
-                      −
-                    </button>
-                    <button
-                      onClick={() => updateServings(currentServings + 1)}
-                      className="flex items-center justify-center text-sm font-bold transition-colors"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        border: '1px solid var(--border)',
-                        background: 'var(--card)',
-                        color: 'var(--muted)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--green)';
-                        e.currentTarget.style.color = 'var(--green)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border)';
-                        e.currentTarget.style.color = 'var(--muted)';
-                      }}
-                    >
-                      +
-                    </button>
+                      {currentServings} serving{currentServings !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          updateServings(Math.max(1, currentServings - 1))
+                        }
+                        className="flex items-center justify-center text-sm font-bold transition-colors"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          border: '1px solid var(--border)',
+                          background: 'var(--card)',
+                          color: 'var(--muted)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--green)';
+                          e.currentTarget.style.color = 'var(--green)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border)';
+                          e.currentTarget.style.color = 'var(--muted)';
+                        }}
+                      >
+                        −
+                      </button>
+                      <button
+                        onClick={() => updateServings(currentServings + 1)}
+                        className="flex items-center justify-center text-sm font-bold transition-colors"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          border: '1px solid var(--border)',
+                          background: 'var(--card)',
+                          color: 'var(--muted)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--green)';
+                          e.currentTarget.style.color = 'var(--green)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border)';
+                          e.currentTarget.style.color = 'var(--muted)';
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
+                  {currentServings !== savedServings && (
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={saveServings}
+                        className="cursor-pointer"
+                        style={{
+                          color: 'var(--green)',
+                          background: 'var(--green-light)',
+                          border: '1px solid var(--green)',
+                          borderRadius: 20,
+                          padding: '2px 10px',
+                          font: 'inherit',
+                          fontSize: '0.8em',
+                          fontWeight: 600,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
