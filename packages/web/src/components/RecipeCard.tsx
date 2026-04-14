@@ -109,7 +109,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
         >
           <h2
             className="rf-heading leading-snug line-clamp-2"
-            style={{ fontSize: 16, color: 'var(--text)' }}
+            style={{ fontSize: 16, color: 'var(--text)', fontFamily: "'DM Sans', sans-serif" }}
           >
             {recipe.title}
           </h2>
