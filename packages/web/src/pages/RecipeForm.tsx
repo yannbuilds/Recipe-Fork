@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -268,14 +268,6 @@ export default function RecipeForm() {
 
   return (
     <div className="mx-auto" style={{ maxWidth: 720, padding: '28px 24px 64px' }}>
-      <Link
-        to={isEditing ? `/recipe/${id}` : '/'}
-        className="inline-flex items-center text-sm mb-6 hover:underline"
-        style={{ color: 'var(--green)' }}
-      >
-        &larr; {isEditing ? 'Back to recipe' : 'Back to recipes'}
-      </Link>
-
       <h1 className="rf-heading text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>
         {isEditing ? 'Edit Recipe' : 'New Recipe'}
       </h1>

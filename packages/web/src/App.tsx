@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "./hooks/useTheme";
-import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NewRecipeModalProvider } from "./context/NewRecipeModalContext";
 import RecipeList from "./pages/RecipeList";
@@ -42,9 +42,17 @@ function AppLayout() {
   );
 }
 
+const TOP_LEVEL_ROUTES = ['/', '/meal-plan'];
+
 function Header() {
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navType = useNavigationType();
+
+  const isTopLevel = TOP_LEVEL_ROUTES.includes(location.pathname);
+  const showBack = !isTopLevel;
 
   useEffect(() => {
     function onScroll() {
@@ -55,6 +63,16 @@ function Header() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  function handleBack() {
+    // If the user navigated here from within the app, go back in history
+    // If they landed directly (POP = refresh/deep link), fall back to home
+    if (navType === 'POP') {
+      navigate('/');
+    } else {
+      navigate(-1);
+    }
+  }
 
   return (
     <header
@@ -71,9 +89,18 @@ function Header() {
       }}
     >
       <div
-        className="mx-auto h-full flex items-center justify-center"
+        className="mx-auto h-full relative flex items-center justify-center"
         style={{ maxWidth: 1100, padding: '0 24px' }}
       >
+        {showBack && (
+          <button
+            onClick={handleBack}
+            className="absolute left-0 flex items-center text-sm"
+            style={{ color: 'var(--muted)', marginLeft: 24, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}
+          >
+            &larr; Back
+          </button>
+        )}
         <Link to="/">
           <span className="rf-heading text-lg font-bold" style={{ color: 'var(--text)' }}>
             Pie Keeper
