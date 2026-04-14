@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
@@ -82,6 +82,45 @@ export default function MealPlan() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // FLIP animation refs
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
+
+  // Sorted entries: uncooked first, cooked last
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((a, b) => {
+      if (a.is_cooked === b.is_cooked) return 0;
+      return a.is_cooked ? 1 : -1;
+    });
+  }, [entries]);
+
+  // FLIP animation after reorder
+  useLayoutEffect(() => {
+    if (prevRectsRef.current.size === 0) return;
+    const prevRects = prevRectsRef.current;
+
+    cardRefs.current.forEach((el, id) => {
+      const prevRect = prevRects.get(id);
+      if (!prevRect) return;
+      const currRect = el.getBoundingClientRect();
+      const deltaX = prevRect.left - currRect.left;
+      const deltaY = prevRect.top - currRect.top;
+      if (deltaX === 0 && deltaY === 0) return;
+
+      el.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      el.style.transition = 'none';
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+          el.style.transform = '';
+        });
+      });
+    });
+
+    prevRectsRef.current = new Map();
+  }, [sortedEntries]);
 
   // Derived data
   const uncookedEntries = entries.filter((e) => !e.is_cooked);
@@ -192,6 +231,14 @@ export default function MealPlan() {
   async function handleToggleCooked(entryId: string) {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
+
+    // FLIP: capture "First" positions before state change
+    const prevRects = new Map<string, DOMRect>();
+    cardRefs.current.forEach((el, id) => {
+      prevRects.set(id, el.getBoundingClientRect());
+    });
+    prevRectsRef.current = prevRects;
+
     const next = !entry.is_cooked;
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
@@ -391,16 +438,20 @@ export default function MealPlan() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {entries.map((entry, index) => (
+            {sortedEntries.map((entry, index) => (
               <div
                 key={entry.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(entry.id, el);
+                  else cardRefs.current.delete(entry.id);
+                }}
                 className="overflow-hidden"
                 style={{
                   background: 'var(--card)',
                   borderRadius: 'var(--radius)',
                   boxShadow: 'var(--shadow-md)',
-                  opacity: entry.is_cooked ? 0.65 : 1,
-                  transition: 'opacity 0.3s, transform 0.2s',
+                  opacity: entry.is_cooked ? 0.75 : 1,
+                  transition: 'opacity 0.3s, filter 0.4s',
                   animation: 'fadeUp 0.4s ease both',
                   animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
                 }}
@@ -412,12 +463,18 @@ export default function MealPlan() {
                       src={entry.recipe.image_url}
                       alt={entry.recipe?.title}
                       className="absolute inset-0 w-full h-full object-cover"
+                      style={{
+                        filter: entry.is_cooked ? 'grayscale(100%)' : 'none',
+                        transition: 'filter 0.4s ease',
+                      }}
                     />
                   ) : (
                     <div
                       className="absolute inset-0 flex items-center justify-center text-3xl"
                       style={{
                         background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                        filter: entry.is_cooked ? 'grayscale(100%)' : 'none',
+                        transition: 'filter 0.4s ease',
                       }}
                     >
                       🍴
