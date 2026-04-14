@@ -161,6 +161,24 @@
   .rd-meta-row   { display: flex; gap: 12px; margin-top: 12px; }
   .rd-action-btn { flex: 0 0 calc(50% - 6px); text-align: center; }
   .rd-action-btn button { width: 100%; }
+
+  /* Full-coverage scrim so long titles are never in the transparent zone */
+  .rd-hero .rd-hero-bottom-overlay {
+    -webkit-mask-image: none;
+    mask-image: none;
+    background: linear-gradient(to top,
+      rgba(0,0,0,0.78) 0%,
+      rgba(0,0,0,0.58) 45%,
+      rgba(0,0,0,0.3) 80%,
+      rgba(0,0,0,0.1) 100%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* Slightly larger subcopy text on mobile (recipe detail only) */
+  .rd-hero-title .rd-mobile-desc {
+    font-size: 14px !important;
+  }
 }
 
 /* ── Reusable input ────────────────────────────── */

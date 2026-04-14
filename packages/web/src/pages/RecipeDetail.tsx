@@ -249,8 +249,10 @@ export default function RecipeDetail() {
   // ── Description expand/collapse ─────────────────────────
   const [descExpanded, setDescExpanded] = useState(false);
   const [descTruncated, setDescTruncated] = useState(false);
+  const [heroMinHeight, setHeroMinHeight] = useState(0);
   const descRef = useRef<HTMLParagraphElement>(null);
   const descRefMobile = useRef<HTMLParagraphElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!supportsWakeLock) return;
@@ -360,6 +362,22 @@ export default function RecipeDetail() {
     const lh = parseFloat(getComputedStyle(el).lineHeight) || 16;
     setDescTruncated(el.scrollHeight > lh * 2 + 2);
   }, [recipe?.description]);
+
+  // On mobile: grow the hero to fit the overlay when description is expanded
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return;
+    if (!overlayRef.current) return;
+    if (!descExpanded) {
+      setHeroMinHeight(0);
+      return;
+    }
+    // Give the DOM a frame to finish reflow before measuring
+    requestAnimationFrame(() => {
+      if (!overlayRef.current) return;
+      const overlayH = overlayRef.current.getBoundingClientRect().height;
+      setHeroMinHeight(Math.max(360, overlayH + 20));
+    });
+  }, [descExpanded]);
 
   async function handleDelete() {
     setShowDeleteModal(false);
@@ -629,6 +647,7 @@ export default function RecipeDetail() {
           {/* Image (right column on desktop, full-width on mobile) */}
           <div
             className={`rd-hero relative overflow-hidden${descExpanded ? ' rd-hero-expanded' : ''}`}
+            style={heroMinHeight > 0 ? { minHeight: heroMinHeight } : undefined}
           >
             {/* Image or placeholder */}
             {recipe.image_url ? (
@@ -683,6 +702,7 @@ export default function RecipeDetail() {
 
             {/* Bottom overlay: title card (mobile only) + meta cards */}
             <div
+              ref={overlayRef}
               className="rd-hero-bottom-overlay absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
               style={{ padding: '32px 20px 20px' }}
             >
@@ -702,7 +722,7 @@ export default function RecipeDetail() {
                     >
                       <p
                         ref={descRefMobile}
-                        className="text-xs"
+                        className="text-xs rd-mobile-desc"
                         style={{ color: 'var(--muted)' }}
                       >
                         {recipe.description}
