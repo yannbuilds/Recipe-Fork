@@ -42,7 +42,7 @@ function AppLayout() {
   );
 }
 
-const TOP_LEVEL_ROUTES = ['/', '/meal-plan'];
+const TOP_LEVEL_ROUTES = ['/', '/meal-plan', '/profile'];
 
 function Header() {
   const [hidden, setHidden] = useState(false);
