@@ -460,6 +460,90 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Chrome Extension Highlight ──────────── */}
+      <section
+        style={{
+          background: "linear-gradient(135deg, var(--green) 0%, #2d5a43 100%)",
+          padding: "80px 24px",
+        }}
+      >
+        <div
+          className="lp-reveal mx-auto flex flex-col md:flex-row items-center gap-12"
+          style={{ maxWidth: 1100 }}
+        >
+          {/* Text column */}
+          <div className="flex-1" style={{ maxWidth: 420 }}>
+            <span
+              className="lp-chip"
+              style={{
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+                borderColor: "rgba(255,255,255,0.25)",
+                marginBottom: 16,
+                display: "inline-flex",
+              }}
+            >
+              <Chrome size={14} />
+              Chrome Extension
+            </span>
+            <h2
+              className="rf-heading font-bold"
+              style={{
+                fontSize: "clamp(24px, 4vw, 36px)",
+                color: "#fff",
+                lineHeight: 1.2,
+                marginBottom: 16,
+                marginTop: 16,
+              }}
+            >
+              Save recipes while you browse
+            </h2>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.8)",
+                fontSize: 16,
+                lineHeight: 1.7,
+                marginBottom: 24,
+              }}
+            >
+              Spot a recipe you love? Click the Pie Keeper icon in your browser and
+              it's saved – ingredients, steps, photo, everything. No copying, no
+              pasting, no switching tabs.
+            </p>
+            <a
+              href="https://chromewebstore.google.com/detail/pie-keeper/agohefbmkcgmlpnopjinmmjacmlpffph"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rf-btn"
+              style={{
+                background: "#fff",
+                color: "var(--green)",
+                border: "1px solid #fff",
+                padding: "12px 24px",
+                fontSize: 15,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Chrome size={16} />
+              Add to Chrome – it's free
+            </a>
+          </div>
+
+          {/* Extension screenshot column */}
+          <div className="flex-1 flex justify-center">
+            <img
+              src="/screenshots/extension.png"
+              alt="Pie Keeper Chrome extension saving a recipe"
+              className="lp-extension-img"
+              style={{ maxWidth: 360 }}
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ── Testimonial ────────────────────────── */}
       <section style={{ background: "var(--warm)", padding: "80px 24px" }}>
         <div
