@@ -398,7 +398,7 @@ export default function MealPlan() {
           onClick={() => setTab('shopping')}
           className={`rf-tab ${tab === 'shopping' ? 'rf-tab-active' : ''}`}
         >
-          Shopping List
+          Groceries List
           <span
             className="inline-flex items-center justify-center rounded-full ml-1.5"
             style={{
