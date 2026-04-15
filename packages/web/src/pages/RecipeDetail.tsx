@@ -743,7 +743,7 @@ export default function RecipeDetail() {
                           textUnderlineOffset: 2,
                         }}
                       >
-                        {descExpanded ? 'less' : 'more'}
+                        {descExpanded ? 'show less' : 'show more'}
                       </button>
                     )}
                   </div>
