@@ -723,7 +723,7 @@ export default function RecipeDetail() {
                       <p
                         ref={descRefMobile}
                         className="text-xs rd-mobile-desc"
-                        style={{ color: 'var(--muted)' }}
+                        style={{ color: 'rgba(255,255,255,0.75)' }}
                       >
                         {recipe.description}
                       </p>
