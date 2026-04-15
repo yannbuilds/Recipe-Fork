@@ -704,7 +704,7 @@ export default function RecipeDetail() {
             <div
               ref={overlayRef}
               className="rd-hero-bottom-overlay absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
-              style={{ padding: '32px 20px 20px' }}
+              style={{ padding: '20px' }}
             >
               {/* Title card – visible on mobile, hidden on desktop via CSS */}
               <div className="rd-hero-title rd-hero-title-overlay">

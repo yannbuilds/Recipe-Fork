@@ -173,6 +173,7 @@
       rgba(0,0,0,0.0) 100%);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+    align-items: center;
   }
 
   /* Slightly larger subcopy text on mobile (recipe detail only) */
