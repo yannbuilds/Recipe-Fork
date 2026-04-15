@@ -167,12 +167,12 @@
     -webkit-mask-image: none;
     mask-image: none;
     background: linear-gradient(to top,
-      rgba(0,0,0,0.78) 0%,
-      rgba(0,0,0,0.58) 45%,
-      rgba(0,0,0,0.3) 80%,
-      rgba(0,0,0,0.1) 100%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+      rgba(0,0,0,0.60) 0%,
+      rgba(0,0,0,0.40) 45%,
+      rgba(0,0,0,0.15) 80%,
+      rgba(0,0,0,0.0) 100%);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
 
   /* Slightly larger subcopy text on mobile (recipe detail only) */
