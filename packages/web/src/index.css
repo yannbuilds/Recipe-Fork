@@ -156,7 +156,8 @@
     border-radius: 0;
   }
   .rd-hero-expanded { height: auto; min-height: 360px; }
-  .rd-hero-title { max-width: 100%; text-align: center; }
+  .rd-hero-title { max-width: 100%; text-align: left; }
+  .rd-hero-title .rd-mobile-desc { text-align: left; }
   .rd-hero-meta  { display: none; }
   .rd-meta-row   { display: flex; gap: 12px; margin-top: 12px; }
   .rd-action-btn { flex: 0 0 calc(50% - 6px); text-align: center; }
