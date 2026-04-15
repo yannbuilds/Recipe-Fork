@@ -715,10 +715,9 @@ export default function RecipeDetail() {
                   {recipe.title}
                 </h1>
                 {recipe.description && (
-                  <>
+                  <div className="relative mt-1">
                     <div
-                      className="relative mt-1"
-                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : 'calc(2rem + 4px)' }}
+                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : 'calc(2rem + 4px)', paddingRight: descExpanded && descTruncated ? '2.5rem' : 0 }}
                     >
                       <p
                         ref={descRefMobile}
@@ -727,43 +726,27 @@ export default function RecipeDetail() {
                       >
                         {recipe.description}
                       </p>
-                      {!descExpanded && descTruncated && (
-                        <button
-                          onClick={() => setDescExpanded(true)}
-                          className="absolute text-xs cursor-pointer"
-                          style={{
-                            bottom: 0,
-                            right: 0,
-                            color: 'rgba(255,255,255,0.75)',
-                            background: `linear-gradient(to right, transparent, rgba(0,0,0,0.5) 35%)`,
-                            border: 'none',
-                            paddingLeft: '2rem',
-                            paddingRight: 0,
-                            textDecoration: 'underline',
-                            textUnderlineOffset: 2,
-                          }}
-                        >
-                          more
-                        </button>
-                      )}
                     </div>
-                    {descExpanded && (
+                    {descTruncated && (
                       <button
-                        onClick={() => setDescExpanded(false)}
-                        className="text-xs mt-0.5 cursor-pointer"
+                        onClick={() => setDescExpanded(v => !v)}
+                        className="absolute text-xs cursor-pointer"
                         style={{
-                          color: 'var(--muted)',
-                          background: 'none',
+                          bottom: 0,
+                          right: 0,
+                          color: 'rgba(255,255,255,0.75)',
+                          background: descExpanded ? 'none' : `linear-gradient(to right, transparent, rgba(0,0,0,0.5) 35%)`,
                           border: 'none',
-                          padding: 0,
+                          paddingLeft: '2rem',
+                          paddingRight: 0,
                           textDecoration: 'underline',
                           textUnderlineOffset: 2,
                         }}
                       >
-                        less
+                        {descExpanded ? 'less' : 'more'}
                       </button>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
 
