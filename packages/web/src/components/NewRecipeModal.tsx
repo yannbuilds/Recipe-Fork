@@ -392,6 +392,11 @@ export default function NewRecipeModal() {
             <p className="text-sm mb-4" style={{ color: 'var(--red)' }}>
               {errorMessage}
             </p>
+            {errorMessage.includes('Failed to fetch page') && (
+              <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+                Some sites block automated requests. Try saving this recipe using the Pie Keeper Chrome extension instead.
+              </p>
+            )}
             <div className="flex gap-3 justify-center">
               <button onClick={closeModal} className="rf-btn rf-btn-secondary">
                 Cancel
