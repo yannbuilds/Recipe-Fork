@@ -710,7 +710,7 @@ export default function RecipeDetail() {
               <div className="rd-hero-title rd-hero-title-overlay">
                 <h1
                   className="font-bold leading-snug"
-                  style={{ fontFamily: "'Lora', serif", fontSize: 20, color: '#fff' }}
+                  style={{ fontFamily: "'Lora', serif", fontSize: 20, color: '#fff', textWrap: 'balance' }}
                 >
                   {recipe.title}
                 </h1>
