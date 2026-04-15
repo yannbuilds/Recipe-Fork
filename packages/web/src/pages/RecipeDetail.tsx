@@ -732,7 +732,7 @@ export default function RecipeDetail() {
                         onClick={() => setDescExpanded(v => !v)}
                         className="absolute text-xs cursor-pointer"
                         style={{
-                          bottom: 0,
+                          bottom: -4,
                           right: 0,
                           color: 'rgba(255,255,255,0.75)',
                           background: descExpanded ? 'none' : `linear-gradient(to right, transparent, rgba(0,0,0,0.5) 35%)`,
