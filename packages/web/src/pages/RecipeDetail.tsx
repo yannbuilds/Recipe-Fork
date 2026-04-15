@@ -734,8 +734,8 @@ export default function RecipeDetail() {
                           style={{
                             bottom: 0,
                             right: 0,
-                            color: 'var(--muted)',
-                            background: `linear-gradient(to right, transparent, var(--glass-bg) 35%)`,
+                            color: 'rgba(255,255,255,0.75)',
+                            background: `linear-gradient(to right, transparent, rgba(0,0,0,0.5) 35%)`,
                             border: 'none',
                             paddingLeft: '2rem',
                             paddingRight: 0,
