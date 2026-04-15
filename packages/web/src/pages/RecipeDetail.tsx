@@ -718,7 +718,7 @@ export default function RecipeDetail() {
                   <>
                     <div
                       className="relative mt-1"
-                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '2rem' }}
+                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : '2rem', paddingBottom: '3px' }}
                     >
                       <p
                         ref={descRefMobile}
