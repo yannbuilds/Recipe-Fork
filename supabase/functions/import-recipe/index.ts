@@ -213,6 +213,24 @@ function extractRecipeNotes(html: string): string | null {
   return null;
 }
 
+/**
+ * Extract image URL from Open Graph or Twitter meta tags as a fallback
+ * when the LLM can't find an image in the page content.
+ */
+function extractOgImage(html: string): string | null {
+  const patterns = [
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
 function buildLlmPayload(html: string, url: string): string {
   const jsonLd = extractJsonLd(html);
   const videoUrls = extractVideoUrls(html);
@@ -446,7 +464,7 @@ Deno.serve(async (req) => {
       source_url: url,
       creator_name: parsed.creator_name ?? null,
       video_url: parsed.video_url ?? null,
-      image_url: parsed.image_url ?? null,
+      image_url: parsed.image_url ?? extractOgImage(html) ?? null,
       servings: parseServings(parsed.servings),
       prep_time: parseServings(parsed.prep_time),
       cook_time: parseServings(parsed.cook_time),
