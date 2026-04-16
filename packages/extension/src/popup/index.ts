@@ -278,31 +278,6 @@ async function saveTags(recipeId: string, tags: { name: string; emoji: string }[
   }
 }
 
-// Grab cleaned HTML from the active tab (strips scripts, styles, etc.)
-async function grabPageHtml(tabId: number): Promise<string | null> {
-  try {
-    const results = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        const clone = document.documentElement.cloneNode(true) as HTMLElement;
-        const tagsToRemove = ["script", "style", "svg", "noscript", "iframe"];
-        for (const tag of tagsToRemove) {
-          clone.querySelectorAll(tag).forEach((el) => el.remove());
-        }
-        return clone.outerHTML;
-      },
-    });
-
-    const html = results?.[0]?.result;
-    if (typeof html !== "string" || html.length < 100) return null;
-
-    // Truncate to 2MB to stay within edge function limits
-    return html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-  } catch {
-    return null;
-  }
-}
-
 // Save handler — grabs page HTML via content script, then will send to Claude API
 async function handleSaveRecipe() {
   const [tab] = await chrome.tabs.query({
@@ -343,17 +318,12 @@ async function handleSaveRecipe() {
     return;
   }
 
-  showLoading("Reading page…");
+  showLoading("Cooking recipe…");
 
   try {
-    // Grab HTML directly from the tab to bypass bot-blocking on sites like Woolworths
-    const pageHtml = await grabPageHtml(tab.id!);
-
-    showLoading("Cooking recipe…");
-
     const { data: fnData, error: fnError } = await supabase.functions.invoke(
       "import-recipe",
-      { body: { url: tab.url, ...(pageHtml ? { html: pageHtml } : {}) } },
+      { body: { url: tab.url } },
     );
 
     if (fnError) {
