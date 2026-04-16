@@ -302,7 +302,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    const { url } = await req.json();
+    const { url, html: providedHtml } = await req.json();
 
     if (!url || typeof url !== "string") {
       return new Response(
@@ -321,25 +321,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch the page HTML
-    const pageRes = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      redirect: "follow",
-    });
-
-    if (!pageRes.ok) {
-      console.error(`[import-recipe] Failed to fetch page: ${pageRes.status} ${url}`);
+    // Validate optional HTML parameter
+    if (providedHtml !== undefined && (typeof providedHtml !== "string" || providedHtml.length > 2_000_000)) {
       return new Response(
-        JSON.stringify({ error: `Failed to fetch page (${pageRes.status})` }),
-        { status: 422, headers: corsHeaders },
+        JSON.stringify({ error: "Invalid 'html' field (must be string, max 2MB)" }),
+        { status: 400, headers: corsHeaders },
       );
     }
 
-    const html = await pageRes.text();
+    // 1. Use provided HTML or fetch the page
+    let html: string;
+
+    if (providedHtml) {
+      html = providedHtml;
+    } else {
+      const pageRes = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "en-AU,en;q=0.9,en-US;q=0.8",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
+        redirect: "follow",
+      });
+
+      if (!pageRes.ok) {
+        console.error(`[import-recipe] Failed to fetch page: ${pageRes.status} ${url}`);
+        return new Response(
+          JSON.stringify({ error: `Failed to fetch page (${pageRes.status})` }),
+          { status: 422, headers: corsHeaders },
+        );
+      }
+
+      html = await pageRes.text();
+    }
 
     // 2. Extract content for the LLM
     const htmlExtractedNotes = extractRecipeNotes(html);

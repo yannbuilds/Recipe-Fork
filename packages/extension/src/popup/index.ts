@@ -278,6 +278,29 @@ async function saveTags(recipeId: string, tags: { name: string; emoji: string }[
   }
 }
 
+// Grab HTML from the active tab, preserving JSON-LD structured data
+async function grabPageHtml(tabId: number): Promise<string | null> {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const clone = document.documentElement.cloneNode(true) as HTMLElement;
+        // Strip bloat but keep JSON-LD scripts (they contain image_url, author, etc.)
+        clone.querySelectorAll('script:not([type="application/ld+json"]), style, noscript, iframe')
+          .forEach((el) => el.remove());
+        return clone.outerHTML;
+      },
+    });
+
+    const html = results?.[0]?.result;
+    if (typeof html !== "string" || html.length < 100) return null;
+
+    return html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+  } catch {
+    return null;
+  }
+}
+
 // Save handler — grabs page HTML via content script, then will send to Claude API
 async function handleSaveRecipe() {
   const [tab] = await chrome.tabs.query({
@@ -321,29 +344,65 @@ async function handleSaveRecipe() {
   showLoading("Cooking recipe…");
 
   try {
-    const { data: fnData, error: fnError } = await supabase.functions.invoke(
+    // Try server-side fetch first (preserves full HTML + JSON-LD for best results)
+    let fnData: Record<string, unknown> | null = null;
+    let fnError: { context?: unknown; message?: string } | null = null;
+
+    ({ data: fnData, error: fnError } = await supabase.functions.invoke(
       "import-recipe",
       { body: { url: tab.url } },
-    );
+    ));
 
+    // Extract error message from edge function response
+    let errorMsg = "";
     if (fnError) {
-      let msg = "Failed to import recipe";
+      errorMsg = "Failed to import recipe";
       try {
         if (fnError.context instanceof Response) {
-          const body = await fnError.context.clone().json();
-          msg = body?.error || msg;
+          const body = await (fnError.context as Response).clone().json();
+          errorMsg = body?.error || errorMsg;
         } else if (fnError.message) {
-          msg = fnError.message;
+          errorMsg = fnError.message;
         }
       } catch { /* keep generic message */ }
-      throw new Error(msg);
+    } else if (fnData?.error) {
+      errorMsg = fnData.error as string;
     }
 
-    if (fnData?.error) {
-      throw new Error(fnData.error);
+    // If the server-side fetch was blocked, retry with HTML grabbed from the tab
+    if (errorMsg.includes("Failed to fetch page")) {
+      showLoading("Retrying with page content…");
+      const pageHtml = await grabPageHtml(tab.id!);
+
+      if (pageHtml) {
+        ({ data: fnData, error: fnError } = await supabase.functions.invoke(
+          "import-recipe",
+          { body: { url: tab.url, html: pageHtml } },
+        ));
+
+        // Re-check for errors on retry
+        errorMsg = "";
+        if (fnError) {
+          errorMsg = "Failed to import recipe";
+          try {
+            if (fnError.context instanceof Response) {
+              const body = await (fnError.context as Response).clone().json();
+              errorMsg = body?.error || errorMsg;
+            } else if (fnError.message) {
+              errorMsg = fnError.message;
+            }
+          } catch { /* keep generic message */ }
+        } else if (fnData?.error) {
+          errorMsg = fnData.error as string;
+        }
+      }
     }
 
-    const { recipe, tags } = fnData;
+    if (errorMsg) {
+      throw new Error(errorMsg);
+    }
+
+    const { recipe, tags } = fnData as { recipe: Record<string, unknown>; tags: { name: string; emoji: string }[] };
 
     const { data, error: saveError } = await supabase
       .from("recipes")
