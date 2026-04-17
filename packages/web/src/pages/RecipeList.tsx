@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
@@ -7,6 +7,12 @@ import RecipeFilterBar from '../components/RecipeFilterBar';
 import { useAuth } from '../context/AuthContext';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
+
+const INITIAL_COUNT = window.innerWidth < 1024 ? 8 : 12;
+const PAGE_SIZE = 8;
+
+const RECIPE_SELECT =
+  'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
 
 function getGreeting(): { text: string; punctuation: string } {
   const now = new Date();
@@ -51,6 +57,8 @@ type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 
 export default function RecipeList() {
   const { user, profile, familyMembers } = useAuth();
+
+  // All recipes fetched so far (grows as pages load)
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
@@ -59,8 +67,19 @@ export default function RecipeList() {
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Pagination state
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  // Whether we've fetched the full dataset (needed for client-side filtering)
+  const [allLoaded, setAllLoaded] = useState(false);
+
   const filterRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Track how many recipes we've fetched so far for range queries
+  const fetchedCountRef = useRef(0);
 
   const filters = useRecipeFilters({
     recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
@@ -70,18 +89,54 @@ export default function RecipeList() {
     searchQuery,
   });
 
+  // Whether any filter/search is active
+  const hasAnyFilter =
+    filters.hasActiveFilter || searchQuery !== '' || showFavouritesOnly || sortBy !== 'newest';
+
+  // Fetch the full dataset (called when a filter/sort is activated before all recipes are loaded)
+  const fetchAllRemaining = useCallback(async () => {
+    if (allLoaded) return;
+    const from = fetchedCountRef.current;
+    const { data, error: err } = await supabase
+      .from('recipes')
+      .select(RECIPE_SELECT)
+      .order('created_at', { ascending: false })
+      .range(from, 9999); // large upper bound — fetches everything remaining
+    if (!err && data) {
+      setRecipes((prev) => [...prev, ...(data as Recipe[])]);
+      fetchedCountRef.current += data.length;
+      setHasMore(false);
+      setAllLoaded(true);
+    }
+  }, [allLoaded]);
+
+  // Initial data fetch
   useEffect(() => {
     async function fetchData() {
-      const [recipesResult, tagsResult, recipeTagsResult] = await Promise.all([
-        supabase.from('recipes').select('id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients').order('created_at', { ascending: false }),
+      const to = INITIAL_COUNT - 1;
+      const [recipesResult, tagsResult, recipeTagsResult, countResult] = await Promise.all([
+        supabase
+          .from('recipes')
+          .select(RECIPE_SELECT)
+          .order('created_at', { ascending: false })
+          .range(0, to),
         supabase.from('tags').select('*').order('name'),
         supabase.from('recipe_tags').select('recipe_id, tag_id'),
+        supabase.from('recipes').select('id', { count: 'exact', head: true }),
       ]);
 
       if (recipesResult.error) {
         setError(recipesResult.error.message);
       } else {
-        setRecipes(recipesResult.data as Recipe[]);
+        const fetched = recipesResult.data as Recipe[];
+        setRecipes(fetched);
+        fetchedCountRef.current = fetched.length;
+
+        const total = countResult.count ?? null;
+        setTotalCount(total);
+        const exhausted = total === null || fetched.length >= total;
+        setHasMore(!exhausted);
+        if (exhausted) setAllLoaded(true);
       }
 
       if (!tagsResult.error && tagsResult.data) {
@@ -98,6 +153,52 @@ export default function RecipeList() {
     fetchData();
   }, []);
 
+  // Fetch next page of recipes
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || allLoaded) return;
+    setLoadingMore(true);
+    const from = fetchedCountRef.current;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error: err } = await supabase
+      .from('recipes')
+      .select(RECIPE_SELECT)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (!err && data) {
+      setRecipes((prev) => [...prev, ...(data as Recipe[])]);
+      fetchedCountRef.current += data.length;
+      if (data.length < PAGE_SIZE || (totalCount !== null && fetchedCountRef.current >= totalCount)) {
+        setHasMore(false);
+        setAllLoaded(true);
+      }
+    }
+    setLoadingMore(false);
+  }, [loadingMore, hasMore, allLoaded, totalCount]);
+
+  // IntersectionObserver — trigger loadMore when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  // When a filter or non-default sort is activated, ensure we have all recipes
+  useEffect(() => {
+    if (hasAnyFilter && !allLoaded && !loading) {
+      fetchAllRemaining();
+    }
+  }, [hasAnyFilter, allLoaded, loading, fetchAllRemaining]);
+
   // Close filter panel on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -108,8 +209,6 @@ export default function RecipeList() {
     if (filterOpen) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [filterOpen]);
-
-  const hasAnyFilter = filters.hasActiveFilter || searchQuery !== '' || showFavouritesOnly || sortBy !== 'newest';
 
   function resetAllFilters() {
     filters.resetFilters();
@@ -152,6 +251,9 @@ export default function RecipeList() {
     return map;
   }, [familyMembers, user?.id]);
 
+  // Subtitle: total count (use server count when not all loaded yet)
+  const displayTotal = allLoaded ? recipes.length : (totalCount ?? recipes.length);
+
   return (
     <>
       {/* Greeting header */}
@@ -164,10 +266,10 @@ export default function RecipeList() {
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
           {hasAnyFilter
-            ? `Showing ${sortedRecipes.length} of ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''}.`
+            ? `Showing ${sortedRecipes.length} of ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''}.`
             : familyMembers.length > 1
-              ? `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} in your family collection.`
-              : `You have ${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} saved.`
+              ? `${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} in your family collection.`
+              : `You have ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} saved.`
           }
         </p>
       </div>
@@ -303,7 +405,7 @@ export default function RecipeList() {
       {/* Loading skeletons */}
       {loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }, (_, i) => (
+          {Array.from({ length: INITIAL_COUNT }, (_, i) => (
             <RecipeCardSkeleton key={i} index={i} />
           ))}
         </div>
@@ -344,6 +446,18 @@ export default function RecipeList() {
               ownerName={familyOwnerNames.get(recipe.user_id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Infinite scroll sentinel */}
+      {!loading && !error && hasMore && (
+        <div ref={sentinelRef} className="h-16 flex items-center justify-center">
+          {loadingMore && (
+            <div
+              className="w-6 h-6 rounded-full border-2 animate-spin"
+              style={{ borderColor: 'var(--border)', borderTopColor: 'var(--green)' }}
+            />
+          )}
         </div>
       )}
     </>
