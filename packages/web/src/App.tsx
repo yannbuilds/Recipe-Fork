@@ -21,14 +21,10 @@ import OfflineBanner from "./components/OfflineBanner";
 function AppLayout() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div style={{ color: 'var(--muted)' }}>Loading…</div>
-      </div>
-    );
-  }
-  if (!user) {
+  // Only redirect once auth has finished loading. While loading, render the
+  // shell (Header + page content) so pages can show their own skeletons
+  // instead of a blank "Loading…" screen.
+  if (!loading && !user) {
     return <Navigate to="/login" replace />;
   }
 

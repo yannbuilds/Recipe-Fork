@@ -56,7 +56,7 @@ function getGreeting(): { text: string; punctuation: string } {
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 
 export default function RecipeList() {
-  const { user, profile, familyMembers } = useAuth();
+  const { user, profile, familyMembers, loading: authLoading } = useAuth();
 
   // All recipes fetched so far (grows as pages load)
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -110,8 +110,11 @@ export default function RecipeList() {
     }
   }, [allLoaded]);
 
-  // Initial data fetch
+  // Initial data fetch — wait until auth has settled so we don't fire
+  // queries before the Supabase session is hydrated (would return nothing
+  // under RLS and force a re-fetch).
   useEffect(() => {
+    if (authLoading) return;
     async function fetchData() {
       const to = INITIAL_COUNT - 1;
       const [recipesResult, tagsResult, recipeTagsResult, countResult] = await Promise.all([
@@ -151,7 +154,7 @@ export default function RecipeList() {
     }
 
     fetchData();
-  }, []);
+  }, [authLoading]);
 
   // Fetch next page of recipes
   const loadMore = useCallback(async () => {
@@ -264,12 +267,14 @@ export default function RecipeList() {
         >
           {greeting.text}{profile?.display_name ? `, ${profile.display_name}` : ''}{greeting.punctuation}
         </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          {hasAnyFilter
-            ? `Showing ${sortedRecipes.length} of ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''}.`
-            : familyMembers.length > 1
-              ? `${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} in your family collection.`
-              : `You have ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} saved.`
+        <p className="text-sm mt-1" style={{ color: 'var(--muted)', minHeight: '1.25rem' }}>
+          {loading
+            ? 'Loading your recipes…'
+            : hasAnyFilter
+              ? `Showing ${sortedRecipes.length} of ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''}.`
+              : familyMembers.length > 1
+                ? `${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} in your family collection.`
+                : `You have ${displayTotal} recipe${displayTotal !== 1 ? 's' : ''} saved.`
           }
         </p>
       </div>
