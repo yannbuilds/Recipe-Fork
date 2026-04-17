@@ -9,7 +9,7 @@ import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
 
 const INITIAL_COUNT = window.innerWidth < 1024 ? 4 : 8;
-const PAGE_SIZE = 8;
+const PAGE_SIZE = window.innerWidth < 1024 ? 2 : 4;
 
 const RECIPE_SELECT =
   'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
