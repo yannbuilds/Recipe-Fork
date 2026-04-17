@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
 
-const INITIAL_COUNT = window.innerWidth < 1024 ? 8 : 12;
+const INITIAL_COUNT = window.innerWidth < 1024 ? 4 : 8;
 const PAGE_SIZE = 8;
 
 const RECIPE_SELECT =
