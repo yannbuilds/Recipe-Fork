@@ -32,13 +32,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyInvitations, setFamilyInvitations] = useState<FamilyInvitation[]>([]);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string, authUser?: User | null) => {
     const { data } = await supabase
       .from('profiles')
       .select('display_name, measurement_preference')
       .eq('id', userId)
-      .single();
-    setProfile(data ?? null);
+      .maybeSingle();
+
+    if (data) {
+      setProfile(data);
+      return;
+    }
+
+    if (!authUser) {
+      setProfile(null);
+      return;
+    }
+
+    const meta = (authUser.user_metadata ?? {}) as Record<string, unknown>;
+    const displayName =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      (typeof meta.name === 'string' && meta.name) ||
+      authUser.email?.split('@')[0] ||
+      '';
+
+    const { data: upserted } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        display_name: displayName,
+        measurement_preference: 'metric',
+      })
+      .select('display_name, measurement_preference')
+      .maybeSingle();
+
+    setProfile(upserted ?? { display_name: displayName, measurement_preference: 'metric' });
   }, []);
 
   const fetchFamily = useCallback(async (userId: string) => {
@@ -121,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         Promise.all([
-          fetchProfile(session.user.id),
+          fetchProfile(session.user.id, session.user),
           fetchFamily(session.user.id),
         ]).finally(() => {
           clearTimeout(timeout);
@@ -141,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         Promise.all([
-          fetchProfile(session.user.id),
+          fetchProfile(session.user.id, session.user),
           fetchFamily(session.user.id),
         ]).finally(() => setLoading(false));
       } else {
