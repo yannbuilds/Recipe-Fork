@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   const initial = profile?.display_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? '?';
+  const avatarUrl = (user?.user_metadata?.avatar_url || user?.user_metadata?.picture) as string | undefined;
 
   function enterEditMode() {
     setNameValue(profile?.display_name ?? '');
@@ -62,19 +63,29 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col items-center gap-6 py-12 px-4">
       {/* Avatar */}
-      <div
-        className="flex items-center justify-center rounded-full"
-        style={{
-          width: 80,
-          height: 80,
-          background: 'var(--warm)',
-          color: 'var(--green)',
-          fontSize: 32,
-          fontWeight: 700,
-        }}
-      >
-        {initial}
-      </div>
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={initial}
+          referrerPolicy="no-referrer"
+          className="rounded-full"
+          style={{ width: 80, height: 80, objectFit: 'cover' }}
+        />
+      ) : (
+        <div
+          className="flex items-center justify-center rounded-full"
+          style={{
+            width: 80,
+            height: 80,
+            background: 'var(--warm)',
+            color: 'var(--green)',
+            fontSize: 32,
+            fontWeight: 700,
+          }}
+        >
+          {initial}
+        </div>
+      )}
 
       {editing ? (
         /* ---- Edit mode ---- */
