@@ -101,10 +101,15 @@ export default function RecipeList() {
       .from('recipes')
       .select(RECIPE_SELECT)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, 9999); // large upper bound — fetches everything remaining
     if (!err && data) {
-      setRecipes((prev) => [...prev, ...(data as Recipe[])]);
-      fetchedCountRef.current += data.length;
+      setRecipes((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const fresh = (data as Recipe[]).filter((r) => !seen.has(r.id));
+        fetchedCountRef.current += fresh.length;
+        return [...prev, ...fresh];
+      });
       setHasMore(false);
       setAllLoaded(true);
     }
@@ -122,6 +127,7 @@ export default function RecipeList() {
           .from('recipes')
           .select(RECIPE_SELECT)
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(0, to),
         supabase.from('tags').select('*').order('name'),
         supabase.from('recipe_tags').select('recipe_id, tag_id'),
@@ -166,11 +172,16 @@ export default function RecipeList() {
       .from('recipes')
       .select(RECIPE_SELECT)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to);
 
     if (!err && data) {
-      setRecipes((prev) => [...prev, ...(data as Recipe[])]);
-      fetchedCountRef.current += data.length;
+      setRecipes((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const fresh = (data as Recipe[]).filter((r) => !seen.has(r.id));
+        fetchedCountRef.current += fresh.length;
+        return [...prev, ...fresh];
+      });
       if (data.length < PAGE_SIZE || (totalCount !== null && fetchedCountRef.current >= totalCount)) {
         setHasMore(false);
         setAllLoaded(true);
