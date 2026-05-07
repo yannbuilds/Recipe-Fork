@@ -6,6 +6,7 @@ import RecipeCard from '../components/RecipeCard';
 import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
 import CookbookFormModal from '../components/CookbookFormModal';
 import ConfirmModal from '../components/ConfirmModal';
+import AddRecipeModal from '../components/AddRecipeModal';
 import { useAuth } from '../context/AuthContext';
 
 const RECIPE_SELECT =
@@ -22,6 +23,7 @@ export default function CookbookDetail() {
   const [error, setError] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -79,6 +81,14 @@ export default function CookbookDetail() {
     navigate('/');
   }
 
+  async function handleAddRecipe(recipe: Recipe) {
+    if (!cookbook) return;
+    setRecipes((prev) => (prev.some((r) => r.id === recipe.id) ? prev : [recipe, ...prev]));
+    await supabase
+      .from('cookbook_recipes')
+      .insert({ cookbook_id: cookbook.id, recipe_id: recipe.id });
+  }
+
   const familyOwnerNames = new Map<string, string>();
   for (const m of familyMembers) {
     if (m.user_id !== user?.id && m.profile?.display_name) {
@@ -115,6 +125,15 @@ export default function CookbookDetail() {
             {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}
           </p>
         </div>
+        {cookbook && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="rf-btn rf-btn-filled shrink-0"
+            style={{ padding: '8px 14px' }}
+          >
+            + Add recipe
+          </button>
+        )}
         {cookbook && (
           <div className="relative">
             <button
@@ -168,8 +187,11 @@ export default function CookbookDetail() {
             No recipes in this cookbook yet
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            Open a recipe and tap “Save to cookbook” to add it here.
+            Pick from your existing recipes to fill it up.
           </p>
+          <button onClick={() => setShowAdd(true)} className="rf-btn rf-btn-filled mt-6">
+            + Add recipe
+          </button>
         </div>
       )}
 
@@ -192,6 +214,16 @@ export default function CookbookDetail() {
         cookbook={cookbook}
         onClose={() => setShowEdit(false)}
         onSaved={(cb) => setCookbook(cb)}
+      />
+
+      <AddRecipeModal
+        open={showAdd}
+        existingRecipeIds={new Set(recipes.map((r) => r.id))}
+        onAdd={(recipe) => {
+          handleAddRecipe(recipe);
+        }}
+        onClose={() => setShowAdd(false)}
+        title={cookbook ? `Add recipe to ${cookbook.name}` : 'Add recipe'}
       />
 
       <ConfirmModal

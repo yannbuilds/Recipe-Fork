@@ -13,9 +13,10 @@ interface AddRecipeModalProps {
   existingRecipeIds: Set<string>;
   onAdd: (recipe: Recipe) => void;
   onClose: () => void;
+  title?: string;
 }
 
-export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose }: AddRecipeModalProps) {
+export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan' }: AddRecipeModalProps) {
   const { user } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -101,7 +102,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
         <div className="p-4 space-y-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between">
             <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
-              Add Recipe to Meal Plan
+              {title}
             </h2>
             <button
               onClick={onClose}
