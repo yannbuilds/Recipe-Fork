@@ -89,6 +89,16 @@ export default function CookbookDetail() {
       .insert({ cookbook_id: cookbook.id, recipe_id: recipe.id });
   }
 
+  async function handleRemoveRecipe(recipeId: string) {
+    if (!cookbook) return;
+    setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+    await supabase
+      .from('cookbook_recipes')
+      .delete()
+      .eq('cookbook_id', cookbook.id)
+      .eq('recipe_id', recipeId);
+  }
+
   const familyOwnerNames = new Map<string, string>();
   for (const m of familyMembers) {
     if (m.user_id !== user?.id && m.profile?.display_name) {
@@ -212,8 +222,10 @@ export default function CookbookDetail() {
       <CookbookFormModal
         open={showEdit}
         cookbook={cookbook}
+        recipes={recipes}
         onClose={() => setShowEdit(false)}
         onSaved={(cb) => setCookbook(cb)}
+        onRemoveRecipe={handleRemoveRecipe}
       />
 
       <AddRecipeModal

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
-import type { Cookbook } from '@recipe-aggregator/shared';
+import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 
 const PRESET_EMOJIS = ['📖', '🍝', '🥗', '🍰', '🍱', '🍳', '🥘', '🍲', '🍕', '🌮', '🍜', '🥐'];
@@ -8,11 +8,13 @@ const PRESET_EMOJIS = ['📖', '🍝', '🥗', '🍰', '🍱', '🍳', '🥘', '
 interface CookbookFormModalProps {
   open: boolean;
   cookbook?: Cookbook | null; // edit mode if provided
+  recipes?: Recipe[]; // shown in edit mode for removal
   onClose: () => void;
   onSaved: (cookbook: Cookbook) => void;
+  onRemoveRecipe?: (recipeId: string) => void;
 }
 
-export default function CookbookFormModal({ open, cookbook, onClose, onSaved }: CookbookFormModalProps) {
+export default function CookbookFormModal({ open, cookbook, recipes, onClose, onSaved, onRemoveRecipe }: CookbookFormModalProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -155,6 +157,73 @@ export default function CookbookFormModal({ open, cookbook, onClose, onSaved }: 
             maxLength={140}
           />
         </div>
+
+        {cookbook && recipes && recipes.length > 0 && onRemoveRecipe && (
+          <div>
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
+              Recipes ({recipes.length})
+            </label>
+            <div
+              className="max-h-48 overflow-y-auto -mx-1 px-1 space-y-1"
+              style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}
+            >
+              {recipes.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                >
+                  {r.image_url ? (
+                    <img
+                      src={r.image_url}
+                      alt=""
+                      className="w-9 h-9 rounded-md object-cover shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-md shrink-0 flex items-center justify-center"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                      }}
+                    >
+                      🍴
+                    </div>
+                  )}
+                  <p
+                    className="flex-1 text-sm truncate"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {r.title}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveRecipe(r.id)}
+                    className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--red-border)',
+                      color: 'var(--red)',
+                      fontSize: 16,
+                      lineHeight: 1,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--red-light)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                    aria-label={`Remove ${r.title}`}
+                    title="Remove from cookbook"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Removing only takes the recipe out of this cookbook — it stays in your library.
+            </p>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm" style={{ color: 'var(--red)' }}>
