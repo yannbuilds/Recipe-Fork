@@ -11,16 +11,19 @@ interface CookbookFormModalProps {
   recipes?: Recipe[]; // shown in edit mode for removal
   onClose: () => void;
   onSaved: (cookbook: Cookbook) => void;
-  onRemoveRecipe?: (recipeId: string) => void;
+  // Called on Save with the recipe IDs to remove from the cookbook.
+  // Removals are staged locally — nothing hits the DB until Save.
+  onCommitRemovals?: (recipeIds: string[]) => Promise<void> | void;
 }
 
-export default function CookbookFormModal({ open, cookbook, recipes, onClose, onSaved, onRemoveRecipe }: CookbookFormModalProps) {
+export default function CookbookFormModal({ open, cookbook, recipes, onClose, onSaved, onCommitRemovals }: CookbookFormModalProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [emoji, setEmoji] = useState<string>('📖');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -28,6 +31,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
       setDescription(cookbook?.description ?? '');
       setEmoji(cookbook?.emoji ?? '📖');
       setError(null);
+      setPendingRemoval(new Set());
     }
   }, [open, cookbook]);
 
@@ -60,7 +64,13 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
         .single();
       if (err) {
         setError(err.message);
-      } else if (data) {
+        setSaving(false);
+        return;
+      }
+      if (pendingRemoval.size > 0 && onCommitRemovals) {
+        await onCommitRemovals(Array.from(pendingRemoval));
+      }
+      if (data) {
         onSaved(data as Cookbook);
         onClose();
       }
@@ -158,69 +168,106 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
           />
         </div>
 
-        {cookbook && recipes && recipes.length > 0 && onRemoveRecipe && (
+        {cookbook && recipes && recipes.length > 0 && onCommitRemovals && (
           <div>
             <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-              Recipes ({recipes.length})
+              Recipes ({recipes.length - pendingRemoval.size}
+              {pendingRemoval.size > 0 ? ` · ${pendingRemoval.size} to remove` : ''})
             </label>
             <div
               className="max-h-48 overflow-y-auto -mx-1 px-1 space-y-1"
               style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}
             >
-              {recipes.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-                >
-                  {r.image_url ? (
-                    <img
-                      src={r.image_url}
-                      alt=""
-                      className="w-9 h-9 rounded-md object-cover shrink-0"
-                    />
-                  ) : (
-                    <div
-                      className="w-9 h-9 rounded-md shrink-0 flex items-center justify-center"
+              {recipes.map((r) => {
+                const removing = pendingRemoval.has(r.id);
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={removing ? { opacity: 0.55 } : undefined}
+                  >
+                    {r.image_url ? (
+                      <img
+                        src={r.image_url}
+                        alt=""
+                        className="w-9 h-9 rounded-md object-cover shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className="w-9 h-9 rounded-md shrink-0 flex items-center justify-center"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                        }}
+                      >
+                        🍴
+                      </div>
+                    )}
+                    <p
+                      className="flex-1 text-sm truncate"
                       style={{
-                        background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                        color: 'var(--text)',
+                        textDecoration: removing ? 'line-through' : 'none',
                       }}
                     >
-                      🍴
-                    </div>
-                  )}
-                  <p
-                    className="flex-1 text-sm truncate"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    {r.title}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveRecipe(r.id)}
-                    className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors"
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid var(--red-border)',
-                      color: 'var(--red)',
-                      fontSize: 16,
-                      lineHeight: 1,
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = 'var(--red-light)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = 'transparent';
-                    }}
-                    aria-label={`Remove ${r.title}`}
-                    title="Remove from cookbook"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+                      {r.title}
+                    </p>
+                    {removing ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingRemoval((prev) => {
+                            const next = new Set(prev);
+                            next.delete(r.id);
+                            return next;
+                          });
+                        }}
+                        className="shrink-0 px-2 h-7 rounded-md text-xs font-semibold transition-colors"
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border)',
+                          color: 'var(--muted)',
+                        }}
+                      >
+                        Undo
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingRemoval((prev) => {
+                            const next = new Set(prev);
+                            next.add(r.id);
+                            return next;
+                          });
+                        }}
+                        className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors"
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--red-border)',
+                          color: 'var(--red)',
+                          fontSize: 16,
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = 'var(--red-light)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = 'transparent';
+                        }}
+                        aria-label={`Remove ${r.title}`}
+                        title="Remove from cookbook"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-              Removing only takes the recipe out of this cookbook — it stays in your library.
+              {pendingRemoval.size > 0
+                ? 'Changes apply when you click Save.'
+                : 'Removing only takes the recipe out of this cookbook — it stays in your library.'}
             </p>
           </div>
         )}

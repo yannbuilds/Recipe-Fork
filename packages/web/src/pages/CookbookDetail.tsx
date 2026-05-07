@@ -89,14 +89,14 @@ export default function CookbookDetail() {
       .insert({ cookbook_id: cookbook.id, recipe_id: recipe.id });
   }
 
-  async function handleRemoveRecipe(recipeId: string) {
-    if (!cookbook) return;
-    setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+  async function handleCommitRemovals(recipeIds: string[]) {
+    if (!cookbook || recipeIds.length === 0) return;
+    setRecipes((prev) => prev.filter((r) => !recipeIds.includes(r.id)));
     await supabase
       .from('cookbook_recipes')
       .delete()
       .eq('cookbook_id', cookbook.id)
-      .eq('recipe_id', recipeId);
+      .in('recipe_id', recipeIds);
   }
 
   const familyOwnerNames = new Map<string, string>();
@@ -135,7 +135,7 @@ export default function CookbookDetail() {
             {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}
           </p>
         </div>
-        {cookbook && (
+        {cookbook && recipes.length > 0 && (
           <button
             onClick={() => setShowAdd(true)}
             className="rf-btn rf-btn-filled shrink-0"
@@ -225,7 +225,7 @@ export default function CookbookDetail() {
         recipes={recipes}
         onClose={() => setShowEdit(false)}
         onSaved={(cb) => setCookbook(cb)}
-        onRemoveRecipe={handleRemoveRecipe}
+        onCommitRemovals={handleCommitRemovals}
       />
 
       <AddRecipeModal
