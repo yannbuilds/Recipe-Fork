@@ -117,7 +117,10 @@ export default function CookbookDetail() {
   return (
     <>
       {/* Header */}
-      <div style={{ animation: 'fadeUp 0.4s ease both' }} className="mb-5 flex items-start gap-4">
+      <div
+        style={{ animation: 'fadeUp 0.4s ease both', position: 'relative', zIndex: 30 }}
+        className="mb-5 flex items-start gap-4"
+      >
         <span style={{ fontSize: 48, lineHeight: 1 }}>{cookbook?.emoji ?? '📖'}</span>
         <div className="flex-1 min-w-0">
           <h1
