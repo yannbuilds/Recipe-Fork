@@ -301,6 +301,32 @@ async function grabPageHtml(tabId: number): Promise<string | null> {
   }
 }
 
+// Tracking params commonly appended to recipe URLs that shouldn't differentiate a save
+const TRACKING_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id", "utm_name",
+  "fbclid", "gclid", "gbraid", "wbraid", "msclkid", "mc_cid", "mc_eid",
+  "ref", "ref_src", "ref_url", "_ga", "_gl",
+]);
+
+function normalizeRecipeUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.hash = ""; // strip fragment (e.g. "#recipe")
+    for (const key of Array.from(u.searchParams.keys())) {
+      if (TRACKING_PARAMS.has(key) || key.startsWith("utm_")) {
+        u.searchParams.delete(key);
+      }
+    }
+    // Strip trailing slash on the path (only when path > "/") so "/foo/" === "/foo"
+    if (u.pathname.length > 1 && u.pathname.endsWith("/")) {
+      u.pathname = u.pathname.slice(0, -1);
+    }
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 // Save handler — grabs page HTML via content script, then will send to Claude API
 async function handleSaveRecipe() {
   const [tab] = await chrome.tabs.query({
@@ -313,6 +339,10 @@ async function handleSaveRecipe() {
     showError("Can't save recipes from this page.");
     return;
   }
+
+  // Normalize URL — strip fragment and tracking params so the same recipe
+  // page isn't saved twice from different links (e.g. with `#recipe` or `?utm_*`)
+  const normalizedUrl = normalizeRecipeUrl(tab.url);
 
   // Ensure we have a logged-in user
   const {
@@ -327,7 +357,7 @@ async function handleSaveRecipe() {
   const { data: existing } = await supabase
     .from("recipes")
     .select("id")
-    .eq("source_url", tab.url)
+    .eq("source_url", normalizedUrl)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -350,7 +380,7 @@ async function handleSaveRecipe() {
 
     ({ data: fnData, error: fnError } = await supabase.functions.invoke(
       "import-recipe",
-      { body: { url: tab.url } },
+      { body: { url: normalizedUrl } },
     ));
 
     // Extract error message from edge function response
@@ -377,7 +407,7 @@ async function handleSaveRecipe() {
       if (pageHtml) {
         ({ data: fnData, error: fnError } = await supabase.functions.invoke(
           "import-recipe",
-          { body: { url: tab.url, html: pageHtml } },
+          { body: { url: normalizedUrl, html: pageHtml } },
         ));
 
         // Re-check for errors on retry

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pie Keeper",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Save recipes from any website with AI-powered parsing",
   "permissions": ["activeTab", "storage", "identity", "cookies", "scripting"],
   "host_permissions": ["https://piekeeper.com/*", "https://*.piekeeper.com/*"],
