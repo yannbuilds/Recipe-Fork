@@ -6,6 +6,7 @@ import { NewRecipeModalProvider } from "./context/NewRecipeModalContext";
 import RecipeList from "./pages/RecipeList";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
+import CookbookDetail from "./pages/CookbookDetail";
 import MealPlan from "./pages/MealPlan";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -174,6 +175,7 @@ function AppShell() {
             <Route path="/new" element={<RecipeForm />} />
             <Route path="/recipe/:id" element={<RecipeDetail />} />
             <Route path="/recipe/:id/edit" element={<RecipeForm />} />
+            <Route path="/cookbook/:id" element={<CookbookDetail />} />
             <Route path="/meal-plan" element={<MealPlan />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/icon-compare" element={<IconCompare />} />

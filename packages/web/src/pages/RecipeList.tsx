@@ -4,6 +4,7 @@ import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
 import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
 import RecipeFilterBar from '../components/RecipeFilterBar';
+import CookbooksView from './CookbooksView';
 import { useAuth } from '../context/AuthContext';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
@@ -54,9 +55,22 @@ function getGreeting(): { text: string; punctuation: string } {
 }
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
+type ListView = 'all' | 'cookbooks';
+const VIEW_KEY = 'rf:list-view';
+
+function readInitialView(): ListView {
+  if (typeof window === 'undefined') return 'all';
+  const stored = window.localStorage.getItem(VIEW_KEY);
+  return stored === 'cookbooks' ? 'cookbooks' : 'all';
+}
 
 export default function RecipeList() {
   const { user, profile, familyMembers, loading: authLoading } = useAuth();
+  // View toggle — read synchronously from localStorage so first paint is correct
+  const [view, setView] = useState<ListView>(readInitialView);
+  useEffect(() => {
+    window.localStorage.setItem(VIEW_KEY, view);
+  }, [view]);
 
   // All recipes fetched so far (grows as pages load)
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -117,9 +131,12 @@ export default function RecipeList() {
 
   // Initial data fetch — wait until auth has settled so we don't fire
   // queries before the Supabase session is hydrated (would return nothing
-  // under RLS and force a re-fetch).
+  // under RLS and force a re-fetch). Only run when the All Recipes view
+  // is active — Cookbooks view fetches its own (much smaller) dataset.
   useEffect(() => {
     if (authLoading) return;
+    if (view !== 'all') return;
+    if (recipes.length > 0) return; // already loaded once
     async function fetchData() {
       const to = INITIAL_COUNT - 1;
       const [recipesResult, tagsResult, recipeTagsResult, countResult] = await Promise.all([
@@ -160,7 +177,7 @@ export default function RecipeList() {
     }
 
     fetchData();
-  }, [authLoading]);
+  }, [authLoading, view, recipes.length]);
 
   // Fetch next page of recipes
   const loadMore = useCallback(async () => {
@@ -270,6 +287,35 @@ export default function RecipeList() {
 
   return (
     <>
+      {/* View toggle: All Recipes vs Cookbooks. Persisted to localStorage. */}
+      <div
+        className="mb-4"
+        style={{ animation: 'fadeUp 0.4s ease both' }}
+      >
+        <div className="rf-tabs" style={{ maxWidth: 360 }}>
+          <button
+            className={`rf-tab ${view === 'all' ? 'rf-tab-active' : ''}`}
+            onClick={() => setView('all')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          >
+            <span>🍽</span>
+            All recipes
+          </button>
+          <button
+            className={`rf-tab ${view === 'cookbooks' ? 'rf-tab-active' : ''}`}
+            onClick={() => setView('cookbooks')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          >
+            <span>📖</span>
+            Cookbooks
+          </button>
+        </div>
+      </div>
+
+      {view === 'cookbooks' ? (
+        <CookbooksView authLoading={authLoading} />
+      ) : (
+        <>
       {/* Greeting header */}
       <div style={{ animation: 'fadeUp 0.4s ease both' }} className="mb-5">
         <h1
@@ -475,6 +521,8 @@ export default function RecipeList() {
             />
           )}
         </div>
+      )}
+        </>
       )}
     </>
   );

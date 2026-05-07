@@ -9,6 +9,7 @@ import FavouriteButton from '../components/FavouriteButton';
 import IngredientIcon from '../components/IngredientIcon';
 import VideoPlayer from '../components/VideoPlayer';
 import MyNotesModal from '../components/MyNotesModal';
+import AddToCookbookSheet from '../components/AddToCookbookSheet';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -235,6 +236,7 @@ export default function RecipeDetail() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
   const [showMyNotes, setShowMyNotes] = useState(false);
+  const [showAddToCookbook, setShowAddToCookbook] = useState(false);
   const [myNotesSaveStatus, setMyNotesSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [savedServings, setSavedServings] = useState<number>(1);
   const saveNotesRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1362,6 +1364,23 @@ export default function RecipeDetail() {
             Edit
           </Link>
           <button
+            onClick={() => setShowAddToCookbook(true)}
+            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--green)',
+              color: 'var(--green)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--green-light)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--card)';
+            }}
+          >
+            📖 Save to cookbook
+          </button>
+          <button
             onClick={() => setShowDeleteModal(true)}
             className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
             style={{
@@ -1379,6 +1398,14 @@ export default function RecipeDetail() {
             Delete
           </button>
         </div>
+
+        {id && (
+          <AddToCookbookSheet
+            open={showAddToCookbook}
+            recipeId={id}
+            onClose={() => setShowAddToCookbook(false)}
+          />
+        )}
 
       <ConfirmModal
         open={showDeleteModal}

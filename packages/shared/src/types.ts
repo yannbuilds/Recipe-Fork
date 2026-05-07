@@ -71,6 +71,25 @@ export interface MealPlanEntry extends MealPlanRecipe {
   recipe: Recipe;
 }
 
+export interface Cookbook {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CookbookRecipe {
+  cookbook_id: string;
+  recipe_id: string;
+  added_at: string;
+}
+
+export type CookbookInsert = Omit<Cookbook, 'id' | 'created_at' | 'updated_at'>;
+export type CookbookUpdate = Partial<CookbookInsert>;
+
 export interface FamilyGroup {
   id: string;
   name: string;

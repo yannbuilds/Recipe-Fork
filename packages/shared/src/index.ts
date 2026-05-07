@@ -14,4 +14,8 @@ export type {
   FamilyGroup,
   FamilyMember,
   FamilyInvitation,
+  Cookbook,
+  CookbookRecipe,
+  CookbookInsert,
+  CookbookUpdate,
 } from './types.js';
