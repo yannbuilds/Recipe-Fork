@@ -145,7 +145,7 @@ export default function CookbookDetail() {
           </button>
         )}
         {cookbook && (
-          <div className="relative">
+          <div className="relative" style={{ zIndex: 60 }}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
               className="w-9 h-9 rounded-lg flex items-center justify-center"
