@@ -1,0 +1,12 @@
+Loaded 194 URLs from todo list
+Resolving user_id for jasonpompon@gmail.com...
+  user_id: aa767476-981d-4c0e-9345-937c83ad31cd
+Loading existing source_urls...
+  56 existing recipes for this user
+
+[1/194] SKIP (exists): https://www.recipetineats.com/seafood-chowder
+[2/194] OK: Baked sausage breakfast hash
+
+[3/194] RATE LIMIT hit. Saving pending list and exiting.
+
+Done. inserted=1 skipped=1 failed=0
