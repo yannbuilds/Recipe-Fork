@@ -1,0 +1,2 @@
+https://www.recipetineats.com/egg-sandwich	TypeError: fetch failed
+https://recip.aboutbackpacks.com/index.php/2025/10/27/fluffy-homemade-pancakes	HTTP 403 Forbidden
