@@ -9,6 +9,10 @@ interface CookbookFormModalProps {
   open: boolean;
   cookbook?: Cookbook | null; // edit mode if provided
   recipes?: Recipe[]; // shown in edit mode for removal
+  // Pre-fill values for create mode (e.g. from an AI suggestion).
+  initialValues?: { name?: string; description?: string | null; emoji?: string | null };
+  // Recipe ids to attach to the cookbook immediately after create (create mode only).
+  initialRecipeIds?: string[];
   onClose: () => void;
   onSaved: (cookbook: Cookbook) => void;
   // Called on Save with the recipe IDs to remove from the cookbook.
@@ -16,7 +20,7 @@ interface CookbookFormModalProps {
   onCommitRemovals?: (recipeIds: string[]) => Promise<void> | void;
 }
 
-export default function CookbookFormModal({ open, cookbook, recipes, onClose, onSaved, onCommitRemovals }: CookbookFormModalProps) {
+export default function CookbookFormModal({ open, cookbook, recipes, initialValues, initialRecipeIds, onClose, onSaved, onCommitRemovals }: CookbookFormModalProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -27,13 +31,13 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
 
   useEffect(() => {
     if (open) {
-      setName(cookbook?.name ?? '');
-      setDescription(cookbook?.description ?? '');
-      setEmoji(cookbook?.emoji ?? '📖');
+      setName(cookbook?.name ?? initialValues?.name ?? '');
+      setDescription(cookbook?.description ?? initialValues?.description ?? '');
+      setEmoji(cookbook?.emoji ?? initialValues?.emoji ?? '📖');
       setError(null);
       setPendingRemoval(new Set());
     }
-  }, [open, cookbook]);
+  }, [open, cookbook, initialValues]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +92,20 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
       if (err) {
         setError(err.message);
       } else if (data) {
+        if (initialRecipeIds && initialRecipeIds.length > 0) {
+          const rows = initialRecipeIds.map((rid) => ({
+            cookbook_id: data.id,
+            recipe_id: rid,
+          }));
+          const { error: linkErr } = await supabase
+            .from('cookbook_recipes')
+            .insert(rows);
+          if (linkErr) {
+            setError(linkErr.message);
+            setSaving(false);
+            return;
+          }
+        }
         onSaved(data as Cookbook);
         onClose();
       }

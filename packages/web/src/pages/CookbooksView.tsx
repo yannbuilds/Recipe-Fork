@@ -4,6 +4,7 @@ import type { Cookbook } from '@recipe-aggregator/shared';
 import CookbookCard from '../components/CookbookCard';
 import CookbookEmptyState from '../components/CookbookEmptyState';
 import CookbookFormModal from '../components/CookbookFormModal';
+import SuggestCookbooksModal from '../components/SuggestCookbooksModal';
 import { useAuth } from '../context/AuthContext';
 
 interface CookbooksViewProps {
@@ -24,6 +25,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -109,15 +111,28 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     <>
       {/* Header */}
       <div style={{ animation: 'fadeUp 0.4s ease both' }} className="mb-5">
-        <h1
-          className="rf-heading font-bold"
-          style={{ color: 'var(--text)', fontSize: 26 }}
-        >
-          Cookbooks{profile?.display_name ? `, ${profile.display_name}` : ''}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)', minHeight: '1.25rem' }}>
-          {subtitle}
-        </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1
+              className="rf-heading font-bold"
+              style={{ color: 'var(--text)', fontSize: 26 }}
+            >
+              Cookbooks{profile?.display_name ? `, ${profile.display_name}` : ''}
+            </h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--muted)', minHeight: '1.25rem' }}>
+              {subtitle}
+            </p>
+          </div>
+          {!loading && !error && total > 0 && (
+            <button
+              onClick={() => setShowSuggest(true)}
+              className="rf-btn rf-btn-secondary shrink-0"
+              title="Let AI propose cookbooks based on your library"
+            >
+              ✨ Suggest
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -167,6 +182,16 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
         onSaved={(cb) => {
           setCookbooks((prev) => [cb, ...prev]);
           setCountsByCookbook((prev) => ({ ...prev, [cb.id]: 0 }));
+          setImagesByCookbook((prev) => ({ ...prev, [cb.id]: [] }));
+        }}
+      />
+
+      <SuggestCookbooksModal
+        open={showSuggest}
+        onClose={() => setShowSuggest(false)}
+        onCreated={(cb, recipeCount) => {
+          setCookbooks((prev) => [cb, ...prev]);
+          setCountsByCookbook((prev) => ({ ...prev, [cb.id]: recipeCount }));
           setImagesByCookbook((prev) => ({ ...prev, [cb.id]: [] }));
         }}
       />
