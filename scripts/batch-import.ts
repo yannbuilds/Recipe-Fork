@@ -2,8 +2,16 @@
  * batch-import.ts
  *
  * Extracts + imports a batch of recipes from the pending list.
- * - Calls the deployed import-recipe edge function for extraction (Groq)
- * - Inserts directly into Supabase
+ *
+ * HOW EXTRACTION WORKS (mirrors the Chrome extension exactly):
+ *   1. Fetch the page HTML locally (Node.js fetch, same browser-like headers)
+ *   2. Send { url, html } to the import-recipe edge function
+ *      → Edge function runs HTML extraction helpers (notes, video, JSON-LD)
+ *      → Then sends the content to Groq LLM for full structured extraction
+ *   By passing our own HTML, the edge function never needs to fetch the URL
+ *   itself — avoiding server-side fetch blocks and ensuring the full page
+ *   content (including WPRM notes and YouTube embeds) is always available.
+ *
  * - Handles rate limits gracefully (stops and saves remaining pending)
  * - Skips URLs already in the DB and known failures
  *
@@ -40,9 +48,45 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/import-recipe`;
 const AUTH_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
 
+// Browser-like headers — reduces chance of getting blocked or a bot-detection page
+const FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Language': 'en-AU,en;q=0.9,en-US;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Upgrade-Insecure-Requests': '1',
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const normaliseUrl = (u: string) => u.split('#')[0].replace(/\/$/, '').toLowerCase();
+
+/**
+ * Fetch raw HTML for a URL. Mirrors what the extension does with grabPageHtml()
+ * before sending to the edge function. Keeping the HTML < 2MB matches the edge
+ * function's validation limit.
+ */
+async function fetchHtml(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: FETCH_HEADERS,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      console.log(`  HTML fetch: HTTP ${res.status}`);
+      return null;
+    }
+    const html = await res.text();
+    return html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+  } catch (e: any) {
+    console.log(`  HTML fetch error: ${e.message}`);
+    return null;
+  }
+}
 
 async function resolveUserId(email: string): Promise<string> {
   let page = 1;
@@ -74,8 +118,26 @@ async function loadExistingSourceUrls(userId: string): Promise<Set<string>> {
   return set;
 }
 
+/**
+ * Call the edge function to extract a recipe.
+ * Mirrors the Chrome extension: fetch HTML locally first, then send
+ * { url, html } so the edge function never has to fetch the page itself.
+ * Falls back to URL-only if the local fetch fails.
+ */
 async function extractRecipe(url: string): Promise<{ recipe: any; tags: any[] } | { error: string } | null> {
+  // Step 1: fetch HTML locally (same as extension's grabPageHtml)
+  const html = await fetchHtml(url);
+  if (html) {
+    console.log(`  Fetched HTML (${Math.round(html.length / 1024)}kb) → sending to edge function`);
+  } else {
+    console.log(`  Local fetch failed → falling back to URL-only extraction`);
+  }
+
+  // Step 2: call edge function with HTML (or URL-only as fallback)
   try {
+    const body: Record<string, string> = { url };
+    if (html) body.html = html;
+
     const res = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: {
@@ -83,15 +145,15 @@ async function extractRecipe(url: string): Promise<{ recipe: any; tags: any[] } 
         Authorization: `Bearer ${AUTH_KEY}`,
         apikey: AUTH_KEY,
       },
-      body: JSON.stringify({ url }),
-      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
     });
 
     if (res.status === 429) return { error: 'RATE_LIMIT' };
 
-    const body = await res.json();
-    if (!res.ok) return { error: body.error ?? `HTTP ${res.status}` };
-    return body;
+    const responseBody = await res.json();
+    if (!res.ok) return { error: responseBody.error ?? `HTTP ${res.status}` };
+    return responseBody;
   } catch (e: any) {
     return { error: e.message };
   }
