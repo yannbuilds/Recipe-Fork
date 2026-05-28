@@ -7,6 +7,7 @@ import RecipeCardSkeleton from '../components/RecipeCardSkeleton';
 import CookbookFormModal from '../components/CookbookFormModal';
 import ConfirmModal from '../components/ConfirmModal';
 import AddRecipeModal from '../components/AddRecipeModal';
+import SuggestRecipesModal from '../components/SuggestRecipesModal';
 import { useAuth } from '../context/AuthContext';
 
 const RECIPE_SELECT =
@@ -24,6 +25,7 @@ export default function CookbookDetail() {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -89,6 +91,15 @@ export default function CookbookDetail() {
       .insert({ cookbook_id: cookbook.id, recipe_id: recipe.id });
   }
 
+  function handleSuggestionsAdded(added: Recipe[]) {
+    if (added.length === 0) return;
+    setRecipes((prev) => {
+      const existing = new Set(prev.map((r) => r.id));
+      const fresh = added.filter((r) => !existing.has(r.id));
+      return [...fresh, ...prev];
+    });
+  }
+
   async function handleCommitRemovals(recipeIds: string[]) {
     if (!cookbook || recipeIds.length === 0) return;
     setRecipes((prev) => prev.filter((r) => !recipeIds.includes(r.id)));
@@ -139,13 +150,22 @@ export default function CookbookDetail() {
           </p>
         </div>
         {cookbook && recipes.length > 0 && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="rf-btn rf-btn-filled shrink-0"
-            style={{ padding: '8px 14px' }}
-          >
-            + Add recipe
-          </button>
+          <>
+            <button
+              onClick={() => setShowSuggest(true)}
+              className="rf-btn rf-btn-secondary shrink-0"
+              style={{ padding: '8px 14px' }}
+            >
+              ✨ Suggest
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="rf-btn rf-btn-filled shrink-0"
+              style={{ padding: '8px 14px' }}
+            >
+              + Add recipe
+            </button>
+          </>
         )}
         {cookbook && (
           <div className="relative" style={{ zIndex: 60 }}>
@@ -202,9 +222,14 @@ export default function CookbookDetail() {
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
             Pick from your existing recipes to fill it up.
           </p>
-          <button onClick={() => setShowAdd(true)} className="rf-btn rf-btn-filled mt-6">
-            + Add recipe
-          </button>
+          <div className="flex flex-wrap gap-3 justify-center mt-6">
+            <button onClick={() => setShowAdd(true)} className="rf-btn rf-btn-filled">
+              + Add recipe
+            </button>
+            <button onClick={() => setShowSuggest(true)} className="rf-btn rf-btn-secondary">
+              ✨ Suggest recipes
+            </button>
+          </div>
         </div>
       )}
 
@@ -230,6 +255,15 @@ export default function CookbookDetail() {
         onSaved={(cb) => setCookbook(cb)}
         onCommitRemovals={handleCommitRemovals}
       />
+
+      {cookbook && (
+        <SuggestRecipesModal
+          open={showSuggest}
+          cookbook={cookbook}
+          onClose={() => setShowSuggest(false)}
+          onAdded={handleSuggestionsAdded}
+        />
+      )}
 
       <AddRecipeModal
         open={showAdd}
