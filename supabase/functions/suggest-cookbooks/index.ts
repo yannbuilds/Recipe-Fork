@@ -8,7 +8,7 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 const ALLOWED_EMOJIS = ["📖", "🍝", "🥗", "🍰", "🍱", "🍳", "🥘", "🍲", "🍕", "🌮", "🍜", "🥐"];
 const FALLBACK_EMOJI = "📖";
 
-const MAX_RECIPES = 150;
+const MAX_RECIPES = 50;
 const MAX_SUGGESTIONS = 3;
 const MIN_RECIPES_PER_SUGGESTION = 3;
 const MAX_RECIPES_PER_SUGGESTION = 12;
@@ -140,8 +140,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    let suggestions = await askGroq(apiKey, compactRecipes, existingNames, avoidNames);
-    suggestions = validate(suggestions, ownedRecipeIds);
+    const rawSuggestions = await askGroq(apiKey, compactRecipes, existingNames, avoidNames);
+    let suggestions = validate(rawSuggestions, ownedRecipeIds);
 
     // One retry if validation strips below MAX_SUGGESTIONS
     if (suggestions.length < MAX_SUGGESTIONS) {
@@ -231,7 +231,8 @@ Output shape:
   });
 
   if (!groqRes.ok) {
-    console.error(`[suggest-cookbooks] Groq API error (${groqRes.status})`);
+    const errText = await groqRes.text().catch(() => "");
+    console.error(`[suggest-cookbooks] Groq API error (${groqRes.status}): ${errText.slice(0, 200)}`);
     return [];
   }
 
