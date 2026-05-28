@@ -22,9 +22,9 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { extractRecipeWithClaude } from './recipe-extractor.js';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)!;
-const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const TARGET_EMAIL = 'jasonpompon@gmail.com';
 
@@ -44,9 +44,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-
-const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/import-recipe`;
-const AUTH_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
 
 // Browser-like headers — reduces chance of getting blocked or a bot-detection page
 const FETCH_HEADERS = {
@@ -119,44 +116,20 @@ async function loadExistingSourceUrls(userId: string): Promise<Set<string>> {
 }
 
 /**
- * Call the edge function to extract a recipe.
- * Mirrors the Chrome extension: fetch HTML locally first, then send
- * { url, html } so the edge function never has to fetch the page itself.
- * Falls back to URL-only if the local fetch fails.
+ * Fetch HTML then extract recipe via Claude.
+ * Mirrors the Chrome extension: fetch HTML locally, pass it to the extractor
+ * so Claude gets the full page content every time.
  */
 async function extractRecipe(url: string): Promise<{ recipe: any; tags: any[] } | { error: string } | null> {
-  // Step 1: fetch HTML locally (same as extension's grabPageHtml)
   const html = await fetchHtml(url);
   if (html) {
-    console.log(`  Fetched HTML (${Math.round(html.length / 1024)}kb) → sending to edge function`);
+    console.log(`  Fetched HTML (${Math.round(html.length / 1024)}kb) → extracting with Claude`);
   } else {
-    console.log(`  Local fetch failed → falling back to URL-only extraction`);
+    console.log(`  Local fetch failed — skipping`);
+    return { error: 'Could not fetch page HTML' };
   }
 
-  // Step 2: call edge function with HTML (or URL-only as fallback)
-  try {
-    const body: Record<string, string> = { url };
-    if (html) body.html = html;
-
-    const res = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AUTH_KEY}`,
-        apikey: AUTH_KEY,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
-
-    if (res.status === 429) return { error: 'RATE_LIMIT' };
-
-    const responseBody = await res.json();
-    if (!res.ok) return { error: responseBody.error ?? `HTTP ${res.status}` };
-    return responseBody;
-  } catch (e: any) {
-    return { error: e.message };
-  }
+  return extractRecipeWithClaude(url, html);
 }
 
 async function upsertTag(name: string, emoji?: string | null): Promise<string> {
@@ -269,7 +242,6 @@ async function main() {
   let inserted = 0;
   let skipped = 0;
   let failed = 0;
-  let rateLimited = false;
   const processedUrls: string[] = [];
 
   for (let i = 0; i < batch.length; i++) {
@@ -288,11 +260,6 @@ async function main() {
     }
 
     if ('error' in result) {
-      if (result.error === 'RATE_LIMIT') {
-        console.log(`\n  RATE LIMIT hit at item ${i + 1}. Stopping.\n`);
-        rateLimited = true;
-        break;
-      }
       console.log(`  FAIL: ${result.error}`);
       appendLine(FAILED_FILE, `${url}\t${result.error}`);
       failed++;
@@ -327,9 +294,6 @@ async function main() {
 
   console.log(`\nDone. inserted=${inserted} skipped=${skipped} failed=${failed}`);
   console.log(`${newPending.length} URLs remain in pending.txt`);
-  if (rateLimited) {
-    console.log('Rate limited — remaining URLs saved. Run again tomorrow or later.');
-  }
 }
 
 main().catch((e) => {

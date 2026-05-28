@@ -19,5 +19,8 @@
   "devDependencies": {
     "dotenv": "^17.3.1",
     "tsx": "^4.22.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.99.0"
   }
 }

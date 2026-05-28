@@ -22,14 +22,11 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { extractRecipeWithClaude } from './recipe-extractor.js';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)!;
-const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const TARGET_EMAIL = 'jasonpompon@gmail.com';
-
-const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/import-recipe`;
-const AUTH_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -151,51 +148,25 @@ function extractRecipeNotes(html: string): string | null {
   return null;
 }
 
-// ── Phase 2: Edge function fallback (LLM) ─────────────────────────────────────
+// ── Phase 2: Claude LLM fallback ──────────────────────────────────────────────
 
 /**
- * Call the edge function with the fetched HTML — mirrors the extension exactly.
- * Only use this when regex extraction found nothing, to stay within Groq rate limits.
+ * Re-extract the full recipe via Claude and return only the fields we need.
+ * Only called when regex extraction finds nothing — avoids unnecessary API calls.
  */
-async function extractViaEdgeFunction(
+async function extractViaClauде(
   url: string,
-  html: string | null,
-): Promise<{ author_notes: string | null; video_url: string | null } | 'RATE_LIMIT' | null> {
-  try {
-    const body: Record<string, string> = { url };
-    if (html) body.html = html;
-
-    const res = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AUTH_KEY}`,
-        apikey: AUTH_KEY,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
-
-    if (res.status === 429) return 'RATE_LIMIT';
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.log(`  Edge function error: ${err.error ?? `HTTP ${res.status}`}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const recipe = data?.recipe;
-    if (!recipe) return null;
-
-    return {
-      author_notes: recipe.author_notes ?? null,
-      video_url: recipe.video_url ?? null,
-    };
-  } catch (e: any) {
-    console.log(`  Edge function call failed: ${e.message}`);
+  html: string,
+): Promise<{ author_notes: string | null; video_url: string | null } | null> {
+  const result = await extractRecipeWithClaude(url, html);
+  if ('error' in result) {
+    console.log(`  Claude extraction error: ${result.error}`);
     return null;
   }
+  return {
+    author_notes: result.recipe.author_notes ?? null,
+    video_url: result.recipe.video_url ?? null,
+  };
 }
 
 async function resolveUserId(email: string): Promise<string> {
@@ -266,14 +237,8 @@ async function main() {
     const stillMissingVideo = !r.video_url && !newVideo;
 
     if (html && (stillMissingNotes || stillMissingVideo)) {
-      console.log(`  Regex found nothing → trying edge function (LLM)`);
-      const extracted = await extractViaEdgeFunction(r.source_url, html);
-
-      if (extracted === 'RATE_LIMIT') {
-        console.log('\n  RATE LIMIT hit. Stopping to preserve remaining quota.\n');
-        break;
-      }
-
+      console.log(`  Regex found nothing → trying Claude (LLM)`);
+      const extracted = await extractViaClauде(r.source_url, html);
       if (extracted) {
         if (stillMissingNotes && extracted.author_notes) newNotes = extracted.author_notes;
         if (stillMissingVideo && extracted.video_url) newVideo = extracted.video_url;

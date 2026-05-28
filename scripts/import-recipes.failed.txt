@@ -1,2 +1,5 @@
 https://www.recipetineats.com/egg-sandwich	TypeError: fetch failed
 https://recip.aboutbackpacks.com/index.php/2025/10/27/fluffy-homemade-pancakes	HTTP 403 Forbidden
+https://cooking.nytimes.com/recipes/12874-sauteed-kale	Blocked by paywall
+https://www.inspiredtaste.net/26952/how-to-cook-dried-chickpeas	No Recipe JSON-LD
+https://www.allrecipes.com/recipe/16383/basic-crepes	Could not fetch HTML
