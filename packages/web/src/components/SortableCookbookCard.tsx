@@ -31,8 +31,10 @@ export default function SortableCookbookCard({
   } = useSortable({ id: cookbook.id });
 
   // Suppress the Link's click navigation that fires right after a drag.
-  const draggedRef = useRef(false);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
+  // isDragging reliably latches true during a real drag; the stray click
+  // fires immediately after the drag ends, so we swallow exactly that one.
+  const wasDraggingRef = useRef(false);
+  if (isDragging) wasDraggingRef.current = true;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(
@@ -55,21 +57,11 @@ export default function SortableCookbookCard({
       style={style}
       {...attributes}
       {...listeners}
-      onPointerDownCapture={(e) => {
-        draggedRef.current = false;
-        startRef.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerMoveCapture={(e) => {
-        if (!startRef.current) return;
-        const dx = e.clientX - startRef.current.x;
-        const dy = e.clientY - startRef.current.y;
-        if (Math.hypot(dx, dy) > 6) draggedRef.current = true;
-      }}
       onClickCapture={(e) => {
-        if (isDragging || draggedRef.current) {
+        if (wasDraggingRef.current) {
           e.preventDefault();
           e.stopPropagation();
-          draggedRef.current = false;
+          wasDraggingRef.current = false;
         }
       }}
     >
