@@ -46,6 +46,11 @@ export default function SortableCookbookCard({
     // decides between scroll and drag, then suppresses scroll once dragging.
     touchAction: 'pan-y',
     position: 'relative',
+    // Stop Chrome's long-press link-preview / text-selection callout from
+    // hijacking the press-and-hold gesture we use to start a drag.
+    WebkitTouchCallout: 'none',
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
   };
 
   return (
@@ -53,6 +58,7 @@ export default function SortableCookbookCard({
       ref={setNodeRef}
       style={style}
       className="group"
+      onContextMenu={(e) => e.preventDefault()}
       {...attributes}
       {...listeners}
     >

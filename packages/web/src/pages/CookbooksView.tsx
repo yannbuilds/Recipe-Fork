@@ -117,11 +117,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
   }, [authLoading]);
 
   // Desktop: a small drag distance activates (taps still open a cookbook).
-  // Mobile: a ~1s long-press activates, so normal scrolling never starts a drag —
-  // any finger movement before the timer fires cancels activation and scrolls.
+  // Mobile: a short press-and-hold activates. The delay is kept under Chrome's
+  // ~500ms long-press so drag mode engages before its link-preview menu, while
+  // still being long enough that any finger movement (scrolling) cancels first.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 1000, tolerance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
