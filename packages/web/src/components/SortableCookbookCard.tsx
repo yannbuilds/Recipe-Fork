@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
@@ -31,12 +30,6 @@ export default function SortableCookbookCard({
     isDragging,
   } = useSortable({ id: cookbook.id });
 
-  // Suppress the Link's click navigation that fires right after a drag.
-  // isDragging reliably latches true during a real drag; the stray click
-  // fires immediately after the drag ends, so we swallow exactly that one.
-  const wasDraggingRef = useRef(false);
-  if (isDragging) wasDraggingRef.current = true;
-
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(
       transform
@@ -60,13 +53,6 @@ export default function SortableCookbookCard({
       className="group"
       {...attributes}
       {...listeners}
-      onClickCapture={(e) => {
-        if (wasDraggingRef.current) {
-          e.preventDefault();
-          e.stopPropagation();
-          wasDraggingRef.current = false;
-        }
-      }}
     >
       <CookbookCard
         cookbook={cookbook}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import {
@@ -121,6 +121,10 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // Set true the moment a real drag starts; consumed by the grid's click handler
+  // to swallow the stray click that fires on drop, so a drag never opens a cookbook.
+  const justDraggedRef = useRef(false);
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -200,9 +204,26 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       )}
 
       {!loading && !error && total > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={() => {
+            justDraggedRef.current = true;
+          }}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={cookbooks.map((c) => c.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div
+              className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+              onClickCapture={(e) => {
+                // Swallow the click that immediately follows a drop, wherever it lands.
+                if (justDraggedRef.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  justDraggedRef.current = false;
+                }
+              }}
+            >
               {cookbooks.map((cb, i) => (
                 <SortableCookbookCard
                   key={cb.id}
