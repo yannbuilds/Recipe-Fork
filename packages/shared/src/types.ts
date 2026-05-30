@@ -77,6 +77,8 @@ export interface Cookbook {
   name: string;
   description: string | null;
   emoji: string | null;
+  // Manual display order (ascending). Lower = earlier. Defaults to 0 server-side.
+  sort_order?: number;
   created_at: string;
   updated_at: string;
 }

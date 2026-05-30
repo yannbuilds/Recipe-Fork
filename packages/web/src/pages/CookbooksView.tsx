@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
-import CookbookCard from '../components/CookbookCard';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  rectSortingStrategy,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
 import CookbookEmptyState from '../components/CookbookEmptyState';
 import CookbookFormModal from '../components/CookbookFormModal';
+import SortableCookbookCard from '../components/SortableCookbookCard';
 import SuggestCookbooksModal from '../components/SuggestCookbooksModal';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,7 +49,8 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       setLoading(true);
       const cbResult = await supabase
         .from('cookbooks')
-        .select('id, user_id, name, description, emoji, created_at, updated_at')
+        .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (cancelled) return;
@@ -99,6 +115,43 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     };
   }, [authLoading]);
 
+  // Require a small drag distance before activating so taps still open a cookbook.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = cookbooks.findIndex((c) => c.id === active.id);
+    const newIndex = cookbooks.findIndex((c) => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(cookbooks, oldIndex, newIndex);
+    const previous = cookbooks;
+    // Optimistic UI: snap to the new order immediately.
+    setCookbooks(reordered);
+
+    // Persist only the rows whose position changed.
+    const updates = reordered
+      .map((cb, i) => ({ id: cb.id, sort_order: i }))
+      .filter((u, i) => previous[i]?.id !== u.id);
+
+    const results = await Promise.all(
+      updates.map((u) =>
+        supabase.from('cookbooks').update({ sort_order: u.sort_order }).eq('id', u.id)
+      )
+    );
+
+    if (results.some((r) => r.error)) {
+      // Revert on failure.
+      setCookbooks(previous);
+      setError('Could not save the new order. Please try again.');
+    }
+  }
+
   const total = cookbooks.length;
 
   const subtitle = useMemo(() => {
@@ -146,18 +199,20 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       )}
 
       {!loading && !error && total > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {cookbooks.map((cb, i) => (
-            <CookbookCard
-              key={cb.id}
-              cookbook={cb}
-              recipeCount={countsByCookbook[cb.id] ?? 0}
-              coverImages={imagesByCookbook[cb.id] ?? []}
-              index={i}
-            />
-          ))}
-          {/* Add new tile */}
-          <button
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={cookbooks.map((c) => c.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {cookbooks.map((cb, i) => (
+                <SortableCookbookCard
+                  key={cb.id}
+                  cookbook={cb}
+                  recipeCount={countsByCookbook[cb.id] ?? 0}
+                  coverImages={imagesByCookbook[cb.id] ?? []}
+                  index={i}
+                />
+              ))}
+              {/* Add new tile */}
+              <button
             onClick={() => setShowCreate(true)}
             className="rf-card-hover relative flex flex-col items-center justify-center"
             style={{
@@ -170,10 +225,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
               animationDelay: `${Math.min(cookbooks.length * 0.05, 0.3)}s`,
             }}
           >
-            <span style={{ fontSize: 36, lineHeight: 1 }}>+</span>
-            <span className="text-sm font-semibold mt-2">New cookbook</span>
-          </button>
-        </div>
+                <span style={{ fontSize: 36, lineHeight: 1 }}>+</span>
+                <span className="text-sm font-semibold mt-2">New cookbook</span>
+              </button>
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <CookbookFormModal
