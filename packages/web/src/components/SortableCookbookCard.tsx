@@ -42,7 +42,9 @@ export default function SortableCookbookCard({
     boxShadow: isDragging ? '0 18px 40px rgba(0,0,0,0.28)' : undefined,
     borderRadius: 'var(--radius)',
     cursor: isDragging ? 'grabbing' : 'grab',
-    touchAction: 'none',
+    // Allow native scrolling on touch; the TouchSensor's long-press delay
+    // decides between scroll and drag, then suppresses scroll once dragging.
+    touchAction: 'pan-y',
     position: 'relative',
   };
 

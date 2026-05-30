@@ -3,7 +3,8 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
@@ -115,9 +116,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     };
   }, [authLoading]);
 
-  // Require a small drag distance before activating so taps still open a cookbook.
+  // Desktop: a small drag distance activates (taps still open a cookbook).
+  // Mobile: a ~1s long-press activates, so normal scrolling never starts a drag —
+  // any finger movement before the timer fires cancels activation and scrolls.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 1000, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
