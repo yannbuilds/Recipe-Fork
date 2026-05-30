@@ -121,11 +121,31 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Set true the moment a real drag starts; consumed by the grid's click handler
-  // to swallow the stray click that fires on drop, so a drag never opens a cookbook.
-  const justDraggedRef = useRef(false);
+  // Swallow the stray click that fires right after a drop, so a drag never
+  // opens a cookbook. A native window-level capture listener runs *before*
+  // React (and React Router's Link), making this immune to render-timing races.
+  const suppressNextClickRef = useRef(false);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (suppressNextClickRef.current) {
+        suppressNextClickRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener('click', onClick, true);
+    return () => window.removeEventListener('click', onClick, true);
+  }, []);
 
   async function handleDragEnd(event: DragEndEvent) {
+    // Clear the suppression flag shortly after the drop, in case no click
+    // follows (e.g. touch), so a later genuine tap is never eaten.
+    setTimeout(() => {
+      suppressNextClickRef.current = false;
+    }, 300);
+
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -208,22 +228,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={() => {
-            justDraggedRef.current = true;
+            suppressNextClickRef.current = true;
           }}
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={cookbooks.map((c) => c.id)} strategy={rectSortingStrategy}>
-            <div
-              className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-              onClickCapture={(e) => {
-                // Swallow the click that immediately follows a drop, wherever it lands.
-                if (justDraggedRef.current) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  justDraggedRef.current = false;
-                }
-              }}
-            >
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {cookbooks.map((cb, i) => (
                 <SortableCookbookCard
                   key={cb.id}
