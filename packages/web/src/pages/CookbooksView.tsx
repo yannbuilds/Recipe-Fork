@@ -157,7 +157,8 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
   const subtitle = useMemo(() => {
     if (loading) return 'Loading your cookbooks…';
     if (total === 0) return 'No cookbooks yet — create one to start grouping recipes.';
-    return `${total} cookbook${total === 1 ? '' : 's'} in your collection.`;
+    if (total === 1) return '1 cookbook in your collection.';
+    return `${total} cookbooks in your collection · drag to reorder.`;
   }, [loading, total]);
 
   return (

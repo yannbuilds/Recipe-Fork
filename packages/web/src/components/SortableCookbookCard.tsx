@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import CookbookCard from './CookbookCard';
 
@@ -49,12 +50,14 @@ export default function SortableCookbookCard({
     borderRadius: 'var(--radius)',
     cursor: isDragging ? 'grabbing' : 'grab',
     touchAction: 'none',
+    position: 'relative',
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
+      className="group"
       {...attributes}
       {...listeners}
       onClickCapture={(e) => {
@@ -71,6 +74,23 @@ export default function SortableCookbookCard({
         coverImages={coverImages}
         index={index}
       />
+
+      {/* Drag affordance: always faintly visible (mobile has no hover),
+          brightens on hover. pointer-events:none — the whole card is draggable. */}
+      <div
+        aria-hidden
+        className="absolute top-2 right-2 flex items-center justify-center rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
+        style={{
+          width: 24,
+          height: 24,
+          background: 'rgba(20,20,22,0.5)',
+          backdropFilter: 'blur(4px)',
+          color: 'rgba(255,255,255,0.95)',
+          pointerEvents: 'none',
+        }}
+      >
+        <GripVertical size={15} strokeWidth={2.25} />
+      </div>
     </div>
   );
 }
