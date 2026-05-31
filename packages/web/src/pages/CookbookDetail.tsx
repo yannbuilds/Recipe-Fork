@@ -130,77 +130,84 @@ export default function CookbookDetail() {
       {/* Header */}
       <div
         style={{ animation: 'fadeUp 0.4s ease both', position: 'relative', zIndex: 30 }}
-        className="mb-5 flex items-start gap-4"
+        className="mb-5"
       >
-        <span style={{ fontSize: 48, lineHeight: 1 }}>{cookbook?.emoji ?? '📖'}</span>
-        <div className="flex-1 min-w-0">
-          <h1
-            className="rf-heading font-bold"
-            style={{ color: 'var(--text)', fontSize: 26 }}
-          >
-            {cookbook?.name ?? 'Cookbook'}
-          </h1>
-          {cookbook?.description && (
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-              {cookbook.description}
+        {/* Title row */}
+        <div className="flex items-start gap-3 sm:gap-4">
+          <span style={{ fontSize: 40, lineHeight: 1 }} className="sm:text-5xl shrink-0">
+            {cookbook?.emoji ?? '📖'}
+          </span>
+          <div className="flex-1 min-w-0">
+            <h1
+              className="rf-heading font-bold text-2xl sm:text-[26px] leading-tight"
+              style={{ color: 'var(--text)' }}
+            >
+              {cookbook?.name ?? 'Cookbook'}
+            </h1>
+            {cookbook?.description && (
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+                {cookbook.description}
+              </p>
+            )}
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}
             </p>
+          </div>
+          {cookbook && (
+            <div className="relative shrink-0" style={{ zIndex: 60 }}>
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+                aria-label="More"
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <div className="rf-filter-dropdown" style={{ width: 160 }}>
+                  <button
+                    onClick={() => {
+                      setShowEdit(true);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg text-sm"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDelete(true);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg text-sm"
+                    style={{ color: 'var(--red)' }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
           )}
-          <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-            {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}
-          </p>
         </div>
+
+        {/* Action buttons — full-width on mobile, inline on desktop */}
         {cookbook && recipes.length > 0 && (
-          <>
+          <div className="flex gap-2 mt-4 sm:justify-end">
             <button
               onClick={() => setShowSuggest(true)}
-              className="rf-btn rf-btn-secondary shrink-0"
-              style={{ padding: '8px 14px' }}
+              className="rf-btn rf-btn-secondary flex-1 sm:flex-none"
+              style={{ padding: '10px 14px' }}
             >
               ✨ Suggest
             </button>
             <button
               onClick={() => setShowAdd(true)}
-              className="rf-btn rf-btn-filled shrink-0"
-              style={{ padding: '8px 14px' }}
+              className="rf-btn rf-btn-filled flex-1 sm:flex-none"
+              style={{ padding: '10px 14px' }}
             >
               + Add recipe
             </button>
-          </>
-        )}
-        {cookbook && (
-          <div className="relative" style={{ zIndex: 60 }}>
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="w-9 h-9 rounded-lg flex items-center justify-center"
-              style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)' }}
-              aria-label="More"
-            >
-              ⋯
-            </button>
-            {menuOpen && (
-              <div className="rf-filter-dropdown" style={{ width: 160 }}>
-                <button
-                  onClick={() => {
-                    setShowEdit(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDelete(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm"
-                  style={{ color: 'var(--red)' }}
-                >
-                  Delete
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
