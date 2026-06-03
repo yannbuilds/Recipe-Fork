@@ -14,6 +14,7 @@ import InvitePage from "./pages/InvitePage";
 import IconCompare from "./pages/IconCompare";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LandingPage from "./pages/LandingPage";
+import LandingPageV2 from "./pages/LandingPageV2";
 import BottomNav from "./components/BottomNav";
 import NewRecipeModal from "./components/NewRecipeModal";
 import PWAUpdateBanner from "./components/PWAUpdateBanner";
@@ -138,6 +139,7 @@ function MarketingShell() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        {import.meta.env.DEV && <Route path="/landing-v2" element={<LandingPageV2 />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
@@ -158,7 +160,7 @@ function AppShell() {
     return <MarketingShell />;
   }
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/privacy' || location.pathname === '/landing';
+  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/privacy' || location.pathname === '/landing' || location.pathname === '/landing-v2';
 
   return (
     <NewRecipeModalProvider>
@@ -169,6 +171,7 @@ function AppShell() {
           <Route path="/invite" element={<InvitePage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           {import.meta.env.DEV && <Route path="/landing" element={<LandingPage />} />}
+          {import.meta.env.DEV && <Route path="/landing-v2" element={<LandingPageV2 />} />}
           {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}
           <Route element={<AppLayout />}>
             <Route path="/" element={<RecipeList />} />
