@@ -20,13 +20,13 @@
       "permanent": true
     },
     {
-      "source": "/:path((?!privacy|_next|assets|screenshots|favicon).+)",
+      "source": "/:path((?!privacy|_next|assets|screenshots|favicon|landing).+)",
       "has": [{ "type": "host", "value": "piekeeper.com" }],
       "destination": "https://app.piekeeper.com/:path",
       "permanent": false
     },
     {
-      "source": "/:path((?!privacy|_next|assets|screenshots|favicon).+)",
+      "source": "/:path((?!privacy|_next|assets|screenshots|favicon|landing).+)",
       "has": [{ "type": "host", "value": "www.piekeeper.com" }],
       "destination": "https://app.piekeeper.com/:path",
       "permanent": false
