@@ -7,7 +7,7 @@
 // the prototype's mount.jsx. All styles are scoped under `.pk2` so nothing leaks
 // into the rest of the app while this lives alongside the current landing.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, memo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
@@ -388,6 +388,7 @@ const STYLES = `
 .pk2 .lede { font-size: 19px; line-height: 1.5; color: var(--ink-soft); max-width: 46ch; }
 
 .pk2 section { position: relative; z-index: 2; }
+.pk2 [id] { scroll-margin-top: 92px; }
 .pk2 .section-pad { padding: 140px 0; }
 .pk2 .section-pad-sm { padding: 96px 0; }
 
@@ -1137,6 +1138,14 @@ function runMotion(root: HTMLElement): () => void {
   return () => cleanups.forEach((fn) => fn());
 }
 
+/* Static marketing markup, memoized so React never reconciles (and thus never
+   re-applies) the innerHTML after first mount. Without this, any host re-render
+   — e.g. React Router reacting to a #hash nav click — re-applies the innerHTML
+   and wipes everything the motion script + phone roots added to the DOM. */
+const StaticMarkup = memo(function StaticMarkup() {
+  return <div dangerouslySetInnerHTML={{ __html: bodyHtml() }} />;
+});
+
 /* ─────────────────────────────────────────────────────────────
    Page
    ───────────────────────────────────────────────────────────── */
@@ -1204,7 +1213,7 @@ export default function LandingPageV2() {
         href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600;6..72,700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       />
       <style>{STYLES}</style>
-      <div dangerouslySetInnerHTML={{ __html: bodyHtml() }} />
+      <StaticMarkup />
     </div>
   );
 }
