@@ -1147,20 +1147,35 @@ export default function LandingPageV2() {
     const root = rootRef.current;
     if (!root) return;
 
-    const mounts: Array<[string, React.ComponentType]> = [
+    const phones: Array<[string, React.ComponentType]> = [
       ["phone-library", PhoneLibrary],
       ["phone-recipe", PhoneRecipe],
       ["phone-plan", PhonePlan],
     ];
     const roots: Root[] = [];
-    mounts.forEach(([id, El]) => {
-      const node = root.querySelector("#" + id);
-      if (node) {
+    const mountedNodes = new WeakSet<Element>();
+    let disposed = false;
+
+    // Mount each phone into its placeholder. Idempotent: a given DOM node is
+    // only ever given one root, but if a re-render swapped in fresh placeholder
+    // nodes (or a slot is still empty), the next pass mounts those. This makes
+    // the phones resilient to the host re-rendering after auth state settles.
+    function mountPhones() {
+      if (disposed || !root) return;
+      phones.forEach(([id, El]) => {
+        const node = root.querySelector("#" + id);
+        if (!node || mountedNodes.has(node) || node.childElementCount > 0) return;
+        mountedNodes.add(node);
         const r = createRoot(node);
         r.render(<El />);
         roots.push(r);
-      }
-    });
+      });
+    }
+
+    mountPhones();
+    // Self-heal passes in case the first mount got clobbered by a re-render.
+    const heal1 = window.setTimeout(mountPhones, 400);
+    const heal2 = window.setTimeout(mountPhones, 1600);
 
     let teardownMotion: () => void = () => {};
     try {
@@ -1173,9 +1188,12 @@ export default function LandingPageV2() {
     }
 
     return () => {
+      disposed = true;
+      window.clearTimeout(heal1);
+      window.clearTimeout(heal2);
       teardownMotion();
       // Defer unmount so it doesn't run during React's commit phase.
-      setTimeout(() => roots.forEach((r) => r.unmount()), 0);
+      setTimeout(() => roots.forEach((r) => { try { r.unmount(); } catch { /* node already gone */ } }), 0);
     };
   }, []);
 
