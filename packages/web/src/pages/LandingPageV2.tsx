@@ -1061,6 +1061,17 @@ function runMotion(root: HTMLElement): () => void {
   }, 90);
   cleanups.push(() => window.clearTimeout(t1));
 
+  // Failsafe: never leave content hidden if a hook doesn't fire for any reason
+  // (matches the prototype's safety net). Force-reveal everything after a short
+  // delay — images use opacity/clip reveals, so this guarantees visibility.
+  const failsafe = window.setTimeout(() => {
+    root.querySelector(".nav")?.classList.add("nav-in");
+    root
+      .querySelectorAll(".reveal, .img-reveal, .hero-load, .hero-image")
+      .forEach((el) => el.classList.add("is-in"));
+  }, 1500);
+  cleanups.push(() => window.clearTimeout(failsafe));
+
   // Hero image parallax
   if (!reduce && heroImg) {
     const hImg = heroImg.querySelector("img") as HTMLElement | null;
@@ -1151,7 +1162,15 @@ export default function LandingPageV2() {
       }
     });
 
-    const teardownMotion = runMotion(root);
+    let teardownMotion: () => void = () => {};
+    try {
+      teardownMotion = runMotion(root);
+    } catch {
+      // If motion setup ever throws, never leave content hidden.
+      root
+        .querySelectorAll(".reveal, .img-reveal, .hero-load, .hero-image, .nav")
+        .forEach((el) => el.classList.add("is-in", "nav-in"));
+    }
 
     return () => {
       teardownMotion();
