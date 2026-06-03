@@ -673,7 +673,7 @@ function bodyHtml() {
       </div>
 
       <div class="press">
-        <div class="press-label mono">As featured in</div>
+        <div class="press-label mono">As not featured in</div>
         <div class="press-logos">
           <div class="press-logo italic">Bon Appétit</div>
           <div class="press-logo bold">Eater</div>
@@ -860,7 +860,7 @@ function bodyHtml() {
           <div class="quote-attr">
             <div class="quote-avatar">D</div>
             <div>
-              <div class="name">Dafne Marchetti</div>
+              <div class="name">Dafne L.</div>
               <div class="role">Home cook · Melbourne · saving since '24</div>
             </div>
           </div>
