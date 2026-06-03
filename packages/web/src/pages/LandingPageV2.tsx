@@ -155,10 +155,10 @@ function PKTabBar({ active = "home" }: { active?: string }) {
 /* ── Screen 1: Library / browse ──────────────────────────────── */
 function PhoneLibrary() {
   const recipes = [
-    { name: "Slow-roasted Tomato Pasta", tag: "Italian · 45m", img: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&auto=format&fit=crop&q=80" },
-    { name: "Charred Broccoli Salad", tag: "Salads · 20m", img: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=80" },
-    { name: "Brown Butter Cookies", tag: "Sweets · 30m", img: "https://images.unsplash.com/photo-1568051243851-f9b136146e97?w=400&auto=format&fit=crop&q=80" },
-    { name: "Miso Glazed Salmon", tag: "Fish · 25m", img: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&auto=format&fit=crop&q=80" },
+    { name: "Slow-roasted Tomato Pasta", tag: "Italian · 45m", img: "/landing/tomato-pasta.jpg" },
+    { name: "Charred Broccoli Salad", tag: "Salads · 20m", img: "/landing/broccoli.jpg" },
+    { name: "Brown Butter Cookies", tag: "Sweets · 30m", img: "/landing/cookies.jpg" },
+    { name: "Miso Glazed Salmon", tag: "Fish · 25m", img: "/landing/salmon.jpg" },
   ];
   const cats = ["All", "Pasta", "Salads", "Soups", "Sweets", "Mains"];
   return (
@@ -205,7 +205,7 @@ function PhoneRecipe() {
   return (
     <IOSDevice width={340} height={720}>
       <div style={{ height: 150, marginTop: 44, position: "relative" }}>
-        <img src="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=600&auto=format&fit=crop&q=80" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <img src="/landing/tomato-pasta.jpg" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       </div>
       <div style={{ padding: "16px 18px 8px" }}>
         <div style={{ fontSize: 11, color: PK_INK_MUTE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Italian · Pasta</div>
@@ -646,7 +646,7 @@ function bodyHtml() {
       </div>
 
       <div class="hero-image">
-        <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1800&auto=format&fit=crop&q=80" alt="Hero food photo" />
+        <img src="/landing/hero.jpg" alt="Hero food photo" />
         <div class="img-caption">
           <span class="mono">Plate 01</span>
           <span class="serif" style="font-size: 17px; font-style: italic;">Saved last Sunday — &ldquo;Roasted tomato pasta&rdquo;</span>
@@ -821,7 +821,7 @@ function bodyHtml() {
             <div class="browser-body">
               <div class="recipe-page">
                 <div class="recipe-page-img">
-                  <img src="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=600&auto=format&fit=crop&q=80" alt="Recipe photo" />
+                  <img src="/landing/tomato-pasta.jpg" alt="Recipe photo" />
                 </div>
                 <div class="recipe-page-text">
                   <h4>Slow‑roasted Tomato Pasta</h4>
@@ -866,7 +866,7 @@ function bodyHtml() {
           </div>
         </div>
         <div class="quote-photo">
-          <img src="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=900&auto=format&fit=crop&q=80" alt="Cook portrait" />
+          <img src="/landing/portrait.jpg" alt="Cook portrait" />
         </div>
       </div>
     </div>
