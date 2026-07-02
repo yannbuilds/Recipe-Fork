@@ -300,6 +300,77 @@ function fixIngredientParsing(
   });
 }
 
+// --- Page fetching ---
+
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "en-AU,en;q=0.9,en-US;q=0.8",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+};
+
+/**
+ * Fetch a page's HTML.
+ *
+ * Tries a plain server-side fetch first (fast, works for most sites). If that
+ * is blocked — some hosts return 403/429 to datacenter IPs even with browser
+ * headers (e.g. Cloudflare bot protection on marionskitchen.com) — it falls
+ * back to Jina AI Reader, which renders the page from a residential-friendly
+ * proxy and returns HTML that still includes JSON-LD and og: meta tags, so the
+ * rest of the extraction pipeline is unchanged.
+ *
+ * Returns the HTML on success, or an { error, status } describing the failure.
+ */
+async function fetchPageHtml(
+  url: string,
+): Promise<{ html: string } | { error: string; status: number }> {
+  // 1. Direct fetch — unchanged behaviour for sites that already work.
+  try {
+    const res = await fetch(url, { headers: BROWSER_HEADERS, redirect: "follow" });
+    if (res.ok) {
+      return { html: await res.text() };
+    }
+    console.warn(`[import-recipe] Direct fetch ${res.status} for ${url} — trying reader fallback`);
+  } catch (err) {
+    console.warn(`[import-recipe] Direct fetch threw for ${url} (${err}) — trying reader fallback`);
+  }
+
+  // 2. Jina AI Reader fallback for bot-protected sites.
+  try {
+    const jinaKey = Deno.env.get("JINA_API_KEY");
+    const readerRes = await fetch(`https://r.jina.ai/${url}`, {
+      headers: {
+        "X-Return-Format": "html",
+        "X-Timeout": "30",
+        ...(jinaKey ? { Authorization: `Bearer ${jinaKey}` } : {}),
+      },
+      redirect: "follow",
+    });
+
+    if (readerRes.ok) {
+      const html = await readerRes.text();
+      if (html.length > 200) {
+        return { html };
+      }
+      console.error(`[import-recipe] Reader returned empty body for ${url}`);
+    } else {
+      console.error(`[import-recipe] Reader fallback ${readerRes.status} for ${url}`);
+    }
+  } catch (err) {
+    console.error(`[import-recipe] Reader fallback threw for ${url}: ${err}`);
+  }
+
+  // Keep the "Failed to fetch page" wording — the web app keys off it to
+  // surface the "use the Pie Keeper extension" hint.
+  return { error: "Failed to fetch page (403)", status: 422 };
+}
+
 // --- Main handler ---
 
 Deno.serve(async (req) => {
@@ -353,31 +424,15 @@ Deno.serve(async (req) => {
     if (providedHtml) {
       html = providedHtml;
     } else {
-      const pageRes = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-          "Accept-Language": "en-AU,en;q=0.9,en-US;q=0.8",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "none",
-          "Sec-Fetch-User": "?1",
-          "Upgrade-Insecure-Requests": "1",
-        },
-        redirect: "follow",
-      });
-
-      if (!pageRes.ok) {
-        console.error(`[import-recipe] Failed to fetch page: ${pageRes.status} ${url}`);
+      const fetched = await fetchPageHtml(url);
+      if ("error" in fetched) {
+        console.error(`[import-recipe] ${fetched.error} ${url}`);
         return new Response(
-          JSON.stringify({ error: `Failed to fetch page (${pageRes.status})` }),
-          { status: 422, headers: corsHeaders },
+          JSON.stringify({ error: fetched.error }),
+          { status: fetched.status, headers: corsHeaders },
         );
       }
-
-      html = await pageRes.text();
+      html = fetched.html;
     }
 
     // 2. Extract content for the LLM
