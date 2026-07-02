@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
@@ -436,6 +437,71 @@ async function fetchPageHtml(
   return { error: "Failed to fetch page (403)", status: 422 };
 }
 
+/**
+ * Re-host an image in Supabase Storage so it can be displayed in the app.
+ *
+ * Some source sites (e.g. marionskitchen.com) hotlink-protect their images
+ * behind Cloudflare: a request whose Referer isn't the source site itself
+ * gets a 403 challenge, even though the URL is correct. Browsers send our
+ * app's origin as the Referer when rendering <img src="...">, so the image
+ * ends up broken. Downloading it server-side (with the source page as
+ * Referer, same as a real click-through) and re-hosting it in our own
+ * storage bucket sidesteps that entirely.
+ *
+ * Returns the original URL unchanged if the download/upload fails for any
+ * reason — a possibly-blocked image is still a better fallback than none.
+ */
+async function rehostImage(imageUrl: string, sourcePageUrl: string): Promise<string> {
+  try {
+    const imgRes = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": BROWSER_HEADERS["User-Agent"],
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Referer": sourcePageUrl,
+      },
+    });
+    if (!imgRes.ok) {
+      console.warn(`[import-recipe] Image download ${imgRes.status} for ${imageUrl}`);
+      return imageUrl;
+    }
+
+    const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+    if (!contentType.startsWith("image/")) {
+      return imageUrl;
+    }
+    const bytes = await imgRes.arrayBuffer();
+    if (bytes.byteLength === 0 || bytes.byteLength > 15_000_000) {
+      return imageUrl;
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.warn("[import-recipe] Missing Supabase service credentials — skipping image re-host");
+      return imageUrl;
+    }
+
+    const ext = contentType.split("/")[1]?.split("+")[0] || "jpg";
+    const path = `${crypto.randomUUID()}.${ext}`;
+
+    const admin = createClient(supabaseUrl, serviceRoleKey);
+    const { error } = await admin.storage
+      .from("recipe-images")
+      .upload(path, bytes, { contentType, upsert: false });
+
+    if (error) {
+      console.error(`[import-recipe] Storage upload failed for ${imageUrl}: ${error.message}`);
+      return imageUrl;
+    }
+
+    const { data } = admin.storage.from("recipe-images").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.error(`[import-recipe] Image re-host threw for ${imageUrl}: ${err}`);
+    return imageUrl;
+  }
+}
+
 // --- Main handler ---
 
 Deno.serve(async (req) => {
@@ -576,6 +642,16 @@ Deno.serve(async (req) => {
 
     // 4. Build structured recipe response
     const ingredients = fixIngredientParsing(parsed.ingredients ?? []);
+    // The LLM sometimes returns "" (empty string) when it can't find an
+    // image — treat that as "not found" so the deterministic fallbacks run.
+    const rawImageUrl =
+      firstImageUrl(parsed.image_url) ??
+      extractRecipeImageFromJsonLd(html) ??
+      extractOgImage(html) ??
+      null;
+    // Re-host in our own storage so hotlink-protected sources (e.g.
+    // marionskitchen.com) don't show a broken image in the app.
+    const imageUrl = rawImageUrl ? await rehostImage(rawImageUrl, url) : null;
     const recipe = {
       title: parsed.title,
       description: parsed.description ?? null,
@@ -584,13 +660,7 @@ Deno.serve(async (req) => {
       source_url: url,
       creator_name: parsed.creator_name ?? null,
       video_url: parsed.video_url ?? null,
-      // The LLM sometimes returns "" (empty string) when it can't find an
-      // image — treat that as "not found" so the deterministic fallbacks run.
-      image_url:
-        firstImageUrl(parsed.image_url) ??
-        extractRecipeImageFromJsonLd(html) ??
-        extractOgImage(html) ??
-        null,
+      image_url: imageUrl,
       servings: parseServings(parsed.servings),
       prep_time: parseServings(parsed.prep_time),
       cook_time: parseServings(parsed.cook_time),
