@@ -79,8 +79,14 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
         style={{ animation: 'fadeIn 0.15s ease both' }}
       >
         <div
-          className="rf-card max-w-md w-full sm:mx-4 space-y-3"
-          style={{ padding: 20, borderRadius: '20px 20px 0 0', animation: 'slideUp 0.2s ease both' }}
+          className="rf-card max-w-md w-full sm:mx-4 space-y-3 pb-[calc(env(safe-area-inset-bottom,0px)+84px)] sm:pb-5"
+          style={{
+            paddingTop: 20,
+            paddingLeft: 20,
+            paddingRight: 20,
+            borderRadius: '20px 20px 0 0',
+            animation: 'slideUp 0.2s ease both',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between">
