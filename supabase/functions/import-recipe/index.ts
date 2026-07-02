@@ -214,6 +214,71 @@ function extractRecipeNotes(html: string): string | null {
 }
 
 /**
+ * Pull the first usable image URL out of a JSON-LD "image" value, which may be
+ * a string, an array, or an ImageObject ({ url: ... }) — and any nesting of
+ * those. Returns null if nothing string-like is found.
+ */
+function firstImageUrl(image: unknown): string | null {
+  if (typeof image === "string") {
+    return image.trim() || null;
+  }
+  if (Array.isArray(image)) {
+    for (const item of image) {
+      const url = firstImageUrl(item);
+      if (url) return url;
+    }
+    return null;
+  }
+  if (image && typeof image === "object") {
+    return firstImageUrl((image as Record<string, unknown>).url);
+  }
+  return null;
+}
+
+/**
+ * Extract the recipe's hero image from JSON-LD.
+ *
+ * Sites like marionskitchen.com show the main photo in a JS carousel, so it is
+ * not reliably in og:image and the LLM often misses it — but WordPress Recipe
+ * Maker (and most recipe plugins) always put the canonical image in the
+ * Recipe node's "image" field. Handles @graph wrappers and @type arrays.
+ */
+function extractRecipeImageFromJsonLd(html: string): string | null {
+  const raw = extractJsonLd(html);
+  if (!raw) return null;
+
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  const isRecipe = (type: unknown): boolean =>
+    type === "Recipe" || (Array.isArray(type) && type.includes("Recipe"));
+
+  const findRecipe = (node: unknown): Record<string, unknown> | null => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = findRecipe(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (node && typeof node === "object") {
+      const obj = node as Record<string, unknown>;
+      if (isRecipe(obj["@type"])) return obj;
+      const graph = obj["@graph"];
+      if (Array.isArray(graph)) return findRecipe(graph);
+    }
+    return null;
+  };
+
+  const recipe = findRecipe(data);
+  return recipe ? firstImageUrl(recipe["image"]) : null;
+}
+
+/**
  * Extract image URL from Open Graph or Twitter meta tags as a fallback
  * when the LLM can't find an image in the page content.
  */
@@ -519,7 +584,13 @@ Deno.serve(async (req) => {
       source_url: url,
       creator_name: parsed.creator_name ?? null,
       video_url: parsed.video_url ?? null,
-      image_url: parsed.image_url ?? extractOgImage(html) ?? null,
+      // The LLM sometimes returns "" (empty string) when it can't find an
+      // image — treat that as "not found" so the deterministic fallbacks run.
+      image_url:
+        firstImageUrl(parsed.image_url) ??
+        extractRecipeImageFromJsonLd(html) ??
+        extractOgImage(html) ??
+        null,
       servings: parseServings(parsed.servings),
       prep_time: parseServings(parsed.prep_time),
       cook_time: parseServings(parsed.cook_time),
