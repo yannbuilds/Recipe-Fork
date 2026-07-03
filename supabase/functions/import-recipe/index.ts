@@ -297,6 +297,34 @@ function extractOgImage(html: string): string | null {
   return null;
 }
 
+/**
+ * Map of unicode fraction glyphs to their ASCII "a/b" equivalents.
+ */
+const UNICODE_FRACTIONS: Record<string, string> = {
+  "¼": "1/4", "½": "1/2", "¾": "3/4",
+  "⅐": "1/7", "⅑": "1/9", "⅒": "1/10",
+  "⅓": "1/3", "⅔": "2/3",
+  "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5",
+  "⅙": "1/6", "⅚": "5/6",
+  "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8",
+};
+
+/**
+ * Convert unicode fraction glyphs to ASCII so downstream parsing doesn't drop
+ * them. Handles mixed numbers where a whole number is fused to a fraction
+ * glyph with no space (e.g. "2½ cups" -> "2 1/2 cups") as well as
+ * standalone fractions ("⅔ cup" -> "2/3 cup"). Without this the LLM tends
+ * to read "2½" as just "2", silently losing the half.
+ */
+function normaliseUnicodeFractions(text: string): string {
+  const glyphs = Object.keys(UNICODE_FRACTIONS).join("");
+  const re = new RegExp(`(\\d)?([${glyphs}])`, "g");
+  return text.replace(re, (_m, whole: string | undefined, frac: string) => {
+    const ascii = UNICODE_FRACTIONS[frac];
+    return whole ? `${whole} ${ascii}` : ascii;
+  });
+}
+
 function buildLlmPayload(html: string, url: string): string {
   const jsonLd = extractJsonLd(html);
   const videoUrls = extractVideoUrls(html);
@@ -312,7 +340,7 @@ function buildLlmPayload(html: string, url: string): string {
   if (jsonLd) {
     const text = extractMainText(html);
     const truncatedText = text.slice(0, 8000);
-    return (
+    return normaliseUnicodeFractions(
       `[JSON-LD structured data]:\n${jsonLd}\n\n` +
       `[Page text (excerpt)]:\n${truncatedText}` +
       ingredientSectionBlock +
@@ -321,7 +349,9 @@ function buildLlmPayload(html: string, url: string): string {
   }
 
   const text = extractMainText(html);
-  return text.slice(0, 12000) + ingredientSectionBlock + videoSection;
+  return normaliseUnicodeFractions(
+    text.slice(0, 12000) + ingredientSectionBlock + videoSection,
+  );
 }
 
 /**
