@@ -23,7 +23,8 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
       const [cbResult, crResult] = await Promise.all([
         supabase
           .from('cookbooks')
-          .select('id, user_id, name, description, emoji, created_at, updated_at')
+          .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+          .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id').eq('recipe_id', recipeId),
       ]);
