@@ -217,6 +217,51 @@ function getDomain(url: string): string {
   }
 }
 
+/* Inline icons (no emoji) so the two primary actions read at a glance. */
+function CalendarPlusIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="19" y1="16" x2="19" y2="22" />
+      <line x1="16" y1="19" x2="22" y2="19" />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -455,6 +500,34 @@ export default function RecipeDetail() {
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
 
+  // The two primary "save" actions, rendered together so it's obvious which
+  // adds to a meal plan (green) and which adds to a cookbook (orange). Shared
+  // between the desktop hero column and the mobile action row.
+  const renderPrimaryActions = () => (
+    <div className="flex items-center gap-2.5 flex-wrap">
+      <button
+        onClick={() => setShowWeekPicker(true)}
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+        style={{ background: 'var(--green)', border: '1px solid var(--green)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+      >
+        <CalendarPlusIcon />
+        Add to plan
+      </button>
+      <button
+        onClick={() => setShowAddToCookbook(true)}
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+        style={{ background: 'var(--orange)', border: '1px solid var(--orange)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+      >
+        <BookIcon />
+        Add to cookbook
+      </button>
+    </div>
+  );
+
   return (
     <div>
         {/* ── Hero ───────────────────────────────────────────────── */}
@@ -567,20 +640,8 @@ export default function RecipeDetail() {
             </div>
 
             {/* Bottom group: meal plan + screen on (desktop only) */}
-            <div className="flex items-center justify-between" style={{ position: 'relative', zIndex: 10 }}>
-              <button
-                onClick={() => setShowWeekPicker(true)}
-                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--green)',
-                  color: 'var(--green)',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--green-light)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
-              >
-                + Meal Plan
-              </button>
+            <div className="flex items-center justify-between flex-wrap gap-3" style={{ position: 'relative', zIndex: 10 }}>
+              {renderPrimaryActions()}
               {supportsWakeLock && (
                 <div className="relative flex items-center gap-2">
                   <button
@@ -919,23 +980,7 @@ export default function RecipeDetail() {
           className="rd-meal-plan-row flex items-center justify-between flex-wrap gap-3 mt-6"
           style={{ position: 'relative', zIndex: 10 }}
         >
-          <button
-            onClick={() => setShowWeekPicker(true)}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            + Meal Plan
-          </button>
+          {renderPrimaryActions()}
 
           {supportsWakeLock && (
             <div className="relative flex items-center gap-2">
@@ -1363,23 +1408,6 @@ export default function RecipeDetail() {
           >
             Edit
           </Link>
-          <button
-            onClick={() => setShowAddToCookbook(true)}
-            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            📖 Save to cookbook
-          </button>
           <button
             onClick={() => setShowDeleteModal(true)}
             className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
