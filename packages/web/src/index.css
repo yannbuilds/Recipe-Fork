@@ -95,8 +95,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  border: 12px solid rgba(255, 214, 10, 0.85);
-  filter: blur(16px);                 /* turns the band into a diffuse halo */
+  border: 8px solid rgba(255, 214, 10, 0.45);
+  filter: blur(14px);                 /* turns the band into a diffuse halo */
 }
 /* Graduated light-bleed fading toward the centre, for depth. */
 .rd-screen-on-frame::after {
@@ -104,13 +104,13 @@
   position: absolute;
   inset: 0;
   box-shadow:
-    inset 0 0 8px 1px    rgba(255, 214, 10, 0.85),
-    inset 0 0 40px 6px   rgba(255, 214, 10, 0.5),
-    inset 0 0 110px 26px rgba(255, 214, 10, 0.26);
+    inset 0 0 6px 0px   rgba(255, 214, 10, 0.45),
+    inset 0 0 28px 3px  rgba(255, 214, 10, 0.24),
+    inset 0 0 80px 16px rgba(255, 214, 10, 0.10);
 }
 @keyframes screenOnPulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.72; }         /* gentle breathing, like a warm light */
+  0%, 100% { opacity: 0.92; }
+  50%      { opacity: 0.65; }         /* gentle breathing, like a warm light */
 }
 @media (prefers-reduced-motion: reduce) {
   .rd-screen-on-frame { animation: none; }
