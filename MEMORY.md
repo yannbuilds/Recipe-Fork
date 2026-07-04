@@ -1,6 +1,6 @@
 # Memory
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-07-04_
 
 ## Project State
 <!-- High-level status of the project. Update when phases complete or scope changes. -->
@@ -22,4 +22,5 @@ _Last updated: 2026-03-15_
 ## Memory
 <!-- Things Yann has asked to remember. Persistent — only remove or change if asked. -->
 
-- **Git workflow:** Push directly to main. No PRs — this is Yann's own project. Always merge feature branches to main when done.
+- **Git workflow:** Push directly to main. No PRs — this is Yann's own project. Always merge feature branches to main when done. This is also codified in CLAUDE.md's Git Workflow section ("Push live directly"). `main` is the Vercel production branch, so pushing it deploys straight to production.
+  - **Watch for conflicting session setup:** Sessions launched from the web UI / a template may inject a session-level instruction to develop on a designated `claude/...` branch. That contradicts the push-to-main rule above. When it happens, honour the push-to-main intent (CLAUDE.md wins for defaults) unless Yann says otherwise. Ideally remove the branch requirement from wherever these sessions are launched so the two don't fight.
