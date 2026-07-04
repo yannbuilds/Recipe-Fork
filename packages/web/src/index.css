@@ -80,6 +80,42 @@
 .rd-meta-row   { display: none; }
 .rd-hero-text  { display: none; }
 
+/* Keep-screen-on indicator: a soft glowing yellow halo hugging the true screen
+   edges, shown while the wake lock is active. Fixed + inset:0 so it ignores the
+   app's max-width/padding and frames the whole viewport. */
+.rd-screen-on-frame {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;               /* never blocks taps/clicks */
+  z-index: 2147483646;                /* above modals/banners; glow stays visible */
+  animation: screenOnPulse 2.8s ease-in-out infinite;
+}
+/* Soft, blurred yellow band hugging every screen edge — the "glow". */
+.rd-screen-on-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 12px solid rgba(255, 214, 10, 0.85);
+  filter: blur(16px);                 /* turns the band into a diffuse halo */
+}
+/* Graduated light-bleed fading toward the centre, for depth. */
+.rd-screen-on-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 0 8px 1px    rgba(255, 214, 10, 0.85),
+    inset 0 0 40px 6px   rgba(255, 214, 10, 0.5),
+    inset 0 0 110px 26px rgba(255, 214, 10, 0.26);
+}
+@keyframes screenOnPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.72; }         /* gentle breathing, like a warm light */
+}
+@media (prefers-reduced-motion: reduce) {
+  .rd-screen-on-frame { animation: none; }
+}
+
 .rd-grid {
   display: grid;
   grid-template-columns: 1fr 2fr;

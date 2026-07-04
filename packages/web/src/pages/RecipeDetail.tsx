@@ -656,6 +656,9 @@ export default function RecipeDetail() {
 
   return (
     <div>
+        {/* Glowing yellow halo around the whole screen while keep-awake is on */}
+        {isAwake && <div className="rd-screen-on-frame" aria-hidden="true" />}
+
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div
           className="rd-hero-split"
