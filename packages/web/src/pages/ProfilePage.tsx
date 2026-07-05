@@ -75,12 +75,15 @@ export default function ProfilePage() {
         <div
           className="flex items-center justify-center rounded-full"
           style={{
-            width: 80,
-            height: 80,
-            background: 'var(--warm)',
-            color: 'var(--green)',
-            fontSize: 32,
-            fontWeight: 700,
+            width: 88,
+            height: 88,
+            background: 'var(--green-light)',
+            color: 'var(--green-deep)',
+            fontSize: 40,
+            fontWeight: 500,
+            fontFamily: '"Newsreader", Georgia, serif',
+            fontStyle: 'italic',
+            border: '1px solid var(--border)',
           }}
         >
           {initial}
@@ -189,8 +192,11 @@ export default function ProfilePage() {
         /* ---- View mode ---- */
         <>
           <div className="text-center">
+            <div className="rf-eyebrow flex justify-center" style={{ marginBottom: 10 }}>
+              The cook
+            </div>
             {profile?.display_name && (
-              <p className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+              <p className="rf-heading" style={{ color: 'var(--text)', fontSize: 28, lineHeight: 1.05 }}>
                 {profile.display_name}
               </p>
             )}
@@ -354,7 +360,7 @@ function FamilySection({
           className="rounded-xl p-5"
           style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
         >
-          <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
+          <h3 className="rf-heading mb-1" style={{ color: 'var(--text)', fontSize: 18 }}>
             Family sharing
           </h3>
           <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
@@ -396,7 +402,7 @@ function FamilySection({
         className="rounded-xl p-5"
         style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
       >
-        <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
+        <h3 className="rf-heading mb-1" style={{ color: 'var(--text)', fontSize: 18 }}>
           Family sharing
         </h3>
         <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
@@ -595,7 +601,7 @@ function FriendInviteSection() {
         className="rounded-xl p-5"
         style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
       >
-        <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>
+        <h3 className="rf-heading mb-1" style={{ color: 'var(--text)', fontSize: 18 }}>
           Invite a friend
         </h3>
         <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>

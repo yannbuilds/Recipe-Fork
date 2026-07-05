@@ -155,12 +155,14 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1
-          className="rf-heading text-2xl font-bold text-center mb-8"
-          style={{ color: 'var(--text)' }}
-        >
-          Pie Keeper
-        </h1>
+        <div className="text-center mb-8">
+          <div className="rf-eyebrow flex justify-center" style={{ marginBottom: 12 }}>
+            Your recipe shelf
+          </div>
+          <h1 className="rf-heading" style={{ color: 'var(--text)', fontSize: 34 }}>
+            Pie Keeper
+          </h1>
+        </div>
 
         {signUpSuccess ? (
           <div className="rf-card text-center" style={{ padding: 24 }}>

@@ -268,9 +268,14 @@ export default function RecipeForm() {
 
   return (
     <div className="mx-auto" style={{ maxWidth: 720, padding: '28px 24px 64px' }}>
-      <h1 className="rf-heading text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>
-        {isEditing ? 'Edit Recipe' : 'New Recipe'}
-      </h1>
+      <div className="mb-6">
+        <div className="rf-eyebrow" style={{ marginBottom: 8 }}>
+          {isEditing ? 'Editing' : 'The kitchen'}
+        </div>
+        <h1 className="rf-heading text-2xl" style={{ color: 'var(--text)' }}>
+          {isEditing ? 'Edit Recipe' : 'New Recipe'}
+        </h1>
+      </div>
 
       {error && (
         <p className="text-sm mb-4" style={{ color: 'var(--red)' }}>{error}</p>

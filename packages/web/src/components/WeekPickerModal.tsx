@@ -196,7 +196,7 @@ export default function WeekPickerModal({
         <div className="flex items-center justify-between px-5 pt-5 pb-2">
           <h2
             className="text-lg font-semibold"
-            style={{ color: 'var(--text)', fontFamily: "'Lora', serif" }}
+            style={{ color: 'var(--text)', fontFamily: '"Newsreader", Georgia, serif' }}
           >
             {heading}
           </h2>

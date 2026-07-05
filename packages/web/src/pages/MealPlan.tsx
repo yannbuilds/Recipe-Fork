@@ -283,7 +283,8 @@ export default function MealPlan() {
           </button>
 
           <div className="text-center">
-            <h2 className="rf-heading text-xl font-bold" style={{ color: 'var(--text)' }}>
+            <div className="rf-eyebrow flex justify-center" style={{ marginBottom: 6 }}>The plan</div>
+            <h2 className="rf-heading text-xl" style={{ color: 'var(--text)' }}>
               Meal Plan
             </h2>
             <p className="text-sm" style={{ color: 'var(--muted)' }}>

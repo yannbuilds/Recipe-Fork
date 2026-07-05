@@ -108,7 +108,7 @@ export default function MyNotesModal({ open, content, onSave, onClose, saveStatu
         <div className="flex items-center justify-between mb-4">
           <h2
             className="font-bold"
-            style={{ fontFamily: "'Lora', serif", fontSize: 18, color: 'var(--text)' }}
+            style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 18, color: 'var(--text)' }}
           >
             My Notes
           </h2>

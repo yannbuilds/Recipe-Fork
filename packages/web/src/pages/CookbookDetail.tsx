@@ -138,9 +138,10 @@ export default function CookbookDetail() {
             {cookbook?.emoji ?? '📖'}
           </span>
           <div className="flex-1 min-w-0">
+            <div className="rf-eyebrow" style={{ marginBottom: 8 }}>Cookbook</div>
             <h1
-              className="rf-heading font-bold text-2xl sm:text-[26px] leading-tight"
-              style={{ color: 'var(--text)' }}
+              className="rf-heading leading-tight"
+              style={{ color: 'var(--text)', fontSize: 'clamp(26px, 7vw, 32px)' }}
             >
               {cookbook?.name ?? 'Cookbook'}
             </h1>
@@ -149,7 +150,10 @@ export default function CookbookDetail() {
                 {cookbook.description}
               </p>
             )}
-            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+            <p
+              className="rf-eyebrow"
+              style={{ marginTop: 8, letterSpacing: '0.08em' }}
+            >
               {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}
             </p>
           </div>

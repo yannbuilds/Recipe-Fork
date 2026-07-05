@@ -687,7 +687,7 @@ export default function RecipeDetail() {
               )}
               <h1
                 className="font-bold leading-snug"
-                style={{ fontFamily: "'Lora', serif", fontSize: 26, color: 'var(--text)' }}
+                style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 26, color: 'var(--text)' }}
               >
                 {recipe.title}
               </h1>
@@ -844,7 +844,7 @@ export default function RecipeDetail() {
               <div className="rd-hero-title rd-hero-title-overlay">
                 <h1
                   className="font-bold leading-snug"
-                  style={{ fontFamily: "'Lora', serif", fontSize: 20, color: '#fff', textWrap: 'balance' }}
+                  style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: '#fff', textWrap: 'balance' }}
                 >
                   {recipe.title}
                 </h1>
@@ -1074,7 +1074,7 @@ export default function RecipeDetail() {
               <div className="mb-2">
                 <h2
                   className="text-lg font-bold"
-                  style={{ fontFamily: "'Lora', serif" }}
+                  style={{ fontFamily: '"Newsreader", Georgia, serif' }}
                 >
                   Ingredients
                 </h2>
@@ -1258,7 +1258,7 @@ export default function RecipeDetail() {
             >
               <h2
                 className="text-lg font-bold mb-5"
-                style={{ fontFamily: "'Lora', serif" }}
+                style={{ fontFamily: '"Newsreader", Georgia, serif' }}
               >
                 Directions
               </h2>
@@ -1361,7 +1361,7 @@ export default function RecipeDetail() {
                   >
                     <h2
                       className="text-lg font-bold mb-4"
-                      style={{ fontFamily: "'Lora', serif" }}
+                      style={{ fontFamily: '"Newsreader", Georgia, serif' }}
                     >
                       Video
                     </h2>
@@ -1466,7 +1466,7 @@ export default function RecipeDetail() {
           >
             <h2
               className="font-bold mb-4"
-              style={{ fontFamily: "'Lora', serif", fontSize: 18, color: 'var(--text)' }}
+              style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 18, color: 'var(--text)' }}
             >
               Author's Notes
             </h2>
