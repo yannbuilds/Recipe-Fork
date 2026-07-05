@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Cookbook } from '@recipe-aggregator/shared';
+import { PK, fSerif, fMono } from '../styles/pieKeeper';
 
 interface CookbookCardProps {
   cookbook: Cookbook;
@@ -8,6 +9,7 @@ interface CookbookCardProps {
   index?: number;
 }
 
+// Editorial "shelf" row — Pie Keeper design language (Screen 02 · CookbookEntry).
 export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0 }: CookbookCardProps) {
   const emoji = cookbook.emoji || '📖';
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
@@ -15,111 +17,139 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
   return (
     <Link
       to={`/cookbook/${cookbook.id}`}
-      className="block overflow-hidden rf-card-hover relative"
+      className="block"
       style={{
-        borderRadius: 'var(--radius)',
-        boxShadow: 'var(--shadow-md)',
+        color: PK.ink,
+        textDecoration: 'none',
         animation: 'fadeUp 0.4s ease both',
         animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
-        // Gradient border treatment to make cookbooks stand out
-        background:
-          'linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%) border-box',
-        border: '1.5px solid transparent',
       }}
     >
-      <div className="relative" style={{ aspectRatio: '3 / 4' }}>
-        {/* Cover: 2x2 collage or fallback */}
-        {recipeCount === 0 ? (
+      {/* Title row: index · name · count */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontFamily: fSerif, fontStyle: 'italic', color: PK.green, fontSize: 14 }}>
+          {String(index + 1).padStart(2, '0')}.
+        </span>
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: fSerif,
+            fontSize: 22,
+            fontWeight: 400,
+            letterSpacing: '-0.018em',
+            color: PK.ink,
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {cookbook.name}
+        </h3>
+        <span
+          style={{
+            fontFamily: fMono,
+            fontSize: 10,
+            color: PK.inkMute,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            flexShrink: 0,
+          }}
+        >
+          {recipeCount} {recipeCount === 1 ? 'recipe' : 'recipes'}
+        </span>
+      </div>
+
+      {/* Photo strip — 4 across, like cookbook plates */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 6,
+          borderTop: `1px solid ${PK.rule}`,
+          paddingTop: 10,
+        }}
+      >
+        {slots.map((src, i) => (
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center"
+            key={i}
             style={{
-              background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+              aspectRatio: '1',
+              borderRadius: 3,
+              overflow: 'hidden',
+              background: PK.paper3,
+              position: 'relative',
             }}
           >
-            <span style={{ fontSize: 56 }}>{emoji}</span>
-            <span className="text-xs mt-2" style={{ color: 'var(--muted)', fontWeight: 600 }}>
-              Empty
-            </span>
-          </div>
-        ) : (
-          <div
-            className="absolute inset-0 grid"
-            style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 2 }}
-          >
-            {slots.map((src, i) =>
-              src ? (
-                <img
-                  key={i}
-                  src={src}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  loading={index < 4 ? 'eager' : 'lazy'}
-                  decoding="async"
-                />
-              ) : (
-                <div
-                  key={i}
-                  className="w-full h-full flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
-                    fontSize: 22,
-                  }}
-                >
-                  {emoji}
-                </div>
-              )
+            {src ? (
+              <img
+                src={src}
+                alt=""
+                loading={index < 4 ? 'eager' : 'lazy'}
+                decoding="async"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  filter: 'saturate(0.92) contrast(1.02)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                }}
+              >
+                {emoji}
+              </div>
             )}
+            <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)' }} />
           </div>
-        )}
+        ))}
+      </div>
 
-        {/* Gradient scrim */}
-        <div className="rf-scrim absolute inset-0" />
-
-        {/* Cookbook badge: top-left */}
-        <div
-          className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full"
+      {/* Footer: description meta (if any) · Open → */}
+      <div
+        style={{
+          marginTop: 8,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          fontSize: 12,
+          color: PK.inkMute,
+        }}
+      >
+        <span
           style={{
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(4px)',
-            fontSize: 11,
-            color: 'var(--green)',
-            fontWeight: 600,
+            fontStyle: 'italic',
+            fontFamily: fSerif,
+            fontSize: 13,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
-          <span>{emoji}</span>
-          Cookbook
-        </div>
-
-        {/* Title + meta overlay */}
-        <div
-          className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-start"
+          {cookbook.description || ' '}
+        </span>
+        <span
           style={{
-            padding: '86px 12px 16px',
-            height: 170,
-            borderRadius: '0 0 var(--radius) var(--radius)',
-            ['--glass-bg' as string]: 'rgba(20, 20, 22, 0.92)',
+            color: PK.ink,
+            borderBottom: `1px solid ${PK.ink}`,
+            paddingBottom: 1,
+            fontSize: 12,
+            flexShrink: 0,
           }}
         >
-          <h2
-            className="rf-heading leading-snug line-clamp-2"
-            style={{
-              fontSize: 16,
-              color: 'rgba(255,255,255,0.95)',
-              fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 600,
-            }}
-          >
-            {cookbook.name}
-          </h2>
-          <div
-            className="flex items-center gap-3 mt-auto"
-            style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}
-          >
-            <span>
-              {recipeCount} {recipeCount === 1 ? 'recipe' : 'recipes'}
-            </span>
-          </div>
-        </div>
+          Open →
+        </span>
       </div>
     </Link>
   );

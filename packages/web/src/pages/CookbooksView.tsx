@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import {
@@ -13,7 +14,7 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  rectSortingStrategy,
+  verticalListSortingStrategy,
   arrayMove,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
@@ -22,6 +23,8 @@ import CookbookFormModal from '../components/CookbookFormModal';
 import SortableCookbookCard from '../components/SortableCookbookCard';
 import SuggestCookbooksModal from '../components/SuggestCookbooksModal';
 import { useAuth } from '../context/AuthContext';
+import { PK, fSerif, fSans, fMono } from '../styles/pieKeeper';
+import { Eyebrow, PaperGrain } from '../components/pieKeeper/PieKeeperBits';
 
 interface CookbooksViewProps {
   // Whether auth is still hydrating — wait before fetching to avoid empty RLS results
@@ -192,83 +195,150 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
 
   return (
     <>
-      {/* Header */}
-      <div style={{ animation: 'fadeUp 0.4s ease both' }} className="mb-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h1
-              className="rf-heading font-bold"
-              style={{ color: 'var(--text)', fontSize: 26 }}
+      {/* Editorial paper sheet — Pie Keeper design, scoped to this view (page-by-page rollout) */}
+      <div
+        style={{
+          position: 'relative',
+          maxWidth: 640,
+          margin: '0 auto',
+          background: PK.paper,
+          borderRadius: 8,
+          padding: '28px 20px 32px',
+          boxShadow: '0 1px 2px rgba(31,27,22,0.06)',
+        }}
+      >
+        <PaperGrain style={{ borderRadius: 8 }} />
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          {/* Masthead */}
+          <div className="mb-5" style={{ animation: 'fadeUp 0.4s ease both' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
             >
-              Cookbooks{profile?.display_name ? `, ${profile.display_name}` : ''}
-            </h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)', minHeight: '1.25rem' }}>
-              {subtitle}
-            </p>
+              <div style={{ minWidth: 0 }}>
+                <Eyebrow>The shelves</Eyebrow>
+                <h1
+                  style={{
+                    margin: '12px 0 0',
+                    fontFamily: fSerif,
+                    fontWeight: 400,
+                    fontSize: 'clamp(30px, 8vw, 38px)',
+                    lineHeight: 1.02,
+                    letterSpacing: '-0.026em',
+                    color: PK.ink,
+                  }}
+                >
+                  Cookbooks
+                  {profile?.display_name ? (
+                    <>
+                      ,{' '}
+                      <em style={{ fontStyle: 'italic', color: PK.green }}>{profile.display_name}</em>
+                    </>
+                  ) : (
+                    ''
+                  )}
+                </h1>
+                <p
+                  style={{
+                    margin: '12px 0 0',
+                    fontFamily: fSans,
+                    fontSize: 14.5,
+                    lineHeight: 1.45,
+                    color: PK.inkSoft,
+                    minHeight: '1.25rem',
+                  }}
+                >
+                  {subtitle}
+                </p>
+              </div>
+              {!loading && !error && total > 0 && (
+                <button
+                  onClick={() => setShowSuggest(true)}
+                  title="Let AI propose cookbooks based on your library"
+                  style={{
+                    flexShrink: 0,
+                    padding: '9px 16px',
+                    background: 'transparent',
+                    color: PK.ink,
+                    border: `1px solid ${PK.rule}`,
+                    borderRadius: 999,
+                    fontFamily: fSans,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✨ Suggest
+                </button>
+              )}
+            </div>
           </div>
+
+          {error && (
+            <p className="text-center py-4" style={{ color: PK.red, fontFamily: fSans, fontSize: 14 }}>
+              Error: {error}
+            </p>
+          )}
+
+          {!loading && !error && total === 0 && (
+            <CookbookEmptyState onCreate={() => setShowCreate(true)} />
+          )}
+
           {!loading && !error && total > 0 && (
-            <button
-              onClick={() => setShowSuggest(true)}
-              className="rf-btn rf-btn-secondary shrink-0"
-              title="Let AI propose cookbooks based on your library"
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={() => {
+                suppressNextClickRef.current = true;
+              }}
+              onDragEnd={handleDragEnd}
             >
-              ✨ Suggest
-            </button>
+              <SortableContext items={cookbooks.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {cookbooks.map((cb, i) => (
+                    <SortableCookbookCard
+                      key={cb.id}
+                      cookbook={cb}
+                      recipeCount={countsByCookbook[cb.id] ?? 0}
+                      coverImages={imagesByCookbook[cb.id] ?? []}
+                      index={i}
+                    />
+                  ))}
+                  {/* New cookbook — dashed editorial row */}
+                  <button
+                    onClick={() => setShowCreate(true)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '18px',
+                      border: `1px dashed ${PK.green}`,
+                      borderRadius: 4,
+                      background: 'transparent',
+                      color: PK.green,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'pointer',
+                      animation: 'fadeUp 0.4s ease both',
+                      animationDelay: `${Math.min(cookbooks.length * 0.05, 0.3)}s`,
+                    }}
+                  >
+                    <Plus size={18} strokeWidth={1.6} />
+                    <span style={{ fontFamily: fSerif, fontSize: 16, fontStyle: 'italic' }}>
+                      New cookbook
+                    </span>
+                  </button>
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>
-
-      {error && (
-        <p className="text-center text-sm py-4" style={{ color: 'var(--red)' }}>
-          Error: {error}
-        </p>
-      )}
-
-      {!loading && !error && total === 0 && (
-        <CookbookEmptyState onCreate={() => setShowCreate(true)} />
-      )}
-
-      {!loading && !error && total > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={() => {
-            suppressNextClickRef.current = true;
-          }}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={cookbooks.map((c) => c.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {cookbooks.map((cb, i) => (
-                <SortableCookbookCard
-                  key={cb.id}
-                  cookbook={cb}
-                  recipeCount={countsByCookbook[cb.id] ?? 0}
-                  coverImages={imagesByCookbook[cb.id] ?? []}
-                  index={i}
-                />
-              ))}
-              {/* Add new tile */}
-              <button
-            onClick={() => setShowCreate(true)}
-            className="rf-card-hover relative flex flex-col items-center justify-center"
-            style={{
-              borderRadius: 'var(--radius)',
-              aspectRatio: '3 / 4',
-              border: '2px dashed var(--border)',
-              background: 'var(--card)',
-              color: 'var(--muted)',
-              animation: 'fadeUp 0.4s ease both',
-              animationDelay: `${Math.min(cookbooks.length * 0.05, 0.3)}s`,
-            }}
-          >
-                <span style={{ fontSize: 36, lineHeight: 1 }}>+</span>
-                <span className="text-sm font-semibold mt-2">New cookbook</span>
-              </button>
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
 
       <CookbookFormModal
         open={showCreate}

@@ -40,7 +40,7 @@ export default function SortableCookbookCard({
     zIndex: isDragging ? 50 : undefined,
     opacity: isDragging ? 0.92 : 1,
     boxShadow: isDragging ? '0 18px 40px rgba(0,0,0,0.28)' : undefined,
-    borderRadius: 'var(--radius)',
+    borderRadius: 4,
     cursor: isDragging ? 'grabbing' : 'grab',
     // Allow native scrolling on touch; the TouchSensor's long-press delay
     // decides between scroll and drag, then suppresses scroll once dragging.
@@ -69,15 +69,19 @@ export default function SortableCookbookCard({
         index={index}
       />
 
-      {/* Drag affordance: always faintly visible (mobile has no hover),
-          brightens on hover. pointer-events:none — the whole card is draggable. */}
+      {/* Drag affordance: faint grip over the photo strip's right edge. Always
+          faintly visible (mobile has no hover), brightens on hover.
+          pointer-events:none — the whole row is draggable. */}
       <div
         aria-hidden
-        className="absolute top-2 right-2 flex items-center justify-center rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
+        className="absolute flex items-center justify-center rounded-full opacity-60 group-hover:opacity-100 transition-opacity"
         style={{
+          top: '50%',
+          right: 6,
+          transform: 'translateY(-50%)',
           width: 24,
           height: 24,
-          background: 'rgba(20,20,22,0.5)',
+          background: 'rgba(20,20,22,0.45)',
           backdropFilter: 'blur(4px)',
           color: 'rgba(255,255,255,0.95)',
           pointerEvents: 'none',
