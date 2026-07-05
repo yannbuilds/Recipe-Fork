@@ -217,6 +217,97 @@ function getDomain(url: string): string {
   }
 }
 
+/* Inline icons (no emoji) so the two primary actions read at a glance. */
+function CalendarPlusIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="19" y1="16" x2="19" y2="22" />
+      <line x1="16" y1="19" x2="22" y2="19" />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </svg>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -455,8 +546,119 @@ export default function RecipeDetail() {
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
 
+  // The two primary "save" actions, rendered together so it's obvious which
+  // adds to a meal plan (green) and which adds to a cookbook (orange). Shared
+  // between the desktop hero column and the mobile action row.
+  const renderPrimaryActions = () => (
+    <div className="flex items-center gap-2.5 flex-wrap">
+      <button
+        onClick={() => setShowWeekPicker(true)}
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+        style={{ background: 'var(--green)', border: '1px solid var(--green)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+      >
+        <CalendarPlusIcon />
+        Add to plan
+      </button>
+      <button
+        onClick={() => setShowAddToCookbook(true)}
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+        style={{ background: 'var(--orange)', border: '1px solid var(--orange)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+      >
+        <BookIcon />
+        Add to cookbook
+      </button>
+    </div>
+  );
+
+  // Wake-lock toggle, overlaid on the top-left of the hero image so it doesn't
+  // take a row of its own below the action buttons. Styled as a glass pill to
+  // stay legible over any photo.
+  const renderScreenOnToggle = () =>
+    supportsWakeLock ? (
+      <div className="absolute top-4 left-4 z-10">
+        <button
+          onClick={() => {
+            const next = !isAwake;
+            setIsAwake(next);
+            if (next) {
+              setShowAwakeTooltip(true);
+              setTimeout(() => setShowAwakeTooltip(false), 4000);
+            } else {
+              setShowAwakeTooltip(false);
+            }
+          }}
+          aria-pressed={isAwake}
+          aria-label="Keep screen on"
+          className="flex items-center gap-2 text-xs font-semibold rounded-full px-3 py-1.5"
+          style={{
+            color: '#fff',
+            background: 'rgba(0,0,0,0.35)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {isAwake ? <SunIcon /> : <MoonIcon />}
+          <span>Screen on</span>
+          {/* Toggle track */}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              width: 38,
+              height: 22,
+              borderRadius: 11,
+              background: isAwake ? 'var(--green)' : 'rgba(255,255,255,0.3)',
+              transition: 'background 0.25s ease',
+              padding: 2,
+              flexShrink: 0,
+            }}
+          >
+            {/* Toggle thumb */}
+            <span
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                background: '#fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                transform: isAwake ? 'translateX(16px)' : 'translateX(0)',
+                transition: 'transform 0.25s ease',
+              }}
+            />
+          </span>
+        </button>
+
+        {showAwakeTooltip && (
+          <div
+            onClick={() => setShowAwakeTooltip(false)}
+            className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
+            style={{
+              background: 'var(--text)',
+              color: 'var(--card)',
+              width: 220,
+              animation: 'fadeUp 0.2s ease both',
+              cursor: 'pointer',
+              zIndex: 9999,
+              left: 0,
+            }}
+          >
+            Screen will stay on while you cook. This may use more battery.
+          </div>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div>
+        {/* Glowing yellow halo around the whole screen while keep-awake is on */}
+        {isAwake && <div className="rd-screen-on-frame" aria-hidden="true" />}
+
         {/* ── Hero ───────────────────────────────────────────────── */}
         <div
           className="rd-hero-split"
@@ -566,83 +768,10 @@ export default function RecipeDetail() {
               )}
             </div>
 
-            {/* Bottom group: meal plan + screen on (desktop only) */}
-            <div className="flex items-center justify-between" style={{ position: 'relative', zIndex: 10 }}>
-              <button
-                onClick={() => setShowWeekPicker(true)}
-                className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--green)',
-                  color: 'var(--green)',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--green-light)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
-              >
-                + Meal Plan
-              </button>
-              {supportsWakeLock && (
-                <div className="relative flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const next = !isAwake;
-                      setIsAwake(next);
-                      if (next) {
-                        setShowAwakeTooltip(true);
-                        setTimeout(() => setShowAwakeTooltip(false), 4000);
-                      } else {
-                        setShowAwakeTooltip(false);
-                      }
-                    }}
-                    className="flex items-center gap-2 text-sm font-semibold"
-                    style={{ color: isAwake ? 'var(--green)' : 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-                  >
-                    <span>{isAwake ? '⚡' : '💤'} Screen on</span>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        width: 44,
-                        height: 24,
-                        borderRadius: 12,
-                        background: isAwake ? 'var(--green)' : 'var(--border)',
-                        transition: 'background 0.25s ease',
-                        padding: 2,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: '50%',
-                          background: '#fff',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                          transform: isAwake ? 'translateX(20px)' : 'translateX(0)',
-                          transition: 'transform 0.25s ease',
-                        }}
-                      />
-                    </span>
-                  </button>
-                  {showAwakeTooltip && (
-                    <div
-                      onClick={() => setShowAwakeTooltip(false)}
-                      className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
-                      style={{
-                        background: 'var(--text)',
-                        color: 'var(--card)',
-                        width: 220,
-                        animation: 'fadeUp 0.2s ease both',
-                        cursor: 'pointer',
-                        zIndex: 9999,
-                        right: 0,
-                      }}
-                    >
-                      Screen will stay on while you cook. This may use more battery.
-                    </div>
-                  )}
-                </div>
-              )}
+            {/* Bottom group: primary actions (desktop only). Screen-on toggle
+                now overlays the hero image instead of taking a row here. */}
+            <div className="flex items-center flex-wrap gap-3" style={{ position: 'relative', zIndex: 10 }}>
+              {renderPrimaryActions()}
             </div>
           </div>
 
@@ -701,6 +830,9 @@ export default function RecipeDetail() {
                 size="md"
               />
             </div>
+
+            {/* Top-left: keep-screen-on toggle overlay */}
+            {renderScreenOnToggle()}
 
             {/* Bottom overlay: title card (mobile only) + meta cards */}
             <div
@@ -914,95 +1046,13 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {/* ── Meal Plan + Screen On row (mobile only — desktop version is in the hero text column) */}
+        {/* ── Primary actions row (mobile only — desktop version is in the hero
+            text column). Screen-on toggle now overlays the hero image. */}
         <div
-          className="rd-meal-plan-row flex items-center justify-between flex-wrap gap-3 mt-6"
+          className="rd-meal-plan-row flex items-center flex-wrap gap-3 mt-6"
           style={{ position: 'relative', zIndex: 10 }}
         >
-          <button
-            onClick={() => setShowWeekPicker(true)}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            + Meal Plan
-          </button>
-
-          {supportsWakeLock && (
-            <div className="relative flex items-center gap-2">
-              <button
-                onClick={() => {
-                  const next = !isAwake;
-                  setIsAwake(next);
-                  if (next) {
-                    setShowAwakeTooltip(true);
-                    setTimeout(() => setShowAwakeTooltip(false), 4000);
-                  } else {
-                    setShowAwakeTooltip(false);
-                  }
-                }}
-                className="flex items-center gap-2 text-sm font-semibold"
-                style={{ color: isAwake ? 'var(--green)' : 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-              >
-                <span>{isAwake ? '⚡' : '💤'} Screen on</span>
-                {/* Toggle track */}
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    width: 44,
-                    height: 24,
-                    borderRadius: 12,
-                    background: isAwake ? 'var(--green)' : 'var(--border)',
-                    transition: 'background 0.25s ease',
-                    padding: 2,
-                    flexShrink: 0,
-                  }}
-                >
-                  {/* Toggle thumb */}
-                  <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      background: 'var(--card)',
-                      boxShadow: 'var(--shadow-sm)',
-                      transform: isAwake ? 'translateX(20px)' : 'translateX(0)',
-                      transition: 'transform 0.25s ease',
-                    }}
-                  />
-                </span>
-              </button>
-
-              {/* Tooltip */}
-              {showAwakeTooltip && (
-                <div
-                  onClick={() => setShowAwakeTooltip(false)}
-                  className="absolute rd-awake-tooltip top-full mt-2 rounded-lg px-4 py-3 text-xs shadow-md"
-                  style={{
-                    background: 'var(--text)',
-                    color: 'var(--card)',
-                    width: 220,
-                    animation: 'fadeUp 0.2s ease both',
-                    cursor: 'pointer',
-                    zIndex: 9999,
-                    right: 0,
-                  }}
-                >
-                  Screen will stay on while you cook. This may use more battery.
-                </div>
-              )}
-            </div>
-          )}
+          {renderPrimaryActions()}
         </div>
 
         {/* ── Two-column body ────────────────────────────────────── */}
@@ -1363,23 +1413,6 @@ export default function RecipeDetail() {
           >
             Edit
           </Link>
-          <button
-            onClick={() => setShowAddToCookbook(true)}
-            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--green-light)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--card)';
-            }}
-          >
-            📖 Save to cookbook
-          </button>
           <button
             onClick={() => setShowDeleteModal(true)}
             className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"

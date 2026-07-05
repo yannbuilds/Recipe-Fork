@@ -179,16 +179,16 @@ export default function WeekPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.5)', animation: 'fadeIn 0.2s ease' }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+      style={{ animation: 'fadeIn 0.15s ease both' }}
       onClick={onClose}
     >
       <div
-        className="rounded-xl shadow-lg w-full mx-4"
+        className="shadow-lg w-full max-w-md sm:mx-4"
         style={{
-          maxWidth: 400,
           background: 'var(--card)',
-          animation: 'fadeUp 0.3s ease both',
+          borderRadius: '20px 20px 0 0',
+          animation: 'slideUp 0.2s ease both',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -213,7 +213,7 @@ export default function WeekPickerModal({
 
         {/* Content with crossfade */}
         <div
-          className="px-5 pb-5"
+          className="px-5 pb-[calc(env(safe-area-inset-bottom,0px)+84px)] sm:pb-5"
           style={{
             opacity: fading ? 0 : 1,
             transition: 'opacity 0.2s ease',

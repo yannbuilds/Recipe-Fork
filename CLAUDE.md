@@ -38,6 +38,7 @@ This overrides the parent folder identity while working here.
 ## Git Workflow
 
 - Always commit and push after completing code changes. Don't wait to be asked.
+- **Push live directly.** Commit to `main` and push it — do not create feature branches or pull requests. `main` is the Vercel production branch, so pushing it deploys straight to production. Only branch/PR if the user explicitly asks for it.
 
 ---
 

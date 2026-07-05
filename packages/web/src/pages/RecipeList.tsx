@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
@@ -56,21 +57,14 @@ function getGreeting(): { text: string; punctuation: string } {
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 type ListView = 'all' | 'cookbooks';
-const VIEW_KEY = 'rf:list-view';
-
-function readInitialView(): ListView {
-  if (typeof window === 'undefined') return 'all';
-  const stored = window.localStorage.getItem(VIEW_KEY);
-  return stored === 'cookbooks' ? 'cookbooks' : 'all';
-}
 
 export default function RecipeList() {
   const { user, profile, familyMembers, loading: authLoading } = useAuth();
-  // View toggle — read synchronously from localStorage so first paint is correct
-  const [view, setView] = useState<ListView>(readInitialView);
-  useEffect(() => {
-    window.localStorage.setItem(VIEW_KEY, view);
-  }, [view]);
+  // View is driven entirely by the URL: `/` shows all recipes, `/?view=cookbooks`
+  // (reached via the Cookbook nav tab) shows cookbooks. No persistence — Home
+  // always lands on all recipes.
+  const [searchParams] = useSearchParams();
+  const view: ListView = searchParams.get('view') === 'cookbooks' ? 'cookbooks' : 'all';
 
   // All recipes fetched so far (grows as pages load)
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -287,31 +281,6 @@ export default function RecipeList() {
 
   return (
     <>
-      {/* View toggle: All Recipes vs Cookbooks. Persisted to localStorage. */}
-      <div
-        className="mb-4"
-        style={{ animation: 'fadeUp 0.4s ease both' }}
-      >
-        <div className="rf-tabs" style={{ maxWidth: 360 }}>
-          <button
-            className={`rf-tab ${view === 'all' ? 'rf-tab-active' : ''}`}
-            onClick={() => setView('all')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-          >
-            <span>🍽</span>
-            All recipes
-          </button>
-          <button
-            className={`rf-tab ${view === 'cookbooks' ? 'rf-tab-active' : ''}`}
-            onClick={() => setView('cookbooks')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-          >
-            <span>📖</span>
-            Cookbooks
-          </button>
-        </div>
-      </div>
-
       {view === 'cookbooks' ? (
         <CookbooksView authLoading={authLoading} />
       ) : (

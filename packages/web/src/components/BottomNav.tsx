@@ -1,13 +1,13 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { House, CalendarDays, PlusCircle, ShoppingCart, User } from 'lucide-react';
+import { House, CalendarDays, PlusCircle, BookOpen, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 
 const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean; action?: boolean; activeCheck?: (pathname: string, search: string) => boolean }[] = [
-  { to: '/', icon: House, label: 'Home', exact: true },
+  { to: '/', icon: House, label: 'Home', activeCheck: (p, s) => p === '/' && !s.includes('view=cookbooks') },
   { to: '/meal-plan', icon: CalendarDays, label: 'Plan', activeCheck: (p, s) => p === '/meal-plan' && !s.includes('tab=shopping') },
   { to: '/new', icon: PlusCircle, label: 'Add', action: true },
-  { to: '/meal-plan?tab=shopping', icon: ShoppingCart, label: 'Shop', activeCheck: (p, s) => p === '/meal-plan' && s.includes('tab=shopping') },
+  { to: '/?view=cookbooks', icon: BookOpen, label: 'Cookbook', activeCheck: (p, s) => p === '/' && s.includes('view=cookbooks') },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
