@@ -57,44 +57,14 @@ function getGreeting(): { text: string; punctuation: string } {
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 type ListView = 'all' | 'cookbooks';
-const VIEW_KEY = 'rf:list-view';
-
-function readInitialView(): ListView {
-  if (typeof window === 'undefined') return 'all';
-  const stored = window.localStorage.getItem(VIEW_KEY);
-  return stored === 'cookbooks' ? 'cookbooks' : 'all';
-}
 
 export default function RecipeList() {
   const { user, profile, familyMembers, loading: authLoading } = useAuth();
-  // View toggle — URL param is the source of truth (so the Cookbook nav tab can
-  // deep-link here), falling back to localStorage so first paint is correct.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const urlView = searchParams.get('view');
-  const view: ListView = urlView === 'cookbooks' ? 'cookbooks' : urlView === 'all' ? 'all' : readInitialView();
-
-  const setView = useCallback((next: ListView) => {
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        if (next === 'cookbooks') params.set('view', 'cookbooks');
-        else params.delete('view');
-        return params;
-      },
-      { replace: true },
-    );
-  }, [setSearchParams]);
-
-  // On first load with no explicit view in the URL, restore the last-used view
-  // so the URL (and therefore the nav highlight) matches what's shown.
-  useEffect(() => {
-    if (urlView === null && readInitialView() === 'cookbooks') setView('cookbooks');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(VIEW_KEY, view);
-  }, [view]);
+  // View is driven entirely by the URL: `/` shows all recipes, `/?view=cookbooks`
+  // (reached via the Cookbook nav tab) shows cookbooks. No persistence — Home
+  // always lands on all recipes.
+  const [searchParams] = useSearchParams();
+  const view: ListView = searchParams.get('view') === 'cookbooks' ? 'cookbooks' : 'all';
 
   // All recipes fetched so far (grows as pages load)
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -311,31 +281,6 @@ export default function RecipeList() {
 
   return (
     <>
-      {/* View toggle: All Recipes vs Cookbooks. Persisted to localStorage. */}
-      <div
-        className="mb-4"
-        style={{ animation: 'fadeUp 0.4s ease both' }}
-      >
-        <div className="rf-tabs" style={{ maxWidth: 360 }}>
-          <button
-            className={`rf-tab ${view === 'all' ? 'rf-tab-active' : ''}`}
-            onClick={() => setView('all')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-          >
-            <span>🍽</span>
-            All recipes
-          </button>
-          <button
-            className={`rf-tab ${view === 'cookbooks' ? 'rf-tab-active' : ''}`}
-            onClick={() => setView('cookbooks')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-          >
-            <span>📖</span>
-            Cookbooks
-          </button>
-        </div>
-      </div>
-
       {view === 'cookbooks' ? (
         <CookbooksView authLoading={authLoading} />
       ) : (
