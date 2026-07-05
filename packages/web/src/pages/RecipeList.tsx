@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeCard from '../components/RecipeCard';
@@ -66,8 +67,31 @@ function readInitialView(): ListView {
 
 export default function RecipeList() {
   const { user, profile, familyMembers, loading: authLoading } = useAuth();
-  // View toggle — read synchronously from localStorage so first paint is correct
-  const [view, setView] = useState<ListView>(readInitialView);
+  // View toggle — URL param is the source of truth (so the Cookbook nav tab can
+  // deep-link here), falling back to localStorage so first paint is correct.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlView = searchParams.get('view');
+  const view: ListView = urlView === 'cookbooks' ? 'cookbooks' : urlView === 'all' ? 'all' : readInitialView();
+
+  const setView = useCallback((next: ListView) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'cookbooks') params.set('view', 'cookbooks');
+        else params.delete('view');
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // On first load with no explicit view in the URL, restore the last-used view
+  // so the URL (and therefore the nav highlight) matches what's shown.
+  useEffect(() => {
+    if (urlView === null && readInitialView() === 'cookbooks') setView('cookbooks');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     window.localStorage.setItem(VIEW_KEY, view);
   }, [view]);
