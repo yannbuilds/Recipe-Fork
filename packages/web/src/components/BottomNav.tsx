@@ -7,7 +7,7 @@ const NAV_ITEMS: { to: string; icon: LucideIcon; label: string; exact?: boolean;
   { to: '/', icon: House, label: 'Home', exact: true },
   { to: '/meal-plan', icon: CalendarDays, label: 'Plan', activeCheck: (p, s) => p === '/meal-plan' && !s.includes('tab=shopping') },
   { to: '/new', icon: PlusCircle, label: 'Add', action: true },
-  { to: '/meal-plan?tab=shopping', icon: ShoppingCart, label: 'Shop', activeCheck: (p, s) => p === '/meal-plan' && s.includes('tab=shopping') },
+  { to: '/meal-plan?tab=shopping', icon: ShoppingCart, label: 'Cookbook', activeCheck: (p, s) => p === '/meal-plan' && s.includes('tab=shopping') },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
