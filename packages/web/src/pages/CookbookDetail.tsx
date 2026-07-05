@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BookOpen, Sparkles, Inbox } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
@@ -134,9 +135,12 @@ export default function CookbookDetail() {
       >
         {/* Title row */}
         <div className="flex items-start gap-3 sm:gap-4">
-          <span style={{ fontSize: 40, lineHeight: 1 }} className="sm:text-5xl shrink-0">
-            {cookbook?.emoji ?? '📖'}
-          </span>
+          <div
+            className="shrink-0 flex items-center justify-center"
+            style={{ width: 44, height: 44, borderRadius: 6, border: '1px solid var(--border)', color: 'var(--green)' }}
+          >
+            <BookOpen size={22} strokeWidth={1.5} />
+          </div>
           <div className="flex-1 min-w-0">
             <div className="rf-eyebrow" style={{ marginBottom: 8 }}>Cookbook</div>
             <h1
@@ -203,7 +207,7 @@ export default function CookbookDetail() {
               className="rf-btn rf-btn-secondary flex-1 sm:flex-none"
               style={{ padding: '10px 14px' }}
             >
-              ✨ Suggest
+              <Sparkles size={15} strokeWidth={1.6} /> Suggest
             </button>
             <button
               onClick={() => setShowAdd(true)}
@@ -226,8 +230,10 @@ export default function CookbookDetail() {
 
       {!loading && recipes.length === 0 && (
         <div className="text-center py-16" style={{ animation: 'fadeUp 0.4s ease 0.1s both' }}>
-          <span className="block text-5xl">📭</span>
-          <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+          <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
+            <Inbox size={44} strokeWidth={1.25} />
+          </div>
+          <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
             No recipes in this cookbook yet
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
@@ -238,7 +244,7 @@ export default function CookbookDetail() {
               + Add recipe
             </button>
             <button onClick={() => setShowSuggest(true)} className="rf-btn rf-btn-secondary">
-              ✨ Suggest recipes
+              <Sparkles size={15} strokeWidth={1.6} /> Suggest recipes
             </button>
           </div>
         </div>

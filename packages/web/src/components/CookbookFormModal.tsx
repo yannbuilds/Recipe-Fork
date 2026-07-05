@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { Utensils } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 
-const PRESET_EMOJIS = ['📖', '🍝', '🥗', '🍰', '🍱', '🍳', '🥘', '🍲', '🍕', '🌮', '🍜', '🥐'];
+// Default cover glyph kept for the DB column; no longer shown in the UI
+// (cookbook covers use recipe photos with a line-icon fallback).
+const DEFAULT_COVER = '📖';
 
 interface CookbookFormModalProps {
   open: boolean;
@@ -24,7 +27,6 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [emoji, setEmoji] = useState<string>('📖');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
@@ -33,7 +35,6 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     if (open) {
       setName(cookbook?.name ?? initialValues?.name ?? '');
       setDescription(cookbook?.description ?? initialValues?.description ?? '');
-      setEmoji(cookbook?.emoji ?? initialValues?.emoji ?? '📖');
       setError(null);
       setPendingRemoval(new Set());
     }
@@ -60,7 +61,6 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
         .update({
           name: name.trim(),
           description: description.trim() || null,
-          emoji,
           updated_at: new Date().toISOString(),
         })
         .eq('id', cookbook.id)
@@ -85,7 +85,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
           user_id: user.id,
           name: name.trim(),
           description: description.trim() || null,
-          emoji,
+          emoji: initialValues?.emoji ?? DEFAULT_COVER,
         })
         .select()
         .single();
@@ -127,37 +127,6 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
         <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
           {cookbook ? 'Edit cookbook' : 'New cookbook'}
         </h2>
-
-        <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-            Cover emoji
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {PRESET_EMOJIS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setEmoji(e)}
-                className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
-                style={
-                  emoji === e
-                    ? {
-                        background: 'var(--green-light)',
-                        border: '2px solid var(--green)',
-                        fontSize: 22,
-                      }
-                    : {
-                        background: 'var(--warm)',
-                        border: '2px solid transparent',
-                        fontSize: 22,
-                      }
-                }
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div>
           <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
@@ -215,9 +184,10 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
                         className="w-9 h-9 rounded-md shrink-0 flex items-center justify-center"
                         style={{
                           background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+                          color: 'var(--muted)',
                         }}
                       >
-                        🍴
+                        <Utensils size={16} strokeWidth={1.5} />
                       </div>
                     )}
                     <p

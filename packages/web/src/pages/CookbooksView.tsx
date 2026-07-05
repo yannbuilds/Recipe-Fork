@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import {
@@ -259,9 +259,13 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  ✨ Suggest
+                  <Sparkles size={14} strokeWidth={1.6} />
+                  Suggest
                 </button>
               )}
             </div>

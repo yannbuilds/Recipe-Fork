@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Utensils } from 'lucide-react';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import { PK, fSerif, fMono } from '../styles/pieKeeper';
 
@@ -11,7 +12,6 @@ interface CookbookCardProps {
 
 // Editorial "shelf" row — Pie Keeper design language (Screen 02 · CookbookEntry).
 export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0 }: CookbookCardProps) {
-  const emoji = cookbook.emoji || '📖';
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
 
   return (
@@ -103,10 +103,11 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 20,
+                  color: PK.inkMute,
+                  opacity: 0.4,
                 }}
               >
-                {emoji}
+                <Utensils size={18} strokeWidth={1.5} />
               </div>
             )}
             <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)' }} />

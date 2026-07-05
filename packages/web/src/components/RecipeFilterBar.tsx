@@ -1,4 +1,14 @@
+import { Utensils, Globe, Beef, Leaf, CookingPot, type LucideIcon } from 'lucide-react';
 import type { TagCategory, OwnerFilter } from '../constants/tagMeta';
+
+// Line icons for the top-level category tabs (replacing emojis).
+const TAB_ICON: Record<TagCategory, LucideIcon> = {
+  meal: Utensils,
+  cuisine: Globe,
+  protein: Beef,
+  dietary: Leaf,
+  style: CookingPot,
+};
 
 interface CategoryItem {
   tag: string;
@@ -87,34 +97,36 @@ export default function RecipeFilterBar({
         style={animated ? { animation: 'fadeUp 0.4s ease 0.14s both' } : undefined}
       >
         <div className="rf-category-tabs-scroll">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setCategoryTab(categoryTab === tab.value ? null : tab.value)}
-              className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''} ${tabHasSelection(tab.value) ? 'rf-category-tab-has-selection' : ''}`}
-            >
-              <span className="rf-category-tab-emoji">{tab.emoji}</span>
-              {tab.label}
-            </button>
-          ))}
+          {visibleTabs.map((tab) => {
+            const Icon = TAB_ICON[tab.value];
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setCategoryTab(categoryTab === tab.value ? null : tab.value)}
+                className={`rf-category-tab ${categoryTab === tab.value ? 'rf-category-tab-active' : ''} ${tabHasSelection(tab.value) ? 'rf-category-tab-has-selection' : ''}`}
+              >
+                {Icon && <Icon size={13} strokeWidth={1.6} />}
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Category bubbles – only when a tab is selected */}
+      {/* Category chips – only when a tab is selected (text-only, editorial) */}
       {categoryTab && visibleCategories.length > 0 && (
         <div
           className="rf-category-section mb-6"
           style={{ animation: 'fadeUp 0.15s ease both' }}
         >
-          <div className="rf-category-scroll">
+          <div className="rf-category-tabs-scroll">
             {visibleCategories.map((cat) => (
               <button
                 key={cat.tag}
                 onClick={() => toggleCategory(cat.tag)}
-                className={`rf-category-bubble ${activeCategories.has(cat.tag) ? 'rf-category-active' : ''}`}
+                className={`rf-category-tab ${activeCategories.has(cat.tag) ? 'rf-category-tab-active' : ''}`}
               >
-                <span className="rf-category-icon">{cat.emoji}</span>
-                <span className="rf-category-label">{cat.label}</span>
+                {cat.label}
               </button>
             ))}
           </div>
