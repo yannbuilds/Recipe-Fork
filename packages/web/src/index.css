@@ -1,50 +1,74 @@
 @import "tailwindcss";
 
 @layer base {
+  /* ── Pie Keeper editorial palette (light) ───────────────────────
+     Warm "paper" ground, espresso ink, herb green, terracotta accent.
+     New tokens (--paper, --text-soft, --green-deep, --terracotta,
+     --rule-soft, --rule-hair) back the editorial components. */
   :root {
-    --bg: #e9ede4;
-    --card: #ffffff;
-    --green: #3f7358;
-    --green-light: #edf3ef;
-    --warm: #f0ece6;
-    --warm-dark: #e0d9d0;
-    --border: #ebebea;
-    --text: #1c1c1a;
-    --muted: #7a7a74;
-    --red: #d94f3a;
-    --radius: 16px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
-    --glass-bg: rgba(255,255,255,0.92);
-    --glass-card: rgba(255,255,255,0.78);
-    --red-light: #fef2f0;
-    --red-border: #f5c6c0;
-    --orange: #d97706;
+    --bg: #ece4d3;          /* page ground — warm paper */
+    --card: #fbf8f1;        /* cream card / input surface */
+    --paper: #f5efe2;       /* editorial "sheet" panels */
+    --paper2: #fbf6ea;      /* slightly warmer panel */
+    --paper3: #efe7d4;      /* image placeholder / tint */
+    --green: #3d6b4e;
+    --green-deep: #2f5440;
+    --green-solid: #3d6b4e; /* filled-button green (stays saturated in dark) */
+    --green-light: #e5ecdf; /* green tint (greenSoft) */
+    --warm: #efe7d4;        /* hover ground */
+    --warm-dark: #e4dac4;
+    --border: rgba(31,27,22,0.14);
+    --rule-soft: rgba(31,27,22,0.07);
+    --rule-hair: rgba(31,27,22,0.055);
+    --text: #1f1b16;        /* ink */
+    --text-soft: #4a4339;   /* inkSoft */
+    --muted: #847a6b;       /* inkMute */
+    --red: #b84a2b;
+    --terracotta: #c8633f;
+    --radius: 8px;
+    --shadow-sm: 0 1px 2px rgba(31,27,22,0.06);
+    --shadow-md: 0 4px 16px rgba(31,27,22,0.08), 0 1px 4px rgba(31,27,22,0.04);
+    --glass-bg: rgba(251,248,241,0.9);
+    --glass-card: rgba(251,248,241,0.78);
+    --red-light: #f7e9e2;
+    --red-border: rgba(184,74,43,0.35);
+    --orange: #c8633f;
   }
 
+  /* ── Editorial dark ("night paper") ─────────────────────────────
+     Warm espresso ground, cream text, sage green so accents read. */
   .dark {
-    --bg: #1a1a1e;
-    --card: #252529;
-    --green: #4a8e6b;
-    --green-light: #2a3a30;
-    --warm: #2a2a2d;
-    --warm-dark: #222225;
-    --border: #3a3a3e;
-    --text: #e8e8e6;
-    --muted: #9a9a96;
-    --red: #e55a47;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.25), 0 1px 4px rgba(0,0,0,0.15);
-    --glass-bg: rgba(30,30,34,0.92);
-    --glass-card: rgba(37,37,41,0.78);
-    --red-light: rgba(229,90,71,0.12);
-    --red-border: rgba(229,90,71,0.3);
-    --orange: #f59e0b;
+    --bg: #1c1917;
+    --card: #262220;
+    --paper: #211d1b;
+    --paper2: #262220;
+    --paper3: #2e2926;
+    --green: #7fa98a;
+    --green-deep: #6b9678;
+    --green-solid: #4f7d5f;
+    --green-light: #2c3a30;
+    --warm: #2e2926;
+    --warm-dark: #201c1a;
+    --border: rgba(245,239,226,0.14);
+    --rule-soft: rgba(245,239,226,0.09);
+    --rule-hair: rgba(245,239,226,0.06);
+    --text: #f2eadb;
+    --text-soft: #cfc6b5;
+    --muted: #a79c88;
+    --red: #e0785a;
+    --terracotta: #d9825e;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+    --glass-bg: rgba(28,25,23,0.9);
+    --glass-card: rgba(38,34,32,0.78);
+    --red-light: rgba(224,120,90,0.14);
+    --red-border: rgba(224,120,90,0.35);
+    --orange: #d9825e;
   }
 
   body {
     background: var(--bg);
-    font-family: 'Nunito', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
     color: var(--text);
   }
 
@@ -236,7 +260,7 @@
 .rf-input::placeholder { color: var(--muted); }
 .rf-input:focus {
   border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(63,115,88,0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 22%, transparent);
 }
 
 /* ── Card ──────────────────────────────────────── */
@@ -260,9 +284,9 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
 .rf-btn-filled {
-  background: var(--green);
-  border: 1px solid var(--green);
-  color: #fff;
+  background: var(--green-solid);
+  border: 1px solid var(--green-solid);
+  color: #fbf8f1;
 }
 .rf-btn-filled:hover { opacity: 0.9; }
 .rf-btn-filled:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -298,9 +322,9 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .rf-tag-active {
-  background: var(--green);
-  border-color: var(--green);
-  color: #fff;
+  background: var(--green-solid);
+  border-color: var(--green-solid);
+  color: #fbf8f1;
 }
 
 /* ── Tabs ──────────────────────────────────────── */
@@ -332,7 +356,23 @@
 }
 
 /* ── Helpers ───────────────────────────────────── */
-.rf-heading { font-family: 'Lora', serif; }
+/* Editorial display serif. Weight 400 + tight tracking is the Pie Keeper look;
+   the un-layered rule wins over Tailwind's font-bold utility, so headings read
+   as elegant serif across the app without touching each element. */
+.rf-heading {
+  font-family: 'Newsreader', 'Source Serif 4', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+/* Mono eyebrow/label helper (JetBrains Mono) for reuse in restyled pages. */
+.rf-eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 input[type="checkbox"] { accent-color: var(--green); }
 
 /* ── Card hover upgrade ───────────────────────── */

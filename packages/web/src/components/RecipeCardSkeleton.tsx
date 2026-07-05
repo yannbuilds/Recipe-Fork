@@ -1,67 +1,36 @@
+// Loading placeholder matching the editorial RecipeCard (photo + caption below).
 export default function RecipeCardSkeleton({ index = 0 }: { index?: number }) {
+  const pulse = 'skeleton-pulse 1.5s ease-in-out infinite';
   return (
     <div
-      className="overflow-hidden"
       style={{
-        borderRadius: 'var(--radius)',
-        boxShadow: 'var(--shadow-md)',
         animation: 'fadeUp 0.4s ease both',
         animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
       }}
     >
-      <div className="relative" style={{ aspectRatio: '3 / 4' }}>
-        {/* Image placeholder */}
+      {/* Image placeholder */}
+      <div
+        style={{
+          aspectRatio: '4 / 5',
+          borderRadius: 4,
+          background: 'var(--paper3)',
+          animation: pulse,
+        }}
+      />
+      {/* Caption placeholders */}
+      <div style={{ marginTop: 10 }}>
+        <div style={{ height: 16, width: '80%', borderRadius: 4, background: 'var(--border)', animation: pulse }} />
         <div
-          className="absolute inset-0"
           style={{
-            background: 'var(--warm)',
-            animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+            height: 10,
+            width: '50%',
+            borderRadius: 4,
+            marginTop: 8,
+            background: 'var(--border)',
+            animation: pulse,
+            animationDelay: '0.2s',
           }}
         />
-
-        {/* Bottom overlay mimicking the glass bar */}
-        <div
-          className="absolute bottom-0 left-0 right-0"
-          style={{
-            padding: '10px 12px',
-            borderRadius: '0 0 var(--radius) var(--radius)',
-            background: 'var(--glass-bg)',
-          }}
-        >
-          {/* Title placeholder */}
-          <div
-            style={{
-              height: 14,
-              width: '75%',
-              borderRadius: 4,
-              background: 'var(--border)',
-              animation: 'skeleton-pulse 1.5s ease-in-out infinite',
-            }}
-          />
-          {/* Meta placeholder */}
-          <div className="flex gap-3 mt-2">
-            <div
-              style={{
-                height: 12,
-                width: 48,
-                borderRadius: 4,
-                background: 'var(--border)',
-                animation: 'skeleton-pulse 1.5s ease-in-out infinite',
-                animationDelay: '0.2s',
-              }}
-            />
-            <div
-              style={{
-                height: 12,
-                width: 56,
-                borderRadius: 4,
-                background: 'var(--border)',
-                animation: 'skeleton-pulse 1.5s ease-in-out infinite',
-                animationDelay: '0.4s',
-              }}
-            />
-          </div>
-        </div>
       </div>
     </div>
   );

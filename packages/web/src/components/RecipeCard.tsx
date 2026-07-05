@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { Clock } from 'lucide-react';
 import type { Recipe } from '@recipe-aggregator/shared';
 import FavouriteButton from './FavouriteButton';
+import { PK, fSerif, fMono } from '../styles/pieKeeper';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -16,6 +18,7 @@ function formatTime(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+// Editorial recipe card — photo with hairline border, serif caption below.
 export default function RecipeCard({ recipe, onToggleFavourite, index = 0, ownerName }: RecipeCardProps) {
   const totalTime =
     recipe.prep_time != null && recipe.cook_time != null
@@ -25,59 +28,90 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
   return (
     <Link
       to={`/recipe/${recipe.id}`}
-      className="block overflow-hidden rf-card-hover"
+      className="block"
       style={{
-        borderRadius: 'var(--radius)',
-        boxShadow: 'var(--shadow-md)',
+        color: PK.ink,
+        textDecoration: 'none',
         animation: 'fadeUp 0.4s ease both',
         animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
       }}
     >
-      <div className="relative" style={{ aspectRatio: '3 / 4' }}>
+      {/* Photo */}
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '4 / 5',
+          borderRadius: 4,
+          overflow: 'hidden',
+          background: PK.paper3,
+        }}
+      >
         {recipe.image_url ? (
           <img
             src={recipe.image_url}
             alt={recipe.title}
-            className="absolute inset-0 w-full h-full object-cover"
             loading={index < 4 ? 'eager' : 'lazy'}
             fetchPriority={index < 4 ? 'high' : 'auto'}
             decoding="async"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'saturate(0.92) contrast(1.02)',
+            }}
           />
         ) : (
           <div
-            className="absolute inset-0 flex items-center justify-center text-5xl"
             style={{
-              background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 40,
             }}
           >
             🍴
           </div>
         )}
 
-        {/* Gradient scrim */}
-        <div className="rf-scrim absolute inset-0" />
+        {/* Hairline border */}
+        <div
+          style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)', pointerEvents: 'none' }}
+        />
 
         {/* Family member badge: top-left */}
         {ownerName && (
           <div
-            className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full"
             style={{
-              background: 'var(--glass-bg)',
-              backdropFilter: 'blur(4px)',
-              fontSize: 11,
-              color: 'var(--muted)',
-              fontWeight: 500,
+              position: 'absolute',
+              top: 10,
+              left: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 8px',
+              background: 'rgba(251,248,241,0.92)',
+              backdropFilter: 'blur(6px)',
+              fontFamily: fMono,
+              fontSize: 9,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: PK.ink,
             }}
           >
             <span
-              className="inline-flex items-center justify-center rounded-full"
               style={{
-                width: 16,
-                height: 16,
-                background: 'var(--border)',
-                color: 'var(--text)',
-                fontSize: 9,
-                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 15,
+                height: 15,
+                borderRadius: 999,
+                background: PK.greenSoft,
+                color: PK.greenDeep,
+                fontSize: 8,
+                fontWeight: 700,
               }}
             >
               {ownerName[0]?.toUpperCase()}
@@ -88,7 +122,7 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
 
         {/* Favourite button: top-right */}
         {onToggleFavourite && (
-          <div className="absolute top-2 right-2">
+          <div style={{ position: 'absolute', top: 10, right: 10 }}>
             <FavouriteButton
               recipeId={recipe.id}
               isFavourite={recipe.is_favourite}
@@ -97,38 +131,39 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
             />
           </div>
         )}
+      </div>
 
-        {/* Title + meta overlay at bottom */}
-        <div
-          className="absolute bottom-0 left-0 right-0 rf-glass flex flex-col justify-start"
-          style={{
-            padding: '86px 12px 16px',
-            height: 170,
-            borderRadius: '0 0 var(--radius) var(--radius)',
-            ['--glass-bg' as string]: 'rgba(20, 20, 22, 0.92)',
-          }}
+      {/* Caption */}
+      <div style={{ marginTop: 10 }}>
+        <h3
+          className="rf-heading line-clamp-2"
+          style={{ margin: 0, fontFamily: fSerif, fontWeight: 400, fontSize: 18, lineHeight: 1.15, letterSpacing: '-0.015em', color: PK.ink }}
         >
-          <h2
-            className="rf-heading leading-snug line-clamp-2"
-            style={{ fontSize: 16, color: 'rgba(255,255,255,0.95)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600 }}
+          {recipe.title}
+        </h3>
+        {(totalTime != null || recipe.servings != null) && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginTop: 6,
+              fontFamily: fMono,
+              fontSize: 10,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: PK.inkMute,
+            }}
           >
-            {recipe.title}
-          </h2>
-          {(totalTime != null || recipe.servings != null) && (
-            <div className="flex items-center gap-3 mt-auto" style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
-              {totalTime != null && (
-                <span className="flex items-center gap-1">
-                  🕐 {formatTime(totalTime)}
-                </span>
-              )}
-              {recipe.servings != null && (
-                <span className="flex items-center gap-1">
-                  🍽 {recipe.servings} serves
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+            {totalTime != null && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Clock size={11} strokeWidth={1.6} /> {formatTime(totalTime)}
+              </span>
+            )}
+            {totalTime != null && recipe.servings != null && <span>·</span>}
+            {recipe.servings != null && <span>{recipe.servings} serves</span>}
+          </div>
+        )}
       </div>
     </Link>
   );

@@ -1,24 +1,24 @@
 // Pie Keeper — editorial cookbook design tokens.
-// Page-scoped: imported by the Cookbooks list view only (not global). Ported
-// verbatim from the Claude Design handoff (~/Downloads/pie-keeper). As more
-// pages adopt the language, reuse these tokens rather than duplicating hexes.
+// These map the design's named tones to the app's CSS custom properties so that
+// every editorial component follows the global light/dark theme automatically.
+// The raw hex values live in index.css (:root and .dark).
 
 export const PK = {
-  ink: '#1F1B16',
-  inkSoft: '#4A4339',
-  inkMute: '#847A6B',
-  paper: '#F5EFE2',
-  paper2: '#FBF6EA',
-  paper3: '#EFE7D4',
-  cream: '#FBF8F1',
-  rule: '#1F1B1620',
-  ruleSoft: '#1F1B1612',
-  ruleHair: '#1F1B160E',
-  green: '#3D6B4E',
-  greenDeep: '#2F5440',
-  greenSoft: '#E5ECDF',
-  terracotta: '#C8633F',
-  red: '#B84A2B',
+  ink: 'var(--text)',
+  inkSoft: 'var(--text-soft)',
+  inkMute: 'var(--muted)',
+  paper: 'var(--paper)',
+  paper2: 'var(--paper2)',
+  paper3: 'var(--paper3)',
+  cream: 'var(--card)',
+  rule: 'var(--border)',
+  ruleSoft: 'var(--rule-soft)',
+  ruleHair: 'var(--rule-hair)',
+  green: 'var(--green)',
+  greenDeep: 'var(--green-deep)',
+  greenSoft: 'var(--green-light)',
+  terracotta: 'var(--terracotta)',
+  red: 'var(--red)',
 } as const;
 
 export const fSerif = '"Newsreader", "Source Serif 4", Georgia, serif';
