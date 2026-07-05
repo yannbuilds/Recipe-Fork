@@ -24,7 +24,7 @@ import SortableCookbookCard from '../components/SortableCookbookCard';
 import SuggestCookbooksModal from '../components/SuggestCookbooksModal';
 import { useAuth } from '../context/AuthContext';
 import { PK, fSerif, fSans, fMono } from '../styles/pieKeeper';
-import { Eyebrow, PaperGrain } from '../components/pieKeeper/PieKeeperBits';
+import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 interface CookbooksViewProps {
   // Whether auth is still hydrating — wait before fetching to avoid empty RLS results
@@ -195,20 +195,8 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
 
   return (
     <>
-      {/* Editorial paper sheet — Pie Keeper design, scoped to this view (page-by-page rollout) */}
-      <div
-        style={{
-          position: 'relative',
-          maxWidth: 640,
-          margin: '0 auto',
-          background: PK.paper,
-          borderRadius: 8,
-          padding: '28px 20px 32px',
-          boxShadow: '0 1px 2px rgba(31,27,22,0.06)',
-        }}
-      >
-        <PaperGrain style={{ borderRadius: 8 }} />
-        <div style={{ position: 'relative', zIndex: 2 }}>
+      <div>
+        <div>
           {/* Masthead */}
           <div className="mb-5" style={{ animation: 'fadeUp 0.4s ease both' }}>
             <div
