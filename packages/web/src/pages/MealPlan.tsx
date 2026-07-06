@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { CalendarDays, ShoppingCart } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
@@ -428,8 +429,10 @@ export default function MealPlan() {
               className="text-center py-16"
               style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
-              <span className="block text-5xl">🍳</span>
-              <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+              <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
+                <CalendarDays size={44} strokeWidth={1.25} />
+              </div>
+              <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
                 No meals planned yet
               </p>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
@@ -586,8 +589,10 @@ export default function MealPlan() {
               className="text-center py-16"
               style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
-              <span className="block text-5xl">🛒</span>
-              <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+              <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
+                <ShoppingCart size={44} strokeWidth={1.25} />
+              </div>
+              <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
                 {entries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
               </p>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>

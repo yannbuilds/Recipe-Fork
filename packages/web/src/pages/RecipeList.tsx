@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UtensilsCrossed } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag } from '@recipe-aggregator/shared';
@@ -371,6 +372,30 @@ export default function RecipeList() {
           {/* Filter dropdown */}
           {filterOpen && (
             <div className="rf-filter-dropdown">
+              {/* Owner filter */}
+              <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                Show
+              </p>
+              {(['all', 'mine', 'shared'] as const).map((value) => {
+                const label = value === 'all' ? 'All recipes' : value === 'mine' ? 'Mine' : 'Shared';
+                return (
+                  <button
+                    key={value}
+                    onClick={() => filters.setOwnerFilter(value)}
+                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
+                    style={
+                      filters.ownerFilter === value
+                        ? { background: 'var(--green-light)', color: 'var(--green)', fontWeight: 600 }
+                        : { color: 'var(--text)' }
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+
               {/* Favourites toggle */}
               <button
                 onClick={() => setShowFavouritesOnly((prev) => !prev)}
@@ -421,17 +446,25 @@ export default function RecipeList() {
                   {label}
                 </button>
               ))}
+
+              {hasActiveFilters && (
+                <>
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+                  <button
+                    onClick={resetAllFilters}
+                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
+                    style={{ color: 'var(--red)' }}
+                  >
+                    Reset all filters
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <RecipeFilterBar
-        {...filters}
-        animated
-        showReset={hasAnyFilter}
-        onReset={resetAllFilters}
-      />
+      <RecipeFilterBar {...filters} animated />
 
       {/* Loading skeletons */}
       {loading && (
@@ -455,8 +488,10 @@ export default function RecipeList() {
           className="text-center py-16"
           style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
         >
-          <span className="block text-5xl">🍽</span>
-          <p className="rf-heading text-lg font-bold mt-4" style={{ color: 'var(--text)' }}>
+          <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
+            <UtensilsCrossed size={44} strokeWidth={1.25} />
+          </div>
+          <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
             No recipes found
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>

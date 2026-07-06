@@ -1,3 +1,4 @@
+import { BookOpen } from 'lucide-react';
 import { PK, fSerif, fSans } from '../styles/pieKeeper';
 import { Eyebrow } from './pieKeeper/PieKeeperBits';
 
@@ -11,9 +12,9 @@ export default function CookbookEmptyState({ onCreate }: CookbookEmptyStateProps
       className="text-center"
       style={{ padding: '56px 16px 0', animation: 'fadeUp 0.4s ease 0.1s both' }}
     >
-      <span className="block" style={{ fontSize: 64 }}>
-        📖
-      </span>
+      <div className="flex justify-center" style={{ color: PK.inkMute }}>
+        <BookOpen size={52} strokeWidth={1.2} />
+      </div>
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
         <Eyebrow>Your shelf</Eyebrow>
       </div>
