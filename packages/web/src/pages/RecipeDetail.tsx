@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Check, Minus, Plus } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag, Ingredient } from '@recipe-aggregator/shared';
@@ -14,6 +15,36 @@ import AddToCookbookSheet from '../components/AddToCookbookSheet';
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+// Tracks whether the viewport is at or below the mobile breakpoint. Drives the
+// tabbed ingredients/steps layout (mobile) vs the side-by-side grid (desktop).
+function useIsMobile(breakpoint = 768): boolean {
+  const query = `(max-width: ${breakpoint}px)`;
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [query]);
+  return isMobile;
+}
+
+// Lowercase roman numeral for editorial group labels (i, ii, iii …).
+function toRoman(n: number): string {
+  const map: [number, string][] = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  let out = '';
+  for (const [v, s] of map) {
+    while (n >= v) {
+      out += s;
+      n -= v;
+    }
+  }
+  return out;
+}
 
 function decodeHtmlEntities(text: string): string {
   return text
@@ -325,6 +356,8 @@ export default function RecipeDetail() {
   const [currentServings, setCurrentServings] = useState<number>(1);
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [mobileTab, setMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const isMobile = useIsMobile();
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
   const [showMyNotes, setShowMyNotes] = useState(false);
   const [showAddToCookbook, setShowAddToCookbook] = useState(false);
@@ -541,6 +574,208 @@ export default function RecipeDetail() {
   const allSteps = hasStepCategories
     ? stepGroups
     : [{ category: '', items: sortedSteps }];
+
+  const ingredientCount = recipe.ingredients.length;
+  const stepCount = sortedSteps.length;
+
+  /* Steps list — shared between the desktop column and the mobile "Steps" tab. */
+  const renderStepGroups = () =>
+    allSteps.map((group) => (
+      <div key={group.category} className="mb-5 last:mb-0">
+        {group.category && (
+          <h3
+            className="uppercase tracking-wide text-xs font-bold mb-3"
+            style={{ color: 'var(--muted)' }}
+          >
+            {group.category}
+          </h3>
+        )}
+        {group.items.map((step, i) => {
+          const isDone = completedSteps.has(step.order);
+          return (
+            <div
+              key={step.order}
+              className="flex gap-4 rounded-md transition-colors select-none"
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                setCompletedSteps((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(step.order)) next.delete(step.order);
+                  else next.add(step.order);
+                  return next;
+                });
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--warm)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <div className="flex flex-col items-center shrink-0">
+                <div
+                  className="flex items-center justify-center rounded-full text-xs font-bold text-white shrink-0 transition-colors"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    background: isDone ? 'var(--muted)' : 'var(--green)',
+                    boxShadow: isDone ? '0 0 0 4px var(--warm)' : '0 0 0 4px var(--green-light)',
+                  }}
+                >
+                  {isDone ? '✓' : i + 1}
+                </div>
+                {i < group.items.length - 1 && (
+                  <div className="flex-1" style={{ width: 2, background: 'var(--green-light)', minHeight: 20 }} />
+                )}
+              </div>
+              <div
+                className="text-sm pt-1.5 pb-5"
+                style={{
+                  color: 'var(--text)',
+                  textDecoration: isDone ? 'line-through' : 'none',
+                  opacity: isDone ? 0.45 : 1,
+                }}
+              >
+                {step.instruction}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ));
+
+  /* Video card — shared between desktop column and the mobile layout. */
+  const renderVideo = () => {
+    if (!recipe.video_url) return null;
+    const match = recipe.video_url.match(
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    );
+    const videoId = match?.[1];
+    if (!videoId) return null;
+    return (
+      <div
+        style={{
+          background: 'var(--card)',
+          borderRadius: 'var(--radius)',
+          boxShadow: 'var(--shadow-md)',
+          padding: 24,
+        }}
+      >
+        <h2 className="text-lg font-bold mb-4" style={{ fontFamily: '"Newsreader", Georgia, serif' }}>
+          Video
+        </h2>
+        <VideoPlayer videoId={videoId} title={recipe.title} />
+      </div>
+    );
+  };
+
+  /* Ingredient checklist for the mobile "Ingredients" tab — roman-numeral group
+     headers + square checkboxes with right-aligned quantities. */
+  const renderMobileIngredients = () =>
+    allIngredients.map((group, gi) => (
+      <div key={group.category || gi} style={{ marginBottom: 24 }}>
+        {group.category && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 10,
+              paddingBottom: 8,
+              borderBottom: '1px solid var(--border)',
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontStyle: 'italic', color: 'var(--green)', fontSize: 13 }}>
+              {toRoman(gi + 1)}.
+            </span>
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: '"Newsreader", Georgia, serif',
+                fontSize: 18,
+                fontWeight: 400,
+                letterSpacing: '-0.015em',
+                color: 'var(--text)',
+                flex: 1,
+              }}
+            >
+              {group.category}
+            </h3>
+          </div>
+        )}
+        {group.items.map((ing, i) => {
+          const ingKey = `${group.category}::${i}`;
+          const isUsed = usedIngredients.has(ingKey);
+          const name = ing.item || ing.original_text || '';
+          const qty =
+            ing.quantity || ing.unit
+              ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
+              : '';
+          return (
+            <div
+              key={i}
+              className="select-none"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 0',
+                borderBottom: i < group.items.length - 1 ? '1px solid var(--rule-hair)' : 'none',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setUsedIngredients((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(ingKey)) next.delete(ingKey);
+                  else next.add(ingKey);
+                  return next;
+                });
+              }}
+            >
+              <span
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  border: `1.5px solid ${isUsed ? 'var(--green)' : 'var(--border)'}`,
+                  background: isUsed ? 'var(--green)' : 'transparent',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                {isUsed && <Check size={13} strokeWidth={3} color="#fbf8f1" />}
+              </span>
+              <span
+                style={{
+                  flex: 1,
+                  fontFamily: '"Newsreader", Georgia, serif',
+                  fontSize: 16,
+                  letterSpacing: '-0.01em',
+                  color: isUsed ? 'var(--muted)' : 'var(--text)',
+                  textDecoration: isUsed ? 'line-through' : 'none',
+                }}
+              >
+                {name}
+              </span>
+              {qty && (
+                <span
+                  style={{
+                    fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                    fontSize: 11,
+                    letterSpacing: '0.04em',
+                    color: 'var(--muted)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {qty}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ));
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -1055,7 +1290,8 @@ export default function RecipeDetail() {
           {renderPrimaryActions()}
         </div>
 
-        {/* ── Two-column body ────────────────────────────────────── */}
+        {/* ── Two-column body (desktop) ──────────────────────────── */}
+        {!isMobile && (
         <div
           className="rd-grid mt-6"
           style={{ animation: 'fadeUp 0.4s ease 0.2s both' }}
@@ -1263,114 +1499,158 @@ export default function RecipeDetail() {
                 Directions
               </h2>
 
-              {allSteps.map((group) => {
-                // Flatten a global step counter per group for display
-                return (
-                  <div key={group.category} className="mb-5 last:mb-0">
-                    {group.category && (
-                      <h3
-                        className="uppercase tracking-wide text-xs font-bold mb-3"
-                        style={{ color: 'var(--muted)' }}
-                      >
-                        {group.category}
-                      </h3>
-                    )}
-                    {group.items.map((step, i) => {
-                      const isDone = completedSteps.has(step.order);
-                      return (
-                        <div
-                          key={step.order}
-                          className="flex gap-4 rounded-md transition-colors select-none"
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => {
-                            setCompletedSteps((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(step.order)) next.delete(step.order);
-                              else next.add(step.order);
-                              return next;
-                            });
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'var(--warm)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          {/* Number column with connecting line */}
-                          <div className="flex flex-col items-center shrink-0">
-                            <div
-                              className="flex items-center justify-center rounded-full text-xs font-bold text-white shrink-0 transition-colors"
-                              style={{
-                                width: 32,
-                                height: 32,
-                                background: isDone ? 'var(--muted)' : 'var(--green)',
-                                boxShadow: isDone
-                                  ? '0 0 0 4px var(--warm)'
-                                  : '0 0 0 4px var(--green-light)',
-                              }}
-                            >
-                              {isDone ? '✓' : i + 1}
-                            </div>
-                            {i < group.items.length - 1 && (
-                              <div
-                                className="flex-1"
-                                style={{
-                                  width: 2,
-                                  background: 'var(--green-light)',
-                                  minHeight: 20,
-                                }}
-                              />
-                            )}
-                          </div>
-                          {/* Step text */}
-                          <div
-                            className="text-sm pt-1.5 pb-5"
-                            style={{
-                              color: 'var(--text)',
-                              textDecoration: isDone ? 'line-through' : 'none',
-                              opacity: isDone ? 0.45 : 1,
-                            }}
-                          >
-                            {step.instruction}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+              {renderStepGroups()}
             </div>
 
             {/* Video card (preserved) */}
-            {recipe.video_url &&
-              (() => {
-                const match = recipe.video_url!.match(
-                  /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-                );
-                const videoId = match?.[1];
-                if (!videoId) return null;
-                return (
-                  <div
-                    style={{
-                      background: 'var(--card)',
-                      borderRadius: 'var(--radius)',
-                      boxShadow: 'var(--shadow-md)',
-                      padding: 24,
-                    }}
-                  >
-                    <h2
-                      className="text-lg font-bold mb-4"
-                      style={{ fontFamily: '"Newsreader", Georgia, serif' }}
-                    >
-                      Video
-                    </h2>
-                    <VideoPlayer videoId={videoId} title={recipe.title} />
-                  </div>
-                );
-              })()}
+            {renderVideo()}
           </div>
         </div>
+        )}
+
+        {/* ── Tabbed body (mobile) ───────────────────────────────── */}
+        {isMobile && (
+          <div className="mt-6" style={{ animation: 'fadeUp 0.4s ease 0.2s both' }}>
+            {/* Tab bar + serving stepper */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                gap: 12,
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 24 }}>
+                {([
+                  ['ingredients', 'Ingredients', ingredientCount],
+                  ['steps', 'Steps', stepCount],
+                ] as const).map(([key, label, count]) => {
+                  const active = mobileTab === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setMobileTab(key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        paddingBottom: 12,
+                        marginBottom: -1,
+                        cursor: 'pointer',
+                        fontFamily: '"Newsreader", Georgia, serif',
+                        fontSize: 18,
+                        letterSpacing: '-0.01em',
+                        color: active ? 'var(--text)' : 'var(--muted)',
+                        borderBottom: active ? '2px solid var(--green)' : '2px solid transparent',
+                      }}
+                    >
+                      {label}{' '}
+                      <span
+                        style={{
+                          fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                          fontSize: 11,
+                          color: 'var(--muted)',
+                        }}
+                      >
+                        · {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Serving stepper (ingredients only) */}
+              {recipe.servings != null && mobileTab === 'ingredients' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 8,
+                    border: '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: 3,
+                    background: 'var(--card)',
+                  }}
+                >
+                  <button
+                    onClick={() => updateServings(Math.max(1, currentServings - 1))}
+                    aria-label="Fewer servings"
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 999,
+                      border: '1px solid var(--border)',
+                      background: 'var(--card)',
+                      color: 'var(--muted)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Minus size={13} strokeWidth={2} />
+                  </button>
+                  <span style={{ minWidth: 34, textAlign: 'center' }}>
+                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 15, color: 'var(--text)' }}>
+                      {currentServings}
+                    </span>
+                    <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace', fontSize: 9.5, color: 'var(--muted)' }}>
+                      {' '}sv
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => updateServings(currentServings + 1)}
+                    aria-label="More servings"
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 999,
+                      border: '1px solid var(--green)',
+                      background: 'var(--green)',
+                      color: '#fbf8f1',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Plus size={13} strokeWidth={2} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Save adjusted servings */}
+            {mobileTab === 'ingredients' && currentServings !== savedServings && (
+              <div className="flex justify-end mt-3">
+                <button
+                  onClick={saveServings}
+                  style={{
+                    color: 'var(--green)',
+                    background: 'var(--green-light)',
+                    border: '1px solid var(--green)',
+                    borderRadius: 20,
+                    padding: '2px 10px',
+                    fontSize: '0.8em',
+                    fontWeight: 600,
+                    lineHeight: 1.6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save serving size
+                </button>
+              </div>
+            )}
+
+            {/* Active panel */}
+            <div className="mt-4">
+              {mobileTab === 'ingredients' ? renderMobileIngredients() : renderStepGroups()}
+            </div>
+
+            {/* Video below the tabs */}
+            {recipe.video_url && <div className="mt-6">{renderVideo()}</div>}
+          </div>
+        )}
 
         {/* ── Tags row ───────────────────────────────────────────── */}
         {tags.length > 0 && (
