@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { Check, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag, Ingredient } from '@recipe-aggregator/shared';
@@ -44,6 +44,40 @@ function toRoman(n: number): string {
     }
   }
   return out;
+}
+
+// Editorial meta card (Prep / Cook / Serves) — mono label + line icon, serif value.
+function MetaCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '12px 14px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+          fontSize: 9.5,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--muted)',
+        }}
+      >
+        {icon}
+        {label}
+      </div>
+      <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: 'var(--text)', marginTop: 4 }}>
+        {value}
+      </div>
+    </div>
+  );
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -661,7 +695,8 @@ export default function RecipeDetail() {
           padding: 24,
         }}
       >
-        <h2 className="text-lg font-bold mb-4" style={{ fontFamily: '"Newsreader", Georgia, serif' }}>
+        <div className="rf-eyebrow" style={{ marginBottom: 8, display: 'block' }}>Watch</div>
+        <h2 className="text-lg mb-4" style={{ fontFamily: '"Newsreader", Georgia, serif' }}>
           Video
         </h2>
         <VideoPlayer videoId={videoId} title={recipe.title} />
@@ -894,7 +929,158 @@ export default function RecipeDetail() {
         {/* Glowing yellow halo around the whole screen while keep-awake is on */}
         {isAwake && <div className="rd-screen-on-frame" aria-hidden="true" />}
 
-        {/* ── Hero ───────────────────────────────────────────────── */}
+        {/* ── Hero (mobile) ──────────────────────────────────────── */}
+        {isMobile && (
+          <div style={{ animation: 'fadeUp 0.4s ease both' }}>
+            {/* Clean photo with screen-on toggle + favourite overlaid */}
+            <div
+              className="relative overflow-hidden"
+              style={{ marginLeft: -24, marginRight: -24, marginTop: -28, height: 320, background: 'var(--paper3)' }}
+            >
+              {recipe.image_url ? (
+                <img src={recipe.image_url} alt={recipe.title} className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ color: 'var(--muted)' }}>
+                  <Flame size={40} strokeWidth={1.2} />
+                </div>
+              )}
+              {renderScreenOnToggle()}
+              <div className="absolute top-4 right-4">
+                <FavouriteButton
+                  recipeId={recipe.id}
+                  isFavourite={recipe.is_favourite}
+                  onToggle={(val) => setRecipe((prev) => (prev ? { ...prev, is_favourite: val } : prev))}
+                  size="md"
+                />
+              </div>
+            </div>
+
+            {/* Editorial paper header */}
+            <div className="mt-5">
+              {tags.length > 0 && (
+                <div className="rf-eyebrow" style={{ marginBottom: 10, display: 'block' }}>
+                  {tags.slice(0, 3).map((t) => t.name).join(' · ')}
+                </div>
+              )}
+              <h1
+                className="rf-heading"
+                style={{ fontSize: 'clamp(30px, 8vw, 38px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: 'var(--text)' }}
+              >
+                {recipe.title}
+              </h1>
+
+              {recipe.description && (
+                <div className="mt-3">
+                  <p
+                    style={{
+                      color: 'var(--text-soft)',
+                      fontSize: 15,
+                      lineHeight: 1.5,
+                      display: '-webkit-box',
+                      WebkitLineClamp: descExpanded ? 'unset' : 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {recipe.description}
+                  </p>
+                  {recipe.description.length > 130 && (
+                    <button
+                      onClick={() => setDescExpanded((v) => !v)}
+                      style={{ color: 'var(--green)', textDecoration: 'underline', textUnderlineOffset: 2, fontSize: 14, marginTop: 4, cursor: 'pointer' }}
+                    >
+                      {descExpanded ? 'show less' : 'show more'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {recipe.source_url && (
+                <a
+                  href={recipe.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-4"
+                  style={{
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '8px 14px',
+                    fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                    fontSize: 12.5,
+                    color: 'var(--muted)',
+                  }}
+                >
+                  <Globe size={14} strokeWidth={1.6} style={{ color: 'var(--green)' }} />
+                  {getDomain(recipe.source_url)}
+                </a>
+              )}
+
+              {/* Meta cards */}
+              {(recipe.prep_time != null || recipe.cook_time != null || recipe.servings != null) && (
+                <div className="flex gap-2.5 mt-5">
+                  {recipe.prep_time != null && (
+                    <MetaCard icon={<Clock size={12} strokeWidth={1.6} />} label="Prep" value={formatTime(recipe.prep_time)} />
+                  )}
+                  {recipe.cook_time != null && (
+                    <MetaCard icon={<Flame size={12} strokeWidth={1.6} />} label="Cook" value={formatTime(recipe.cook_time)} />
+                  )}
+                  {recipe.servings != null && (
+                    <MetaCard icon={<Users size={12} strokeWidth={1.6} />} label="Serves" value={String(recipe.servings)} />
+                  )}
+                </div>
+              )}
+
+              {/* Byline */}
+              {(recipe.creator_name || recipe.source_url) && (
+                <div className="flex items-center gap-2 flex-wrap mt-5" style={{ fontSize: 14, color: 'var(--muted)' }}>
+                  {recipe.creator_name && (
+                    <span>
+                      Recipe by{' '}
+                      <em style={{ fontFamily: '"Newsreader", Georgia, serif', fontStyle: 'italic', color: 'var(--text)' }}>
+                        {recipe.creator_name}
+                      </em>
+                    </span>
+                  )}
+                  {recipe.creator_name && recipe.source_url && <span style={{ color: 'var(--border)' }}>·</span>}
+                  {recipe.source_url && (
+                    <a href={recipe.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)' }}>
+                      View original ↗
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Notes */}
+              <div className="flex items-center gap-4 mt-3">
+                <button
+                  onClick={() => setShowMyNotes(true)}
+                  className="inline-flex items-center gap-1.5"
+                  style={{ fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}
+                >
+                  <FileText size={15} strokeWidth={1.6} style={{ color: 'var(--orange)' }} /> My notes
+                </button>
+                {recipe.author_notes && (
+                  <button
+                    onClick={() => setShowAuthorNotes(true)}
+                    className="inline-flex items-center gap-1.5"
+                    style={{ fontSize: 14, color: 'var(--muted)', cursor: 'pointer' }}
+                  >
+                    <FileText size={15} strokeWidth={1.6} /> Author's notes
+                  </button>
+                )}
+              </div>
+
+              {/* Primary actions */}
+              <div className="mt-5" style={{ position: 'relative', zIndex: 10 }}>
+                {renderPrimaryActions()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Hero (desktop) ─────────────────────────────────────── */}
+        {!isMobile && (
         <div
           className="rd-hero-split"
           style={{ animation: 'fadeUp 0.4s ease both' }}
@@ -942,7 +1128,7 @@ export default function RecipeDetail() {
                 >
                   {recipe.creator_name && (
                     <span>
-                      👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+                      Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
                     </span>
                   )}
                   {recipe.creator_name && recipe.source_url && (
@@ -977,7 +1163,7 @@ export default function RecipeDetail() {
                           lineHeight: 1.6,
                         }}
                       >
-                        📝 Author's Notes
+                        Author's Notes
                       </button>
                     </>
                   )}
@@ -997,7 +1183,7 @@ export default function RecipeDetail() {
                       lineHeight: 1.6,
                     }}
                   >
-                    📒 My Notes
+                    My Notes
                   </button>
                 </div>
               )}
@@ -1027,7 +1213,7 @@ export default function RecipeDetail() {
                 className="absolute inset-0 flex items-center justify-center"
                 style={{ background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)' }}
               >
-                <span className="text-6xl">🍴</span>
+                <Flame size={48} strokeWidth={1.2} style={{ color: 'var(--muted)' }} />
               </div>
             )}
 
@@ -1131,7 +1317,7 @@ export default function RecipeDetail() {
                       borderRadius: 10,
                     }}
                   >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Prep</div>
                     <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
                       {formatTime(recipe.prep_time)}
                     </div>
@@ -1147,7 +1333,7 @@ export default function RecipeDetail() {
                       borderRadius: 10,
                     }}
                   >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Cook</div>
                     <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
                       {formatTime(recipe.cook_time)}
                     </div>
@@ -1163,7 +1349,7 @@ export default function RecipeDetail() {
                       borderRadius: 10,
                     }}
                   >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Servings</div>
                     <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
                       {recipe.servings}
                     </div>
@@ -1173,122 +1359,7 @@ export default function RecipeDetail() {
             </div>
           </div>
         </div>
-
-        {/* ── Mobile meta row (hidden on desktop) ─────────────────── */}
-        {(recipe.prep_time != null || recipe.cook_time != null || recipe.servings != null) && (
-          <div className="rd-meta-row">
-            {recipe.prep_time != null && (
-              <div
-                className="text-center px-3 py-2 flex-1"
-                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
-              >
-                <div className="text-xs" style={{ color: 'var(--muted)' }}>⏱ Prep</div>
-                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                  {formatTime(recipe.prep_time)}
-                </div>
-              </div>
-            )}
-            {recipe.cook_time != null && (
-              <div
-                className="text-center px-3 py-2 flex-1"
-                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
-              >
-                <div className="text-xs" style={{ color: 'var(--muted)' }}>🔥 Cook</div>
-                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                  {formatTime(recipe.cook_time)}
-                </div>
-              </div>
-            )}
-            {recipe.servings != null && (
-              <div
-                className="text-center px-3 py-2 flex-1"
-                style={{ background: 'var(--card)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }}
-              >
-                <div className="text-xs" style={{ color: 'var(--muted)' }}>🍽 Servings</div>
-                <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                  {recipe.servings}
-                </div>
-              </div>
-            )}
-          </div>
         )}
-
-        {/* ── Attribution (mobile only — desktop version is in the hero text column) */}
-        {(recipe.creator_name || recipe.source_url) && (
-          <div
-            className="rd-attribution flex items-center gap-2 mt-4 text-sm flex-wrap"
-            style={{ color: 'var(--muted)' }}
-          >
-            {recipe.creator_name && (
-              <span>
-                👤 Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
-              </span>
-            )}
-            {recipe.creator_name && recipe.source_url && (
-              <span style={{ color: 'var(--border)' }}>·</span>
-            )}
-            {recipe.source_url && (
-              <a
-                href={recipe.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline"
-                style={{ color: 'var(--green)' }}
-              >
-                View original ↗
-              </a>
-            )}
-            {recipe.author_notes && (
-              <>
-                <span style={{ color: 'var(--border)' }}>·</span>
-                <button
-                  onClick={() => setShowAuthorNotes(true)}
-                  className="cursor-pointer"
-                  style={{
-                    color: 'var(--green)',
-                    background: 'var(--green-light)',
-                    border: '1px solid var(--green)',
-                    borderRadius: 20,
-                    padding: '2px 10px',
-                    font: 'inherit',
-                    fontSize: '0.8em',
-                    fontWeight: 600,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  📝 Author's Notes
-                </button>
-              </>
-            )}
-            <span style={{ color: 'var(--border)' }}>·</span>
-            <button
-              onClick={() => setShowMyNotes(true)}
-              className="cursor-pointer"
-              style={{
-                color: 'var(--green)',
-                background: 'var(--green-light)',
-                border: '1px solid var(--green)',
-                borderRadius: 20,
-                padding: '2px 10px',
-                font: 'inherit',
-                fontSize: '0.8em',
-                fontWeight: 600,
-                lineHeight: 1.6,
-              }}
-            >
-              📒 My Notes
-            </button>
-          </div>
-        )}
-
-        {/* ── Primary actions row (mobile only — desktop version is in the hero
-            text column). Screen-on toggle now overlays the hero image. */}
-        <div
-          className="rd-meal-plan-row flex items-center flex-wrap gap-3 mt-6"
-          style={{ position: 'relative', zIndex: 10 }}
-        >
-          {renderPrimaryActions()}
-        </div>
 
         {/* ── Two-column body (desktop) ──────────────────────────── */}
         {!isMobile && (
@@ -1652,33 +1723,37 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {/* ── Tags row ───────────────────────────────────────────── */}
+        {/* ── Filed under (tags, mobile) ─────────────────────────── */}
         {tags.length > 0 && (
-          <div className="flex md:hidden flex-wrap gap-2 mt-8">
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="text-xs px-3 py-1 rounded-full"
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--muted)',
-                }}
-              >
-                {tag.name}
-              </span>
-            ))}
+          <div className="md:hidden mt-8">
+            <div className="rf-eyebrow" style={{ marginBottom: 12, display: 'block' }}>Filed under</div>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="text-xs px-3 py-1.5 rounded-full"
+                  style={{
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-soft)',
+                  }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* ── Action buttons ─────────────────────────────────────── */}
+        {/* ── Edit / Delete ──────────────────────────────────────── */}
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 32 }} />
         <div
-          className="rd-actions flex flex-wrap gap-3 mt-4"
+          className="rd-actions flex flex-wrap gap-3 mt-6"
           style={{ position: 'relative', zIndex: 1 }}
         >
           <Link
             to={`/recipe/${id}/edit`}
-            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -1691,11 +1766,11 @@ export default function RecipeDetail() {
               e.currentTarget.style.background = 'var(--card)';
             }}
           >
-            Edit
+            <Pencil size={15} strokeWidth={1.7} /> Edit
           </Link>
           <button
             onClick={() => setShowDeleteModal(true)}
-            className="rd-action-btn rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--red-border)',
@@ -1708,9 +1783,20 @@ export default function RecipeDetail() {
               e.currentTarget.style.background = 'var(--card)';
             }}
           >
-            Delete
+            <Trash2 size={15} strokeWidth={1.7} /> Delete
           </button>
         </div>
+
+        {/* ── Footer ─────────────────────────────────────────────── */}
+        <p
+          className="text-center mt-6"
+          style={{ fontFamily: '"Newsreader", Georgia, serif', fontStyle: 'italic', fontSize: 13, color: 'var(--muted)' }}
+        >
+          {recipe.source_url ? `Saved from ${getDomain(recipe.source_url)}` : 'Saved'}
+          {recipe.created_at
+            ? ` · ${new Date(recipe.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+            : ''}
+        </p>
 
         {id && (
           <AddToCookbookSheet
