@@ -9,6 +9,24 @@
 
 import { useEffect, useRef, memo } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import {
+  Search,
+  SlidersHorizontal,
+  Heart,
+  Clock,
+  Users,
+  Flame,
+  Check,
+  Minus,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  House,
+  CalendarDays,
+  PlusCircle,
+  BookOpen,
+  User,
+} from "lucide-react";
 
 const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
 
@@ -16,17 +34,52 @@ const APP_URL = import.meta.env.VITE_APP_URL || "https://app.piekeeper.com";
    Palette (shared by markup + phone mockups)
    ───────────────────────────────────────────────────────────── */
 const PK_GREEN = "#3D6B4E";
-const PK_GREEN_SOFT = "#E5ECDF";
-const PK_PAPER = "#FBF8F1";
+const PK_PAPER = "#FBF8F1"; // cream card / input surface (--card)
 const PK_INK = "#1F1B16";
 const PK_INK_SOFT = "#4A4339";
 const PK_INK_MUTE = "#847A6B";
+// Editorial ground + panel tones (mirror the app's light-theme CSS vars)
+const PK_BG = "#ECE4D3"; // page ground — warm paper (--bg)
+const PK_SHEET = "#F5EFE2"; // editorial "sheet" panel (--paper)
+const PK_PAPER3 = "#EFE7D4"; // image placeholder tint (--paper3)
+const PK_WARM = "#EFE7D4"; // hover / track ground (--warm)
+const PK_BORDER = "rgba(31,27,22,0.14)";
+const PK_RULE_HAIR = "rgba(31,27,22,0.055)";
+const PK_RED = "#b84a2b"; // favourite heart (--red)
+
+const fSerif = '"Newsreader", Georgia, serif';
+const fSans = '"DM Sans", system-ui, -apple-system, sans-serif';
+const fMono = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+
+function toRoman(n: number): string {
+  const map: [number, string][] = [
+    [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"],
+  ];
+  let out = "";
+  for (const [val, sym] of map) {
+    while (n >= val) {
+      out += sym;
+      n -= val;
+    }
+  }
+  return out;
+}
+
+// Mono uppercase eyebrow with a leading hairline — the app's editorial label.
+function Eyebrow({ children, color = PK_INK_MUTE }: { children: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: fMono, fontSize: 9, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase", color }}>
+      <span style={{ width: 16, height: 1, background: color, opacity: 0.6 }} />
+      <span>{children}</span>
+    </div>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────
    iOS device frame (trimmed to what the mockups use)
    ───────────────────────────────────────────────────────────── */
-function IOSStatusBar({ time = "9:41" }: { time?: string }) {
-  const c = "#000";
+function IOSStatusBar({ time = "9:41", color = "#000" }: { time?: string; color?: string }) {
+  const c = color;
   return (
     <div
       style={{
@@ -68,7 +121,7 @@ function IOSStatusBar({ time = "9:41" }: { time?: string }) {
   );
 }
 
-function IOSDevice({ children, width = 340, height = 720 }: { children: React.ReactNode; width?: number; height?: number }) {
+function IOSDevice({ children, width = 340, height = 720, statusColor = "#000" }: { children: React.ReactNode; width?: number; height?: number; statusColor?: string }) {
   return (
     <div
       style={{
@@ -77,7 +130,7 @@ function IOSDevice({ children, width = 340, height = 720 }: { children: React.Re
         borderRadius: 48,
         overflow: "hidden",
         position: "relative",
-        background: "#F2F2F7",
+        background: PK_BG,
         boxShadow: "0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)",
         fontFamily: "-apple-system, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
@@ -85,7 +138,7 @@ function IOSDevice({ children, width = 340, height = 720 }: { children: React.Re
     >
       {/* status bar */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 }}>
-        <IOSStatusBar />
+        <IOSStatusBar color={statusColor} />
       </div>
       {/* content */}
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -102,21 +155,13 @@ function IOSDevice({ children, width = 340, height = 720 }: { children: React.Re
 /* ─────────────────────────────────────────────────────────────
    Shared phone bits
    ───────────────────────────────────────────────────────────── */
-function PKHeader({ title }: { title: string }) {
-  return (
-    <div style={{ padding: "52px 18px 14px", textAlign: "center", fontFamily: '"Newsreader", Georgia, serif', fontSize: 18, fontWeight: 500, color: PK_INK, letterSpacing: "-0.01em" }}>
-      {title}
-    </div>
-  );
-}
-
 function PKTabBar({ active = "home" }: { active?: string }) {
   const tabs = [
-    { k: "home", label: "Home", icon: "⌂" },
-    { k: "plan", label: "Plan", icon: "▤" },
-    { k: "add", label: "＋", isAdd: true },
-    { k: "shop", label: "Shop", icon: "◧" },
-    { k: "me", label: "You", icon: "◯" },
+    { k: "home", label: "Home", Icon: House },
+    { k: "plan", label: "Plan", Icon: CalendarDays },
+    { k: "add", label: "Add", Icon: PlusCircle },
+    { k: "cook", label: "Cookbook", Icon: BookOpen },
+    { k: "me", label: "Profile", Icon: User },
   ];
   return (
     <div
@@ -125,29 +170,29 @@ function PKTabBar({ active = "home" }: { active?: string }) {
         bottom: 0,
         left: 0,
         right: 0,
-        paddingBottom: 28,
-        paddingTop: 8,
-        background: PK_PAPER,
-        borderTop: "0.5px solid rgba(0,0,0,0.08)",
+        paddingBottom: 26,
+        paddingTop: 9,
+        background: "rgba(251,248,241,0.9)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        borderTop: `1px solid ${PK_BORDER}`,
         display: "flex",
         justifyContent: "space-around",
-        alignItems: "center",
-        fontFamily: "-apple-system, system-ui, sans-serif",
+        alignItems: "flex-start",
+        fontFamily: fSans,
         zIndex: 40,
       }}
     >
-      {tabs.map((t) => (
-        <div key={t.k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: active === t.k ? PK_GREEN : PK_INK_MUTE, fontSize: 10 }}>
-          {t.isAdd ? (
-            <div style={{ width: 36, height: 36, borderRadius: 18, background: PK_GREEN, color: "#fff", display: "grid", placeItems: "center", fontSize: 22, marginBottom: -4 }}>＋</div>
-          ) : (
-            <>
-              <div style={{ fontSize: 18 }}>{t.icon}</div>
-              <div>{t.label}</div>
-            </>
-          )}
-        </div>
-      ))}
+      {tabs.map(({ k, label, Icon }) => {
+        const on = active === k;
+        return (
+          <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? PK_GREEN : PK_INK_MUTE }}>
+            <Icon size={on ? 22 : 20} strokeWidth={on ? 2.2 : 1.8} />
+            <div style={{ fontSize: 10, fontWeight: on ? 600 : 500 }}>{label}</div>
+            <div style={{ width: 4, height: 4, borderRadius: "50%", background: PK_GREEN, opacity: on ? 1 : 0 }} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -155,44 +200,58 @@ function PKTabBar({ active = "home" }: { active?: string }) {
 /* ── Screen 1: Library / browse ──────────────────────────────── */
 function PhoneLibrary() {
   const recipes = [
-    { name: "Slow-roasted Tomato Pasta", tag: "Italian · 45m", img: "/landing/tomato-pasta.jpg" },
-    { name: "Charred Broccoli Salad", tag: "Salads · 20m", img: "/landing/broccoli.jpg" },
-    { name: "Brown Butter Cookies", tag: "Sweets · 30m", img: "/landing/cookies.jpg" },
-    { name: "Miso Glazed Salmon", tag: "Fish · 25m", img: "/landing/salmon.jpg" },
+    { name: "Slow-roasted Tomato Pasta", meta: "45m · 4 serves", img: "/landing/tomato-pasta.jpg", fav: true },
+    { name: "Charred Broccoli Salad", meta: "20m · 2 serves", img: "/landing/broccoli.jpg" },
+    { name: "Brown Butter Cookies", meta: "30m · 24 serves", img: "/landing/cookies.jpg" },
+    { name: "Miso Glazed Salmon", meta: "25m · 4 serves", img: "/landing/salmon.jpg", fav: true },
   ];
-  const cats = ["All", "Pasta", "Salads", "Soups", "Sweets", "Mains"];
   return (
     <IOSDevice width={340} height={720}>
-      <PKHeader title="Pie Keeper" />
-      <div style={{ padding: "4px 18px 12px", textAlign: "center" }}>
-        <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: PK_INK, letterSpacing: "-0.015em" }}>What's for dinner, Yann?</div>
-        <div style={{ fontSize: 12, color: PK_INK_MUTE, marginTop: 4 }}>You have 19 recipes saved</div>
-      </div>
-      <div style={{ padding: "0 16px" }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: PK_INK_MUTE, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <span>🔍</span>
-          <span>Search recipes</span>
+      <div style={{ height: "100%", overflow: "hidden", background: PK_BG, position: "relative" }}>
+        {/* Editorial masthead */}
+        <div style={{ padding: "60px 20px 0" }}>
+          <Eyebrow>The kitchen</Eyebrow>
+          <div style={{ margin: "11px 0 0", fontFamily: fSerif, fontWeight: 400, fontSize: 30, lineHeight: 1.02, letterSpacing: "-0.026em", color: PK_INK }}>
+            What's for dinner, <em style={{ fontStyle: "italic", color: PK_GREEN }}>Yann</em>?
+          </div>
+          <div style={{ margin: "10px 0 0", fontFamily: fSans, fontSize: 13, lineHeight: 1.45, color: PK_INK_SOFT }}>
+            You have 19 recipes saved.
+          </div>
+
+          {/* Search + filter */}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <Search size={15} strokeWidth={2} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: PK_INK_MUTE }} />
+              <div style={{ background: PK_PAPER, border: `1px solid ${PK_BORDER}`, borderRadius: 10, padding: "11px 12px 11px 34px", fontFamily: fSans, fontSize: 13, color: PK_INK_MUTE }}>
+                Search recipes...
+              </div>
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: PK_PAPER, border: `1px solid ${PK_BORDER}`, display: "grid", placeItems: "center", color: PK_INK_MUTE }}>
+              <SlidersHorizontal size={17} strokeWidth={2} />
+            </div>
+          </div>
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 6, padding: "14px 16px", overflowX: "hidden" }}>
-        {cats.map((c, i) => (
-          <div key={c} style={{ padding: "6px 12px", borderRadius: 999, background: i === 0 ? PK_GREEN : PK_GREEN_SOFT, color: i === 0 ? "#fff" : PK_GREEN, fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>
-            {c}
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: "4px 16px 100px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {recipes.map((r, i) => (
-          <div key={i} style={{ borderRadius: 14, overflow: "hidden", background: "#fff", border: "0.5px solid rgba(0,0,0,0.05)" }}>
-            <div style={{ aspectRatio: "1/1", background: "#eee" }}>
-              <img src={r.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+
+        {/* Card grid — editorial photo + serif caption + mono meta */}
+        <div style={{ padding: "18px 20px 110px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {recipes.map((r, i) => (
+            <div key={i}>
+              <div style={{ position: "relative", aspectRatio: "4 / 5", borderRadius: 4, overflow: "hidden", background: PK_PAPER3 }}>
+                <img src={r.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(0.92) contrast(1.02)" }} />
+                <div style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)" }} />
+                <div style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(251,248,241,0.92)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center" }}>
+                  <Heart size={13} strokeWidth={1.8} fill={r.fav ? PK_RED : "none"} color={r.fav ? PK_RED : PK_INK_MUTE} />
+                </div>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontFamily: fSerif, fontWeight: 400, fontSize: 15, lineHeight: 1.15, letterSpacing: "-0.015em", color: PK_INK }}>{r.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, fontFamily: fMono, fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase", color: PK_INK_MUTE }}>
+                  <Clock size={10} strokeWidth={1.6} /> {r.meta}
+                </div>
+              </div>
             </div>
-            <div style={{ padding: "8px 10px 10px" }}>
-              <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 13.5, color: PK_INK, lineHeight: 1.15, letterSpacing: "-0.01em" }}>{r.name}</div>
-              <div style={{ fontSize: 10.5, color: PK_INK_MUTE, marginTop: 4 }}>{r.tag}</div>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       <PKTabBar active="home" />
     </IOSDevice>
@@ -201,37 +260,83 @@ function PhoneLibrary() {
 
 /* ── Screen 2: Recipe detail ─────────────────────────────────── */
 function PhoneRecipe() {
-  const ingredients = ["6 ripe tomatoes, halved", "4 cloves garlic, smashed", "3 tbsp olive oil, good", "1 tsp chili flakes", "400g rigatoni", "Basil, torn — to finish"];
+  const ingredients = [
+    { name: "Ripe tomatoes, halved", qty: "6" },
+    { name: "Garlic, smashed", qty: "4 cloves" },
+    { name: "Good olive oil", qty: "3 tbsp" },
+    { name: "Chilli flakes", qty: "1 tsp" },
+    { name: "Rigatoni", qty: "400 g" },
+    { name: "Basil, torn", qty: "handful" },
+  ];
+  const meta = [
+    { Icon: Clock, label: "Prep", value: "15m" },
+    { Icon: Flame, label: "Cook", value: "30m" },
+    { Icon: Users, label: "Serves", value: "4" },
+  ];
   return (
-    <IOSDevice width={340} height={720}>
-      <div style={{ height: 150, marginTop: 44, position: "relative" }}>
-        <img src="/landing/tomato-pasta.jpg" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-      </div>
-      <div style={{ padding: "16px 18px 8px" }}>
-        <div style={{ fontSize: 11, color: PK_INK_MUTE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Italian · Pasta</div>
-        <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: PK_INK, lineHeight: 1.1, letterSpacing: "-0.015em" }}>Slow-roasted Tomato Pasta</div>
-        <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12, color: PK_INK_SOFT }}>
-          <div><div style={{ color: PK_INK_MUTE, fontSize: 10 }}>Time</div><div style={{ fontWeight: 500 }}>45 min</div></div>
-          <div><div style={{ color: PK_INK_MUTE, fontSize: 10 }}>Serves</div><div style={{ fontWeight: 500 }}>4</div></div>
-          <div><div style={{ color: PK_INK_MUTE, fontSize: 10 }}>Difficulty</div><div style={{ fontWeight: 500 }}>Easy</div></div>
-        </div>
-      </div>
-      <div style={{ padding: "12px 18px", borderTop: "0.5px solid rgba(0,0,0,0.06)", borderBottom: "0.5px solid rgba(0,0,0,0.06)", marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-        <span style={{ color: PK_INK_MUTE }}>Servings</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 11, background: PK_GREEN_SOFT, color: PK_GREEN, display: "grid", placeItems: "center", fontWeight: 600 }}>−</div>
-          <span style={{ fontWeight: 600 }}>4</span>
-          <div style={{ width: 22, height: 22, borderRadius: 11, background: PK_GREEN, color: "#fff", display: "grid", placeItems: "center", fontWeight: 600 }}>+</div>
-        </div>
-      </div>
-      <div style={{ padding: "14px 18px 100px" }}>
-        <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 16, marginBottom: 10, color: PK_INK }}>Ingredients</div>
-        {ingredients.map((ing, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "0.5px solid rgba(0,0,0,0.05)", fontSize: 13, color: PK_INK_SOFT }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${i < 2 ? PK_GREEN : "rgba(0,0,0,0.2)"}`, background: i < 2 ? PK_GREEN : "transparent", display: "grid", placeItems: "center", color: "#fff", fontSize: 10 }}>{i < 2 ? "✓" : ""}</div>
-            <span style={{ textDecoration: i < 2 ? "line-through" : "none", opacity: i < 2 ? 0.5 : 1 }}>{ing}</span>
+    <IOSDevice width={340} height={720} statusColor="#fff">
+      <div style={{ height: "100%", overflow: "hidden", background: PK_BG, position: "relative" }}>
+        {/* Full-bleed hero, fading into the paper ground */}
+        <div style={{ position: "relative", height: 208, background: PK_PAPER3 }}>
+          <img src="/landing/tomato-pasta.jpg" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(31,27,22,0.30) 0%, rgba(31,27,22,0) 30%, ${PK_BG}00 58%, ${PK_BG} 100%)` }} />
+          <div style={{ position: "absolute", top: 52, right: 16, width: 34, height: 34, borderRadius: "50%", background: "rgba(251,248,241,0.92)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center" }}>
+            <Heart size={16} strokeWidth={1.8} fill={PK_RED} color={PK_RED} />
           </div>
-        ))}
+        </div>
+
+        <div style={{ padding: "4px 20px 0" }}>
+          <div style={{ fontFamily: fMono, fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: PK_INK_MUTE, marginBottom: 10 }}>Italian · Pasta</div>
+          <div style={{ fontFamily: fSerif, fontWeight: 400, fontSize: 28, lineHeight: 1.05, letterSpacing: "-0.02em", color: PK_INK }}>Slow-roasted Tomato Pasta</div>
+          <div style={{ marginTop: 10, fontFamily: fSans, fontSize: 13, lineHeight: 1.5, color: PK_INK_SOFT }}>
+            Sweet, jammy tomatoes roasted low and slow, then tossed through rigatoni with torn basil.
+          </div>
+
+          {/* Meta cards */}
+          <div style={{ display: "flex", gap: 9, marginTop: 16 }}>
+            {meta.map(({ Icon, label, value }) => (
+              <div key={label} style={{ flex: 1, background: PK_PAPER, border: `1px solid ${PK_BORDER}`, borderRadius: 4, padding: "10px 11px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: fMono, fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", color: PK_INK_MUTE }}>
+                  <Icon size={10} strokeWidth={1.6} /> {label}
+                </div>
+                <div style={{ fontFamily: fSerif, fontSize: 20, color: PK_INK, marginTop: 3 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabs + serving stepper */}
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${PK_BORDER}`, marginTop: 20 }}>
+            <div style={{ display: "flex", gap: 20 }}>
+              <div style={{ paddingBottom: 10, marginBottom: -1, fontFamily: fSerif, fontSize: 17, color: PK_INK, borderBottom: `2px solid ${PK_GREEN}` }}>
+                Ingredients <span style={{ fontFamily: fMono, fontSize: 10, color: PK_INK_MUTE }}>· 6</span>
+              </div>
+              <div style={{ paddingBottom: 10, fontFamily: fSerif, fontSize: 17, color: PK_INK_MUTE }}>
+                Steps <span style={{ fontFamily: fMono, fontSize: 10, color: PK_INK_MUTE }}>· 5</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7, border: `1px solid ${PK_BORDER}`, borderRadius: 999, padding: 3, background: PK_PAPER }}>
+              <div style={{ width: 22, height: 22, borderRadius: 999, border: `1px solid ${PK_BORDER}`, background: PK_PAPER, color: PK_INK_MUTE, display: "grid", placeItems: "center" }}><Minus size={11} strokeWidth={2} /></div>
+              <span style={{ fontFamily: fSerif, fontSize: 13, color: PK_INK }}>4<span style={{ fontFamily: fMono, fontSize: 8.5, color: PK_INK_MUTE }}> sv</span></span>
+              <div style={{ width: 22, height: 22, borderRadius: 999, background: PK_GREEN, color: "#fbf8f1", display: "grid", placeItems: "center" }}><Plus size={11} strokeWidth={2} /></div>
+            </div>
+          </div>
+
+          {/* Paper panel — ingredient checklist */}
+          <div style={{ marginTop: 16, marginBottom: 110, background: PK_SHEET, border: `1px solid ${PK_RULE_HAIR}`, borderRadius: 6, padding: 16 }}>
+            {ingredients.map((ing, i) => {
+              const done = i < 2;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: i < ingredients.length - 1 ? `1px solid ${PK_RULE_HAIR}` : "none" }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `1.5px solid ${done ? PK_GREEN : PK_BORDER}`, background: done ? PK_GREEN : "transparent", display: "grid", placeItems: "center" }}>
+                    {done && <Check size={12} strokeWidth={3} color="#fbf8f1" />}
+                  </span>
+                  <span style={{ flex: 1, fontFamily: fSerif, fontSize: 14.5, letterSpacing: "-0.01em", color: done ? PK_INK_MUTE : PK_INK, textDecoration: done ? "line-through" : "none" }}>{ing.name}</span>
+                  <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: "0.04em", color: PK_INK_MUTE, flexShrink: 0 }}>{ing.qty}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
       <PKTabBar active="home" />
     </IOSDevice>
@@ -240,35 +345,94 @@ function PhoneRecipe() {
 
 /* ── Screen 3: Meal plan + shopping list ─────────────────────── */
 function PhonePlan() {
-  const list = [
-    { aisle: "PRODUCE", items: ["6 ripe tomatoes", "2 heads broccoli", "1 bunch basil", "4 cloves garlic"] },
-    { aisle: "PROTEIN", items: ["400g salmon fillet", "2 chicken breasts"] },
-    { aisle: "PANTRY", items: ["400g rigatoni", "White miso paste", "Panko crumbs"] },
+  const groups = [
+    { cat: "Produce", items: [
+      { name: "Ripe tomatoes", qty: "6", done: true },
+      { name: "Broccoli", qty: "2 heads", done: true },
+      { name: "Basil", qty: "1 bunch" },
+      { name: "Garlic", qty: "4 cloves" },
+    ] },
+    { cat: "Protein", items: [
+      { name: "Salmon fillet", qty: "400 g" },
+      { name: "Chicken breast", qty: "2" },
+    ] },
+    { cat: "Pantry", items: [
+      { name: "Rigatoni", qty: "400 g" },
+      { name: "White miso paste", qty: "2 tbsp" },
+    ] },
   ];
   return (
     <IOSDevice width={340} height={720}>
-      <PKHeader title="Pie Keeper" />
-      <div style={{ padding: "4px 18px 12px", textAlign: "center" }}>
-        <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 18, color: PK_INK }}>Meal Plan</div>
-        <div style={{ fontSize: 11, color: PK_INK_MUTE, marginTop: 2 }}>Week of May 11 → 17</div>
-      </div>
-      <div style={{ display: "flex", margin: "0 16px 12px", background: "#fff", borderRadius: 10, padding: 4, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-        <div style={{ flex: 1, padding: "7px", textAlign: "center", fontSize: 12, color: PK_INK_MUTE }}>Meals</div>
-        <div style={{ flex: 1, padding: "7px", textAlign: "center", fontSize: 12, background: PK_GREEN, color: "#fff", borderRadius: 7, fontWeight: 500 }}>Shopping List</div>
-      </div>
-      <div style={{ padding: "0 16px 100px" }}>
-        <div style={{ fontSize: 10.5, color: PK_INK_MUTE, fontWeight: 600, letterSpacing: "0.08em", marginBottom: 8 }}>21 of 23 items needed</div>
-        {list.map((g, i) => (
-          <div key={i} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10.5, color: PK_GREEN, fontWeight: 600, letterSpacing: "0.1em", marginBottom: 6 }}>{g.aisle}</div>
-            {g.items.map((item, j) => (
-              <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "0.5px solid rgba(0,0,0,0.05)", fontSize: 13, color: PK_INK_SOFT }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${i === 0 && j < 2 ? PK_GREEN : "rgba(0,0,0,0.2)"}`, background: i === 0 && j < 2 ? PK_GREEN : "transparent", display: "grid", placeItems: "center", color: "#fff", fontSize: 10 }}>{i === 0 && j < 2 ? "✓" : ""}</div>
-                <span style={{ textDecoration: i === 0 && j < 2 ? "line-through" : "none", opacity: i === 0 && j < 2 ? 0.5 : 1 }}>{item}</span>
-              </div>
-            ))}
+      <div style={{ height: "100%", overflow: "hidden", background: PK_BG, position: "relative" }}>
+        {/* Masthead */}
+        <div style={{ padding: "60px 20px 0" }}>
+          <Eyebrow>The plan</Eyebrow>
+          <div style={{ margin: "11px 0 0", fontFamily: fSerif, fontWeight: 400, fontSize: 30, lineHeight: 1.02, letterSpacing: "-0.026em", color: PK_INK }}>
+            Meal <em style={{ fontStyle: "italic", color: PK_GREEN }}>Plan</em>
           </div>
-        ))}
+          <div style={{ margin: "9px 0 0", fontFamily: fSans, fontSize: 13, lineHeight: 1.45, color: PK_INK_SOFT }}>
+            4 meals planned · 12 things to buy.
+          </div>
+
+          {/* Week switcher rail */}
+          <div style={{ border: `1px solid ${PK_BORDER}`, borderRadius: 4, background: PK_PAPER, padding: "12px 14px", marginTop: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 999, border: `1px solid ${PK_BORDER}`, display: "grid", placeItems: "center", color: PK_INK_MUTE }}><ChevronLeft size={15} /></div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: fSerif, fontSize: 17, letterSpacing: "-0.015em", color: PK_INK, whiteSpace: "nowrap" }}>Week of 11 May</div>
+                <div style={{ marginTop: 4, fontFamily: fMono, fontSize: 9, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: PK_GREEN }}>This week</div>
+              </div>
+              <div style={{ width: 28, height: 28, borderRadius: 999, border: `1px solid ${PK_BORDER}`, display: "grid", placeItems: "center", color: PK_INK_MUTE }}><ChevronRight size={15} /></div>
+            </div>
+            <div style={{ marginTop: 13, paddingTop: 12, borderTop: `1px solid ${PK_RULE_HAIR}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: fMono, fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase", color: PK_INK_MUTE, marginBottom: 7 }}>
+                <span>2 of 4 cooked</span><span>50%</span>
+              </div>
+              <div style={{ height: 4, borderRadius: 9999, background: PK_WARM, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: "50%", borderRadius: 9999, background: PK_GREEN }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Editorial tabs */}
+          <div style={{ display: "flex", gap: 26, borderBottom: `1px solid ${PK_BORDER}`, marginTop: 18 }}>
+            <div style={{ paddingBottom: 10, marginBottom: -1, fontFamily: fSerif, fontSize: 17, color: PK_INK_MUTE }}>
+              Meals <span style={{ fontFamily: fMono, fontSize: 10 }}>· 4</span>
+            </div>
+            <div style={{ paddingBottom: 10, marginBottom: -1, fontFamily: fSerif, fontSize: 17, color: PK_INK, borderBottom: `2px solid ${PK_GREEN}` }}>
+              Groceries <span style={{ fontFamily: fMono, fontSize: 10, color: PK_INK_MUTE }}>· 12</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Shopping list */}
+        <div style={{ padding: "16px 20px 110px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", paddingBottom: 12, marginBottom: 16, borderBottom: `1px solid ${PK_BORDER}` }}>
+            <span style={{ fontFamily: fMono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: PK_INK_MUTE }}>Shopping list</span>
+            <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: "0.04em", color: PK_INK_MUTE }}>2/12 ticked</span>
+          </div>
+          {groups.map((g, gi) => (
+            <div key={g.cat} style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 9, paddingBottom: 7, borderBottom: `1px solid ${PK_BORDER}`, marginBottom: 2 }}>
+                <span style={{ fontFamily: fSerif, fontStyle: "italic", color: PK_GREEN, fontSize: 12 }}>{toRoman(gi + 1)}.</span>
+                <span style={{ flex: 1, fontFamily: fSerif, fontSize: 17, fontWeight: 400, letterSpacing: "-0.015em", color: PK_INK }}>{g.cat}</span>
+                <span style={{ fontFamily: fMono, fontSize: 10, color: PK_INK_MUTE }}>{g.items.length}</span>
+              </div>
+              {g.items.map((it, i) => {
+                const done = "done" in it && it.done;
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: i < g.items.length - 1 ? `1px solid ${PK_RULE_HAIR}` : "none", opacity: done ? 0.5 : 1 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `1.5px solid ${done ? PK_GREEN : PK_BORDER}`, background: done ? PK_GREEN : "transparent", display: "grid", placeItems: "center" }}>
+                      {done && <Check size={12} strokeWidth={3} color="#fbf8f1" />}
+                    </span>
+                    <span style={{ flex: 1, fontFamily: fSerif, fontSize: 14.5, letterSpacing: "-0.01em", color: done ? PK_INK_MUTE : PK_INK, textDecoration: done ? "line-through" : "none" }}>{it.name}</span>
+                    <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: "0.04em", color: PK_INK_MUTE }}>{it.qty}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
       <PKTabBar active="plan" />
     </IOSDevice>
