@@ -28,7 +28,7 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: theme.background },
           }}
         >
-          <Stack.Screen name="index" options={{ title: 'Recipe Fork' }} />
+          <Stack.Screen name="index" options={{ title: 'Pie Keeper' }} />
           <Stack.Screen name="sign-in" options={{ title: 'Sign in', headerShown: false }} />
           <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
         </Stack>

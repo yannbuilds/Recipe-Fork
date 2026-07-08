@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Recipe Fork",
-    "slug": "recipe-fork",
+    "name": "Pie Keeper",
+    "slug": "pie-keeper",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "recipefork",
+    "scheme": "piekeeper",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"

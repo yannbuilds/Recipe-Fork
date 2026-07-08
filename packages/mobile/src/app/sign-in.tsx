@@ -46,7 +46,7 @@ export default function SignInScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={[styles.title, { color: theme.text }]}>Recipe Fork</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Pie Keeper</Text>
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
           Sign in with your existing account
         </Text>
