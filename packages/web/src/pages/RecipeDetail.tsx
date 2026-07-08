@@ -1289,7 +1289,7 @@ export default function RecipeDetail() {
         >
           {/* ─ Left: Ingredients sidebar ───────────────────────── */}
           <aside className="rd-ingredients self-start">
-            <div>
+            <div className="rd-panel">
               {/* Heading + serving control */}
               <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>What you need</div>
               <div
@@ -1371,24 +1371,26 @@ export default function RecipeDetail() {
           {/* ─ Right: Directions + Video ──────────────────────── */}
           <div className="rd-steps">
             {/* Directions */}
-            <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>Method</div>
-            <h2
-              className="rf-heading"
-              style={{
-                fontSize: 24,
-                color: 'var(--text)',
-                borderBottom: '1px solid var(--border)',
-                paddingBottom: 14,
-                marginBottom: 20,
-              }}
-            >
-              Directions
-            </h2>
+            <div className="rd-panel">
+              <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>Method</div>
+              <h2
+                className="rf-heading"
+                style={{
+                  fontSize: 24,
+                  color: 'var(--text)',
+                  borderBottom: '1px solid var(--border)',
+                  paddingBottom: 14,
+                  marginBottom: 20,
+                }}
+              >
+                Directions
+              </h2>
 
-            {renderStepGroups()}
+              {renderStepGroups()}
+            </div>
 
             {/* Video (flat editorial treatment, matching mobile) */}
-            {recipe.video_url && <div style={{ marginTop: 36 }}>{renderVideo(true)}</div>}
+            {recipe.video_url && <div style={{ marginTop: 20 }}>{renderVideo(true)}</div>}
           </div>
         </div>
         )}
@@ -1528,7 +1530,7 @@ export default function RecipeDetail() {
             )}
 
             {/* Active panel */}
-            <div className="mt-4">
+            <div className="mt-4 rd-panel">
               {mobileTab === 'ingredients' ? renderMobileIngredients() : renderStepGroups()}
             </div>
 
