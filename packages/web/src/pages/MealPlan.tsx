@@ -1,5 +1,15 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { CalendarDays, ShoppingCart } from 'lucide-react';
+import {
+  CalendarDays,
+  ShoppingCart,
+  Plus,
+  Check,
+  X,
+  Utensils,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
@@ -8,10 +18,32 @@ import AddRecipeModal from '../components/AddRecipeModal';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { getMonday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
-import { CATEGORY_EMOJI_MAP } from '../utils/ingredientEmojis';
 import IngredientIcon from '../components/IngredientIcon';
+import { fSerif, fSans, fMono } from '../styles/pieKeeper';
+import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 type Tab = 'meals' | 'shopping';
+
+// Lowercase roman numeral for editorial group labels (i, ii, iii …).
+function toRoman(n: number): string {
+  const map: [number, string][] = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  let out = '';
+  for (const [v, s] of map) {
+    while (n >= v) {
+      out += s;
+      n -= v;
+    }
+  }
+  return out;
+}
+
+// Formats total minutes as a compact label (e.g. 90 → "1h 30m").
+function formatMins(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
 
 export default function MealPlan() {
   const { user } = useAuth();
@@ -251,351 +283,416 @@ export default function MealPlan() {
   const isLastWeek = formatWeekStart(shiftWeek(getMonday(new Date()), -1)) === formatWeekStart(weekStart);
   const showPlanningLabel = isPlanningMode() && isNextWeek;
 
-  return (
-    <div className="space-y-5">
-      {/* ── Week navigator card ──────────────────────────── */}
-      <div
-        className="rf-card"
-        style={{ padding: '20px 24px', animation: 'fadeUp 0.4s ease both' }}
-      >
-        <div className="flex items-center justify-between">
-          {/* Prev week circular button */}
-          <button
-            onClick={() => setWeekStart((prev) => shiftWeek(prev, -1))}
-            className="flex items-center justify-center rounded-full transition-colors shrink-0"
-            style={{
-              width: 36,
-              height: 36,
-              border: '1px solid var(--border)',
-              color: 'var(--muted)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--green)';
-              e.currentTarget.style.color = 'var(--green)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border)';
-              e.currentTarget.style.color = 'var(--muted)';
-            }}
-          >
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
+  // Editorial week status chip (mono). Tone drives colour.
+  const weekStatus: { label: string; tone: 'green' | 'muted' } | null = isLastWeek
+    ? { label: 'Last week', tone: 'muted' }
+    : showPlanningLabel
+      ? { label: 'Planning next week', tone: 'green' }
+      : isCurrentWeek
+        ? { label: 'This week', tone: 'green' }
+        : isNextWeek
+          ? { label: 'Next week', tone: 'green' }
+          : null;
 
-          <div className="text-center">
-            <div className="rf-eyebrow flex justify-center" style={{ marginBottom: 6 }}>The plan</div>
-            <h2 className="rf-heading text-xl" style={{ color: 'var(--text)' }}>
-              Meal Plan
-            </h2>
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+  // Masthead subtitle — mirrors the copy voice of the other editorial pages.
+  const subtitle = loading
+    ? 'Loading your week…'
+    : entries.length === 0
+      ? 'Nothing planned yet — add recipes to build your week.'
+      : `${entries.length} meal${entries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
+
+  // Shared editorial circular nav button (prev / next week).
+  const weekNavButton = (dir: -1 | 1) => (
+    <button
+      onClick={() => setWeekStart((prev) => shiftWeek(prev, dir))}
+      aria-label={dir === -1 ? 'Previous week' : 'Next week'}
+      className="flex items-center justify-center rounded-full transition-colors shrink-0"
+      style={{ width: 38, height: 38, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--muted)' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.color = 'var(--green)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)'; }}
+    >
+      {dir === -1 ? <ChevronLeft size={17} strokeWidth={1.8} /> : <ChevronRight size={17} strokeWidth={1.8} />}
+    </button>
+  );
+
+  return (
+    <div>
+      {/* ── Masthead ─────────────────────────────────────── */}
+      <div className="mb-5" style={{ animation: 'fadeUp 0.4s ease both' }}>
+        <Eyebrow>The plan</Eyebrow>
+        <h1
+          style={{
+            margin: '12px 0 0',
+            fontFamily: fSerif,
+            fontWeight: 400,
+            fontSize: 'clamp(30px, 8vw, 38px)',
+            lineHeight: 1.02,
+            letterSpacing: '-0.026em',
+            color: 'var(--text)',
+          }}
+        >
+          Meal <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>Plan</em>
+        </h1>
+        <p
+          style={{
+            margin: '12px 0 0',
+            fontFamily: fSans,
+            fontSize: 14.5,
+            lineHeight: 1.45,
+            color: 'var(--text-soft)',
+            minHeight: '1.25rem',
+          }}
+        >
+          {subtitle}
+        </p>
+      </div>
+
+      {/* ── Week switcher rail ───────────────────────────── */}
+      <div
+        style={{
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          background: 'var(--card)',
+          padding: '14px 16px',
+          marginBottom: 20,
+          animation: 'fadeUp 0.4s ease 0.05s both',
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          {weekNavButton(-1)}
+
+          <div className="text-center" style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: fSerif,
+                fontSize: 19,
+                letterSpacing: '-0.015em',
+                color: 'var(--text)',
+                whiteSpace: 'nowrap',
+              }}
+            >
               Week of {formatWeekLabel(weekStart)}
-            </p>
-            {isLastWeek && (
-              <span
-                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
-                style={{ background: 'var(--border)', color: 'var(--muted)' }}
+            </div>
+            {weekStatus && (
+              <div
+                style={{
+                  marginTop: 5,
+                  fontFamily: fMono,
+                  fontSize: 9.5,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: weekStatus.tone === 'green' ? 'var(--green)' : 'var(--muted)',
+                }}
               >
-                Last week
-              </span>
-            )}
-            {isCurrentWeek && (
-              <span
-                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
-                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
-              >
-                This week
-              </span>
-            )}
-            {isNextWeek && !showPlanningLabel && (
-              <span
-                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
-                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
-              >
-                Next week
-              </span>
-            )}
-            {showPlanningLabel && (
-              <span
-                className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs font-semibold"
-                style={{ background: 'var(--green-light)', color: 'var(--green)' }}
-              >
-                Planning next week
-              </span>
+                {weekStatus.label}
+              </div>
             )}
           </div>
 
-          {/* Next week circular button */}
-          <button
-            onClick={() => setWeekStart((prev) => shiftWeek(prev, 1))}
-            className="flex items-center justify-center rounded-full transition-colors shrink-0"
-            style={{
-              width: 36,
-              height: 36,
-              border: '1px solid var(--border)',
-              color: 'var(--muted)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--green)';
-              e.currentTarget.style.color = 'var(--green)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border)';
-              e.currentTarget.style.color = 'var(--muted)';
-            }}
-          >
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+          {weekNavButton(1)}
         </div>
 
         {/* Progress bar */}
         {entries.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'var(--muted)' }}>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--rule-hair)' }}>
+            <div
+              className="flex justify-between"
+              style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}
+            >
               <span>{cookedCount} of {entries.length} cooked</span>
               <span>{cookedPercentage}%</span>
             </div>
-            <div
-              className="overflow-hidden"
-              style={{ height: 8, borderRadius: 9999, background: 'var(--warm)' }}
-            >
+            <div className="overflow-hidden" style={{ height: 4, borderRadius: 9999, background: 'var(--warm)' }}>
               <div
                 className="rf-progress-fill"
-                style={{
-                  height: '100%',
-                  borderRadius: 9999,
-                  background: 'var(--green)',
-                  width: `${cookedPercentage}%`,
-                }}
+                style={{ height: '100%', borderRadius: 9999, background: 'var(--green)', width: `${cookedPercentage}%` }}
               />
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Tabs with count badges ───────────────────────── */}
-      <div className="rf-tabs" style={{ animation: 'fadeUp 0.4s ease 0.1s both' }}>
-        <button
-          onClick={() => setTab('meals')}
-          className={`rf-tab ${tab === 'meals' ? 'rf-tab-active' : ''}`}
-        >
-          Meals
-          <span
-            className="inline-flex items-center justify-center rounded-full ml-1.5"
-            style={{
-              minWidth: 20,
-              height: 20,
-              fontSize: 11,
-              fontWeight: 700,
-              background: tab === 'meals' ? 'var(--green)' : 'var(--border)',
-              color: tab === 'meals' ? '#fff' : 'var(--muted)',
-            }}
-          >
-            {entries.length}
-          </span>
-        </button>
-        <button
-          onClick={() => setTab('shopping')}
-          className={`rf-tab ${tab === 'shopping' ? 'rf-tab-active' : ''}`}
-        >
-          Groceries List
-          <span
-            className="inline-flex items-center justify-center rounded-full ml-1.5"
-            style={{
-              minWidth: 20,
-              height: 20,
-              fontSize: 11,
-              fontWeight: 700,
-              background: tab === 'shopping' ? 'var(--green)' : 'var(--border)',
-              color: tab === 'shopping' ? '#fff' : 'var(--muted)',
-            }}
-          >
-            {combined.length}
-          </span>
-        </button>
+      {/* ── Editorial tabs ───────────────────────────────── */}
+      <div
+        style={{ display: 'flex', gap: 28, borderBottom: '1px solid var(--border)', marginBottom: 22, animation: 'fadeUp 0.4s ease 0.1s both' }}
+      >
+        {([
+          ['meals', 'Meals', entries.length],
+          ['shopping', 'Groceries', combined.length],
+        ] as const).map(([key, label, count]) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                paddingBottom: 12,
+                marginBottom: -1,
+                cursor: 'pointer',
+                fontFamily: fSerif,
+                fontSize: 19,
+                letterSpacing: '-0.01em',
+                color: active ? 'var(--text)' : 'var(--muted)',
+                borderBottom: active ? '2px solid var(--green)' : '2px solid transparent',
+              }}
+            >
+              {label}{' '}
+              <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>· {count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {loading && (
-        <p className="text-center text-sm py-8" style={{ color: 'var(--muted)' }}>Loading...</p>
+        <p
+          className="text-center py-8"
+          style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 15, color: 'var(--muted)' }}
+        >
+          Loading…
+        </p>
       )}
 
       {/* ── Meals tab ────────────────────────────────────── */}
       {!loading && tab === 'meals' && (
-        <div className="space-y-4">
+        <div>
           {entries.length === 0 && (
             <div
-              className="text-center py-16"
+              className="text-center py-14"
               style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
               <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
-                <CalendarDays size={44} strokeWidth={1.25} />
+                <CalendarDays size={40} strokeWidth={1.2} />
               </div>
-              <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
-                No meals planned yet
+              <p
+                className="mt-4"
+                style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}
+              >
+                Nothing planned yet
               </p>
-              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Add some recipes to plan your week.
+              <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
+                Add some recipes to build your week.
               </p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {sortedEntries.map((entry, index) => (
-              <div
-                key={entry.id}
-                ref={(el) => {
-                  if (el) cardRefs.current.set(entry.id, el);
-                  else cardRefs.current.delete(entry.id);
-                }}
-                className="overflow-hidden"
-                style={{
-                  background: 'var(--card)',
-                  borderRadius: 'var(--radius)',
-                  boxShadow: 'var(--shadow-md)',
-                  opacity: entry.is_cooked ? 0.75 : 1,
-                  transition: 'opacity 0.3s, filter 0.4s',
-                  animation: 'fadeUp 0.4s ease both',
-                  animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
-                }}
-              >
-                {/* Image area with overlays */}
-                <div className="relative" style={{ height: 200 }}>
-                  {entry.recipe?.image_url ? (
-                    <img
-                      src={entry.recipe.image_url}
-                      alt={entry.recipe?.title}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{
-                        filter: entry.is_cooked ? 'grayscale(100%)' : 'none',
-                        transition: 'filter 0.4s ease',
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="absolute inset-0 flex items-center justify-center text-3xl"
-                      style={{
-                        background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
-                        filter: entry.is_cooked ? 'grayscale(100%)' : 'none',
-                        transition: 'filter 0.4s ease',
-                      }}
-                    >
-                      🍴
-                    </div>
-                  )}
-
-                  {/* Gradient scrim */}
-                  <div className="rf-scrim absolute inset-0" />
-
-                  {/* Remove button: frosted circle */}
-                  <button
-                    onClick={() => handleRemove(entry.id)}
-                    className="absolute top-2 right-2 flex items-center justify-center rounded-full rf-glass-dark text-white text-lg leading-none transition-colors"
-                    style={{ width: 28, height: 28 }}
-                    title="Remove from meal plan"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-8">
+            {sortedEntries.map((entry, index) => {
+              const cooked = entry.is_cooked;
+              const meta: string[] = [];
+              if (entry.recipe?.prep_time != null) meta.push(`Prep ${formatMins(entry.recipe.prep_time)}`);
+              if (entry.recipe?.cook_time != null) meta.push(`Cook ${formatMins(entry.recipe.cook_time)}`);
+              if (entry.recipe?.servings != null) meta.push(`Serves ${entry.recipe.servings}`);
+              return (
+                <div
+                  key={entry.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(entry.id, el);
+                    else cardRefs.current.delete(entry.id);
+                  }}
+                  style={{
+                    opacity: cooked ? 0.72 : 1,
+                    transition: 'opacity 0.3s, filter 0.4s',
+                    animation: 'fadeUp 0.4s ease both',
+                    animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
+                  }}
+                >
+                  {/* Photo */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '4 / 3',
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                      background: 'var(--paper3)',
+                    }}
                   >
-                    ×
-                  </button>
-
-                  {/* Cooked badge: top-left */}
-                  {entry.is_cooked && (
-                    <div
-                      className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
-                      style={{ background: 'var(--green)' }}
-                    >
-                      ✓ Cooked
-                    </div>
-                  )}
-
-                  {/* Title overlay: bottom, solid scrim (meal plan only) */}
-                  <div className="absolute bottom-0 left-0 right-0">
-                    <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.72)' }}>
-                      <h3
-                        className={`rf-heading font-semibold text-sm ${entry.is_cooked ? 'line-through' : ''}`}
-                        style={{ color: '#fff' }}
+                    {entry.recipe?.image_url ? (
+                      <img
+                        src={entry.recipe.image_url}
+                        alt={entry.recipe?.title}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        style={{
+                          filter: cooked ? 'grayscale(100%)' : 'saturate(0.92) contrast(1.02)',
+                          transition: 'filter 0.4s ease',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ color: 'var(--muted)', filter: cooked ? 'grayscale(100%)' : 'none' }}
                       >
-                        {entry.recipe?.title}
-                      </h3>
-                      <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                        {entry.recipe?.prep_time != null && <span>Prep: {entry.recipe.prep_time}m</span>}
-                        {entry.recipe?.cook_time != null && <span>Cook: {entry.recipe.cook_time}m</span>}
-                        {entry.recipe?.servings != null && <span>Serves {entry.recipe.servings}</span>}
+                        <Utensils size={34} strokeWidth={1.2} />
                       </div>
+                    )}
+
+                    {/* Hairline border */}
+                    <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)', pointerEvents: 'none' }} />
+
+                    {/* Remove button */}
+                    <button
+                      onClick={() => handleRemove(entry.id)}
+                      className="absolute flex items-center justify-center rounded-full rf-glass-dark text-white transition-colors"
+                      style={{ top: 10, right: 10, width: 28, height: 28 }}
+                      title="Remove from meal plan"
+                    >
+                      <X size={15} strokeWidth={2} />
+                    </button>
+
+                    {/* Cooked chip */}
+                    {cooked && (
+                      <div
+                        className="absolute flex items-center gap-1.5"
+                        style={{
+                          top: 10,
+                          left: 10,
+                          padding: '4px 8px',
+                          background: 'rgba(251,248,241,0.92)',
+                          backdropFilter: 'blur(6px)',
+                          WebkitBackdropFilter: 'blur(6px)',
+                          fontFamily: fMono,
+                          fontSize: 9,
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase',
+                          color: 'var(--green-deep)',
+                        }}
+                      >
+                        <Check size={11} strokeWidth={3} />
+                        Cooked
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Caption */}
+                  <div style={{ marginTop: 12 }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontFamily: fSerif,
+                        fontWeight: 400,
+                        fontSize: 19,
+                        lineHeight: 1.15,
+                        letterSpacing: '-0.015em',
+                        color: 'var(--text)',
+                        textDecoration: cooked ? 'line-through' : 'none',
+                      }}
+                    >
+                      {entry.recipe?.title}
+                    </h3>
+                    {meta.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 10,
+                          marginTop: 6,
+                          fontFamily: fMono,
+                          fontSize: 10,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)',
+                        }}
+                      >
+                        {meta.map((m) => (
+                          <span key={m}>{m}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2" style={{ marginTop: 12 }}>
+                      <button
+                        onClick={() => handleToggleCooked(entry.id)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 transition-colors"
+                        style={{
+                          padding: '9px 0',
+                          borderRadius: 999,
+                          fontFamily: fSans,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          border: cooked ? '1px solid var(--green)' : '1px solid var(--border)',
+                          background: cooked ? 'var(--green-light)' : 'var(--card)',
+                          color: cooked ? 'var(--green)' : 'var(--text)',
+                        }}
+                      >
+                        {cooked && <Check size={14} strokeWidth={2.5} />}
+                        {cooked ? 'Cooked' : 'Mark cooked'}
+                      </button>
+                      <button
+                        onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
+                        className="flex-1 text-center transition-colors"
+                        style={{
+                          padding: '9px 0',
+                          borderRadius: 999,
+                          fontFamily: fSans,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          border: '1px solid var(--border)',
+                          background: 'var(--card)',
+                          color: 'var(--text)',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--card)'; }}
+                      >
+                        View recipe
+                      </button>
                     </div>
                   </div>
                 </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2" style={{ padding: 12 }}>
-                  <button
-                    onClick={() => handleToggleCooked(entry.id)}
-                    className="flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors"
-                    style={
-                      entry.is_cooked
-                        ? { background: 'var(--green-light)', color: 'var(--green)' }
-                        : { background: 'var(--warm)', color: 'var(--muted)' }
-                    }
-                  >
-                    {entry.is_cooked ? (
-                      <span className="flex items-center justify-center gap-1.5">
-                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Cooked
-                      </span>
-                    ) : (
-                      'Mark as cooked'
-                    )}
-                  </button>
-                  <button
-                    onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
-                    className="flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors"
-                    style={{ background: 'var(--warm)', color: 'var(--text)' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
-                  >
-                    View Recipe
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Add recipe button */}
+          {/* Add recipe — dashed editorial row */}
           <button
             onClick={() => setShowAddModal(true)}
-            className="w-full py-3 rounded-lg border-2 border-dashed text-sm font-medium transition-colors"
             style={{
-              borderColor: 'var(--green)',
+              width: '100%',
+              textAlign: 'left',
+              marginTop: entries.length > 0 ? 24 : 0,
+              padding: '16px 18px',
+              border: '1px dashed var(--green)',
+              borderRadius: 4,
+              background: 'transparent',
               color: 'var(--green)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              cursor: 'pointer',
               animation: 'fadeUp 0.4s ease both',
               animationDelay: `${Math.min(0.15 + entries.length * 0.05 + 0.05, 0.45)}s`,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--green-light)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
           >
-            + Add Recipe
+            <Plus size={18} strokeWidth={1.6} />
+            <span style={{ fontFamily: fSerif, fontSize: 16, fontStyle: 'italic' }}>Add a recipe</span>
           </button>
         </div>
       )}
 
       {/* ── Shopping list tab ────────────────────────────── */}
       {!loading && tab === 'shopping' && (
-        <div className="space-y-4">
+        <div>
           {/* Empty state */}
           {combined.length === 0 && (
             <div
-              className="text-center py-16"
+              className="text-center py-14"
               style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
               <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
-                <ShoppingCart size={44} strokeWidth={1.25} />
+                <ShoppingCart size={40} strokeWidth={1.2} />
               </div>
-              <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
+              <p
+                className="mt-4"
+                style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}
+              >
                 {entries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
               </p>
-              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+              <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
                 {entries.length === 0
                   ? 'Add some meals to generate a shopping list.'
                   : 'All meals are marked as cooked — nothing to shop for.'}
@@ -606,19 +703,29 @@ export default function MealPlan() {
           {/* Progress summary */}
           {combined.length > 0 && (
             <div
-              className="rf-card flex items-center justify-between"
-              style={{ padding: '14px 16px', animation: 'fadeUp 0.4s ease 0.15s both' }}
+              className="flex items-baseline justify-between"
+              style={{
+                paddingBottom: 14,
+                marginBottom: 22,
+                borderBottom: '1px solid var(--border)',
+                animation: 'fadeUp 0.4s ease 0.15s both',
+              }}
             >
-              <span className="text-sm">
-                <span className="font-bold" style={{ color: 'var(--text)' }}>{checkedItems.size}</span>
-                <span style={{ color: 'var(--muted)' }}> of {combined.length} items ticked</span>
+              <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                Shopping list
+              </span>
+              <span style={{ fontFamily: fMono, fontSize: 11, letterSpacing: '0.04em', color: 'var(--muted)' }}>
+                {checkedItems.size}/{combined.length} ticked
               </span>
             </div>
           )}
 
           {categorising && combined.length > 0 && (
-            <p className="text-center text-sm py-2" style={{ color: 'var(--green)' }}>
-              Categorising ingredients...
+            <p
+              className="text-center py-2 mb-2"
+              style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}
+            >
+              Categorising ingredients…
             </p>
           )}
 
@@ -627,140 +734,162 @@ export default function MealPlan() {
             <div
               key={group.category}
               style={{
+                marginBottom: 26,
                 animation: 'fadeUp 0.4s ease both',
                 animationDelay: `${Math.min(0.2 + groupIndex * 0.05, 0.45)}s`,
               }}
             >
-              {/* Category header with emoji */}
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-base">{CATEGORY_EMOJI_MAP[group.category] || '🛒'}</span>
+              {/* Editorial category header: roman numeral + serif name + mono count */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 10,
+                  paddingBottom: 8,
+                  borderBottom: '1px solid var(--border)',
+                  marginBottom: 2,
+                }}
+              >
+                <span style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--green)', fontSize: 13 }}>
+                  {toRoman(groupIndex + 1)}.
+                </span>
                 <h3
-                  className="text-xs font-bold uppercase tracking-wide"
-                  style={{ color: 'var(--muted)' }}
+                  style={{
+                    margin: 0,
+                    fontFamily: fSerif,
+                    fontSize: 18,
+                    fontWeight: 400,
+                    letterSpacing: '-0.015em',
+                    color: 'var(--text)',
+                    flex: 1,
+                  }}
                 >
                   {group.category}
                 </h3>
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                  ({group.items.length})
+                <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>
+                  {group.items.length}
                 </span>
               </div>
 
-              {/* Items in a single card */}
-              <div className="rf-card overflow-hidden">
-                {group.items.map((ing, i) => {
-                  const key = `${ing.item}-${ing.unit}`;
-                  const checked = checkedItems.has(key);
-                  const isExpanded = expandedItem === key;
-                  return (
+              {/* Items — hairline-divided rows on the paper */}
+              {group.items.map((ing, i) => {
+                const key = `${ing.item}-${ing.unit}`;
+                const checked = checkedItems.has(key);
+                const isExpanded = expandedItem === key;
+                const qty = `${ing.quantity}${ing.unit ? ` ${ing.unit}` : ''}`.trim();
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      borderBottom: i < group.items.length - 1 ? '1px solid var(--rule-hair)' : 'none',
+                      opacity: checked ? 0.5 : 1,
+                      transition: 'opacity 0.3s',
+                    }}
+                  >
                     <div
-                      key={key}
-                      style={{
-                        borderBottom: i < group.items.length - 1 ? '1px solid var(--border)' : 'none',
-                        opacity: checked ? 0.5 : 1,
-                        transition: 'opacity 0.3s, background 0.15s',
-                      }}
+                      className="flex items-center gap-3 select-none"
+                      style={{ padding: '12px 0', cursor: 'pointer' }}
+                      onClick={() => toggleShoppingItem(key)}
                     >
-                      <div
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ''; }}
-                        onClick={() => toggleShoppingItem(key)}
+                      {/* Square editorial checkbox */}
+                      <span
+                        className="shrink-0"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 5,
+                          border: `1.5px solid ${checked ? 'var(--green)' : 'var(--border)'}`,
+                          background: checked ? 'var(--green)' : 'transparent',
+                          display: 'grid',
+                          placeItems: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
                       >
-                        {/* Custom checkbox */}
-                        <div
-                          className="flex items-center justify-center shrink-0"
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 6,
-                            border: '2px solid',
-                            borderColor: checked ? 'var(--green)' : 'var(--border)',
-                            background: checked ? 'var(--green)' : 'transparent',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          {checked && (
-                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </div>
+                        {checked && <Check size={13} strokeWidth={3} color="#fbf8f1" />}
+                      </span>
 
-                        <IngredientIcon item={ing.item} />
+                      <IngredientIcon item={ing.item} />
 
-                        {/* Item text */}
+                      {/* Item name (serif) */}
+                      <span
+                        className="flex-1"
+                        style={{
+                          fontFamily: fSerif,
+                          fontSize: 16,
+                          letterSpacing: '-0.01em',
+                          color: checked ? 'var(--muted)' : 'var(--text)',
+                          textDecoration: checked ? 'line-through' : 'none',
+                        }}
+                      >
+                        {ing.item}
+                      </span>
+
+                      {/* Quantity (mono) */}
+                      {qty && (
                         <span
-                          className={`flex-1 text-sm ${checked ? 'line-through' : ''}`}
-                          style={{ color: checked ? 'var(--muted)' : 'var(--text)' }}
-                        >
-                          {ing.quantity} {ing.unit}{' '}
-                          <span className="font-medium">{ing.item}</span>
-                        </span>
-
-                        {/* Chevron — tap to expand, does not tick */}
-                        <div
-                          style={{ padding: 4, margin: -4, flexShrink: 0 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedItem(isExpanded ? null : key);
-                          }}
-                        >
-                          <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="var(--muted)"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transition: 'transform 0.2s ease',
-                              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                              display: 'block',
-                            }}
-                          >
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      {/* Expanded recipe sources */}
-                      {isExpanded && (
-                        <div
                           style={{
-                            padding: '0 16px 12px 59px',
-                            borderTop: '1px solid var(--border)',
-                            marginTop: -1,
+                            fontFamily: fMono,
+                            fontSize: 11,
+                            letterSpacing: '0.04em',
+                            color: 'var(--muted)',
+                            flexShrink: 0,
+                            textDecoration: checked ? 'line-through' : 'none',
                           }}
                         >
-                          {ing.sources.map((src, si) => (
-                            <div
-                              key={`${src.recipeId}-${si}`}
-                              className="flex items-center justify-between py-1.5"
-                              style={{ color: 'var(--muted)', fontSize: 13 }}
-                            >
-                              <span
-                                className="cursor-pointer"
-                                style={{ color: 'var(--green)' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/recipe/${src.recipeId}`);
-                                }}
-                              >
-                                {src.recipeTitle}
-                              </span>
-                              <span style={{ fontSize: 12 }}>
-                                {src.quantity} {src.unit}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                          {qty}
+                        </span>
                       )}
+
+                      {/* Chevron — tap to expand, does not tick */}
+                      <button
+                        style={{ padding: 4, margin: -4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}
+                        aria-label="Show recipes"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedItem(isExpanded ? null : key);
+                        }}
+                      >
+                        <ChevronDown
+                          size={15}
+                          strokeWidth={2}
+                          color="var(--muted)"
+                          style={{
+                            transition: 'transform 0.2s ease',
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            display: 'block',
+                          }}
+                        />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* Expanded recipe sources */}
+                    {isExpanded && (
+                      <div style={{ padding: '2px 0 12px 59px' }}>
+                        {ing.sources.map((src, si) => (
+                          <div
+                            key={`${src.recipeId}-${si}`}
+                            className="flex items-center justify-between py-1.5"
+                          >
+                            <span
+                              className="cursor-pointer"
+                              style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/recipe/${src.recipeId}`);
+                              }}
+                            >
+                              {src.recipeTitle}
+                            </span>
+                            <span style={{ fontFamily: fMono, fontSize: 10.5, letterSpacing: '0.04em', color: 'var(--muted)' }}>
+                              {src.quantity} {src.unit}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
