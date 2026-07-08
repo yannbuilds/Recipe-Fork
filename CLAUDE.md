@@ -16,12 +16,32 @@ This overrides the parent folder identity while working here.
 
 ## Stack
 
-- **Monorepo:** npm workspaces with three packages — `extension`, `web`, `shared`
+- **Monorepo:** npm workspaces with four packages — `extension`, `web`, `shared`, `mobile`
 - **Frontend:** React + TypeScript (Vite), lives in `packages/web`
 - **Extension:** Chrome MV3, lives in `packages/extension`
+- **Mobile:** Expo (React Native) for iOS/Android, lives in `packages/mobile`
 - **Backend:** Supabase (Postgres + auth + storage) — no custom API server
 - **Parsing:** Claude API (Haiku or Sonnet) — extracts structured recipe data from raw HTML
-- **Shared types:** `packages/shared` — used by both web and extension
+- **Shared types:** `packages/shared` — used by web, extension and mobile (mobile imports types only; it has its own Supabase client in `src/lib/supabase.ts` because the shared client is web/cookie-specific)
+
+---
+
+## Mobile App Roadmap
+
+The mobile app lives in `packages/mobile` (Expo + expo-router + TypeScript). Run with `npm run dev:mobile` from the repo root, preview via Expo Go on the phone. Check this roadmap at the start of mobile work and update the status markers as phases complete.
+
+**Hard constraints — do not undo these:**
+
+- **Pinned to Expo SDK 54.** The App Store's Expo Go only supports SDK 54 (it stopped getting updates in Sept 2025). Do not upgrade the SDK while Expo Go is the preview path. Same reason `experiments.typedRoutes` is off (monorepo require bug) and `metro.config.js` pins resolution to the app's own `node_modules` (the web app's React copy at the repo root would otherwise duplicate React and crash the app).
+- **Expo Go cannot run the share-sheet save flow.** That needs an EAS dev build, which for iOS needs an Apple Developer account (US$99/yr). Yann's decision gate: use the free Expo Go phases first; pay only if the app earns it.
+
+**Phases:**
+
+- ✅ **Phase 0 — Scaffold + auth** (done, July 2026): Expo app in `packages/mobile`, sign-in with existing Supabase email/password, recipe list loads real data in Expo Go.
+- ✅ **Phase 1 — Browse + cook** (done with Phase 0): recipe list with search (titles + ingredients) and pull-to-refresh, recipe detail with ingredients/steps/notes, `expo-keep-awake` on the detail screen so the phone doesn't lock while cooking. *Polish still open: act on Yann's feedback from real kitchen use (type sizes, layout, ordering).*
+- ⬜ **Phase 2 — Share-sheet save** (needs Apple Developer account + EAS dev build): `expo-share-intent` config plugin, share landing screen with saving/success/error states, calls the existing `import-recipe` Supabase Edge Function with the shared URL. Exit test: iPhone Safari → Share → recipe appears in app and web.
+- ⬜ **Phase 3 — Offline + polish:** TanStack Query cache persistence to AsyncStorage (recipes readable in airplane mode), `expo-image` disk caching, haptics on save, proper app icon + splash (currently Expo template placeholders).
+- ⬜ **Later / not scoped:** TestFlight distribution to Yann + Dafne, Android build check, push notifications, widgets/Siri. Recipe editing, cookbooks and meal planning stay web-only unless Yann asks.
 
 ---
 
