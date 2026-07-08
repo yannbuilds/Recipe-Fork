@@ -10,6 +10,8 @@ import CookbooksView from './CookbooksView';
 import { useAuth } from '../context/AuthContext';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import type { RecipeTagRow } from '../constants/tagMeta';
+import { fSerif, fSans } from '../styles/pieKeeper';
+import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 const INITIAL_COUNT = window.innerWidth < 1024 ? 4 : 8;
 const PAGE_SIZE = 8;
@@ -286,15 +288,40 @@ export default function RecipeList() {
         <CookbooksView authLoading={authLoading} />
       ) : (
         <>
-      {/* Greeting header */}
+      {/* Greeting masthead */}
       <div style={{ animation: 'fadeUp 0.4s ease both' }} className="mb-5">
+        <Eyebrow>The kitchen</Eyebrow>
         <h1
-          className="rf-heading font-bold"
-          style={{ color: 'var(--text)', fontSize: 26 }}
+          style={{
+            margin: '12px 0 0',
+            fontFamily: fSerif,
+            fontWeight: 400,
+            fontSize: 'clamp(30px, 8vw, 38px)',
+            lineHeight: 1.02,
+            letterSpacing: '-0.026em',
+            color: 'var(--text)',
+          }}
         >
-          {greeting.text}{profile?.display_name ? `, ${profile.display_name}` : ''}{greeting.punctuation}
+          {greeting.text}
+          {profile?.display_name ? (
+            <>
+              , <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>{profile.display_name}</em>
+            </>
+          ) : (
+            ''
+          )}
+          {greeting.punctuation}
         </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)', minHeight: '1.25rem' }}>
+        <p
+          style={{
+            margin: '12px 0 0',
+            fontFamily: fSans,
+            fontSize: 14.5,
+            lineHeight: 1.45,
+            color: 'var(--text-soft)',
+            minHeight: '1.25rem',
+          }}
+        >
           {loading
             ? 'Loading your recipes…'
             : hasAnyFilter
@@ -489,12 +516,15 @@ export default function RecipeList() {
           style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
         >
           <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
-            <UtensilsCrossed size={44} strokeWidth={1.25} />
+            <UtensilsCrossed size={40} strokeWidth={1.2} />
           </div>
-          <p className="rf-heading text-lg mt-4" style={{ color: 'var(--text)' }}>
+          <p
+            className="mt-4"
+            style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}
+          >
             No recipes found
           </p>
-          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+          <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
             Try adjusting your filters or add a new recipe.
           </p>
         </div>

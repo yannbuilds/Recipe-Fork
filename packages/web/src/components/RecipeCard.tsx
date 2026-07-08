@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { Clock, Utensils } from 'lucide-react';
 import type { Recipe } from '@recipe-aggregator/shared';
 import FavouriteButton from './FavouriteButton';
 import { PK, fSerif, fMono } from '../styles/pieKeeper';
@@ -68,10 +68,10 @@ export default function RecipeCard({ recipe, onToggleFavourite, index = 0, owner
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 40,
+              color: PK.inkMute,
             }}
           >
-            🍴
+            <Utensils size={34} strokeWidth={1.2} />
           </div>
         )}
 
