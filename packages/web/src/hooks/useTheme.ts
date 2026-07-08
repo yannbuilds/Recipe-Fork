@@ -1,5 +1,35 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getSunTimes } from '../utils/sunlight';
+
+export type ThemePreference = 'auto' | 'light' | 'dark';
+
+const STORAGE_KEY = 'pk-theme-preference';
+const CHANGE_EVENT = 'pk-theme-change';
+
+export function getThemePreference(): ThemePreference {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === 'light' || stored === 'dark' ? stored : 'auto';
+}
+
+export function setThemePreference(pref: ThemePreference) {
+  if (pref === 'auto') {
+    localStorage.removeItem(STORAGE_KEY);
+  } else {
+    localStorage.setItem(STORAGE_KEY, pref);
+  }
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+}
+
+/** Reactive read of the current preference — for UI that reflects the choice. */
+export function useThemePreference(): ThemePreference {
+  const [pref, setPref] = useState<ThemePreference>(getThemePreference);
+  useEffect(() => {
+    const handler = () => setPref(getThemePreference());
+    window.addEventListener(CHANGE_EVENT, handler);
+    return () => window.removeEventListener(CHANGE_EVENT, handler);
+  }, []);
+  return pref;
+}
 
 function isDark(now: Date): boolean {
   const { sunrise, sunset } = getSunTimes(now);
@@ -21,7 +51,16 @@ function msUntil(target: Date, now: Date): number {
 }
 
 export function useTheme() {
+  const pref = useThemePreference();
+
   useEffect(() => {
+    // Manual light/dark — apply once, no scheduling.
+    if (pref === 'light' || pref === 'dark') {
+      applyTheme(pref === 'dark');
+      return;
+    }
+
+    // Auto — follow local sunrise/sunset and reschedule at each transition.
     let timer: ReturnType<typeof setTimeout>;
 
     function update() {
@@ -51,5 +90,5 @@ export function useTheme() {
     update();
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [pref]);
 }

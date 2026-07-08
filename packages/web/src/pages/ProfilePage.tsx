@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '@recipe-aggregator/shared';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
+import { useThemePreference, setThemePreference, type ThemePreference } from '../hooks/useTheme';
 
 export default function ProfilePage() {
   const {
@@ -221,6 +222,9 @@ export default function ProfilePage() {
         </>
       )}
 
+      {/* ---- Appearance ---- */}
+      {!editing && <ThemeSection />}
+
       {/* ---- Family Sharing ---- */}
       {user && !editing && (
         <FamilySection
@@ -253,6 +257,60 @@ export default function ProfilePage() {
           Sign out
         </button>
       )}
+    </div>
+  );
+}
+
+/* ================================================================
+   Appearance / Theme Section
+   ================================================================ */
+
+function ThemeSection() {
+  const pref = useThemePreference();
+
+  const options: { value: ThemePreference; label: string }[] = [
+    { value: 'auto', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ];
+
+  return (
+    <div className="w-full max-w-sm">
+      <div
+        className="rounded-xl p-5"
+        style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
+      >
+        <h3 className="rf-heading mb-1" style={{ color: 'var(--text)', fontSize: 18 }}>
+          Appearance
+        </h3>
+        <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+          System follows the time of day. Pick Light or Dark to keep one look.
+        </p>
+        <div
+          className="flex rounded-lg overflow-hidden"
+          style={{ border: '1px solid var(--border)', height: 36 }}
+        >
+          {options.map((opt, i) => {
+            const active = pref === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setThemePreference(opt.value)}
+                className="flex-1 text-xs font-medium transition-colors"
+                style={{
+                  background: active ? 'var(--card)' : 'transparent',
+                  color: active ? 'var(--text)' : 'var(--muted)',
+                  fontWeight: active ? 600 : 500,
+                  borderRight: i < options.length - 1 ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
