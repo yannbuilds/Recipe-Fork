@@ -33,9 +33,6 @@
           "imageWidth": 76
         }
       ]
-    ],
-    "experiments": {
-      "reactCompiler": true
-    }
+    ]
   }
 }
