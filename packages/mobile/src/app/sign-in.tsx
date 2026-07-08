@@ -1,30 +1,25 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
-  StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Body, Button, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/lib/theme';
+import { font, useTheme } from '@/lib/theme';
 
 export default function SignInScreen() {
-  const theme = useTheme();
+  const t = useTheme();
   const { session, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (!authLoading && session) {
-    return <Redirect href="/" />;
-  }
+  if (!authLoading && session) return <Redirect href="/" />;
 
   async function handleSignIn() {
     setError(null);
@@ -34,30 +29,39 @@ export default function SignInScreen() {
       password,
     });
     setSubmitting(false);
-    if (signInError) {
-      setError(signInError.message);
-    }
-    // Success: AuthContext picks up the session and <Redirect> above fires.
+    if (signInError) setError(signInError.message);
   }
+
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.card,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: t.text,
+    fontFamily: font.sans,
+  } as const;
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      style={{ flex: 1, backgroundColor: t.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
-        <Text style={[styles.title, { color: theme.text }]}>Pie Keeper</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          Sign in with your existing account
-        </Text>
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 }}>
+        <Eyebrow>Welcome back</Eyebrow>
+        <Serif size={40} style={{ lineHeight: 42, marginBottom: 4 }}>
+          Pie <Serif size={40} italic color={t.green}>Keeper</Serif>
+        </Serif>
+        <Body size={15} color={t.muted} style={{ marginBottom: 16 }}>
+          Sign in with your existing account.
+        </Body>
 
         <TextInput
-          style={[
-            styles.input,
-            { backgroundColor: theme.inputBackground, borderColor: theme.border, color: theme.text },
-          ]}
+          style={inputStyle}
           placeholder="Email"
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={t.muted}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
@@ -65,12 +69,9 @@ export default function SignInScreen() {
           onChangeText={setEmail}
         />
         <TextInput
-          style={[
-            styles.input,
-            { backgroundColor: theme.inputBackground, borderColor: theme.border, color: theme.text },
-          ]}
+          style={inputStyle}
           placeholder="Password"
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={t.muted}
           autoComplete="current-password"
           secureTextEntry
           value={password}
@@ -78,45 +79,22 @@ export default function SignInScreen() {
           onSubmitEditing={handleSignIn}
         />
 
-        {error && <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>}
+        {error && (
+          <Body size={14} color={t.red}>
+            {error}
+          </Body>
+        )}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: theme.accent, opacity: pressed || submitting ? 0.7 : 1 },
-          ]}
+        <Button
+          label="Sign in"
+          variant="filled"
+          full
+          loading={submitting}
+          disabled={!email || !password}
           onPress={handleSignIn}
-          disabled={submitting || !email || !password}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign in</Text>
-          )}
-        </Pressable>
+          style={{ marginTop: 8, paddingVertical: 15 }}
+        />
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
-  title: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, marginBottom: 16 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-  },
-  error: { fontSize: 14 },
-  button: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-});

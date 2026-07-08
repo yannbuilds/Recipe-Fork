@@ -1,448 +1,745 @@
-import type { Ingredient, Recipe, Tag } from '@recipe-aggregator/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useKeepAwake } from 'expo-keep-awake';
-import { Link, Redirect, useLocalSearchParams } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AddToCookbookSheet from '@/components/AddToCookbookSheet';
+import ConfirmModal from '@/components/ConfirmModal';
+import FavouriteButton from '@/components/FavouriteButton';
+import IngredientIcon from '@/components/IngredientIcon';
+import MyNotesModal from '@/components/MyNotesModal';
+import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
+import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
+import { accentTitle, formatTime, getDomain, scaleQuantity } from '@/lib/recipeFormat';
 import { supabase } from '@/lib/supabase';
+import { stripHtml } from '@/lib/text';
 import { useTheme } from '@/lib/theme';
 
-const RECIPE_SELECT =
-  'id, user_id, title, description, ingredients, steps, source_url, creator_name, author_notes, user_notes, video_url, image_url, servings, custom_servings, prep_time, cook_time, is_favourite, created_at, updated_at';
-
-type RecipeTagRow = {
-  tags: Tag | Tag[] | null;
-};
-
-async function fetchRecipe(id: string): Promise<Recipe> {
-  const [{ data: recipe, error: recipeError }, { data: tagRows, error: tagsError }] =
-    await Promise.all([
-      supabase.from('recipes').select(RECIPE_SELECT).eq('id', id).single(),
-      supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', id),
-    ]);
-
-  if (recipeError) throw new Error(recipeError.message);
-  if (tagsError) throw new Error(tagsError.message);
-
-  const tags =
-    ((tagRows ?? []) as RecipeTagRow[])
-      .flatMap((row) => (Array.isArray(row.tags) ? row.tags : row.tags ? [row.tags] : []))
-      .filter(Boolean) ?? [];
-
-  return { ...(recipe as unknown as Recipe), tags };
+interface RecipeData {
+  recipe: Recipe;
+  tags: Tag[];
 }
 
-function formatTime(minutes: number | null): string {
-  if (!minutes) return '0 min';
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins ? `${hours}h ${mins}m` : `${hours}h`;
+async function fetchRecipe(id: string): Promise<RecipeData> {
+  const [recipeRes, tagsRes] = await Promise.all([
+    supabase.from('recipes').select('*').eq('id', id).single(),
+    supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', id),
+  ]);
+  if (recipeRes.error) throw new Error(recipeRes.error.message);
+  const tags = ((tagsRes.data ?? []) as any[]).map((rt) => rt.tags).filter(Boolean) as Tag[];
+  return { recipe: recipeRes.data as Recipe, tags };
 }
 
-function getDomain(url: string | null): string {
-  if (!url) return 'Source';
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return 'Source';
-  }
-}
-
-function ingredientText(ingredient: Ingredient): string {
-  if (ingredient.original_text) return ingredient.original_text;
-  return [ingredient.quantity, ingredient.unit, ingredient.item].filter(Boolean).join(' ');
-}
-
-function Section({
-  title,
-  children,
+function MetaCard({
+  icon,
+  label,
+  value,
 }: {
-  title: string;
-  children: React.ReactNode;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
 }) {
-  const theme = useTheme();
-
+  const t = useTheme();
   return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
-      {children}
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: t.card,
+        borderWidth: 1,
+        borderColor: t.border,
+        borderRadius: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Ionicons name={icon} size={11} color={t.muted} />
+        <Mono size={9} style={{ letterSpacing: 1 }}>
+          {label.toUpperCase()}
+        </Mono>
+      </View>
+      <Serif size={21} style={{ marginTop: 3 }}>
+        {value}
+      </Serif>
     </View>
   );
 }
 
+function AuthorNotesModal({
+  open,
+  notes,
+  onClose,
+}: {
+  open: boolean;
+  notes: string | null;
+  onClose: () => void;
+}) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  if (!notes) return null;
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+        onPress={onClose}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: t.card,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            paddingBottom: insets.bottom + 16,
+            maxHeight: '80%',
+          }}
+        >
+          <Serif size={18} weight="semi" style={{ marginBottom: 12 }}>
+            Author&apos;s notes
+          </Serif>
+          <ScrollView>
+            <Body size={14} color={t.text} style={{ lineHeight: 22 }}>
+              {stripHtml(notes)}
+            </Body>
+          </ScrollView>
+          <Button label="Close" variant="secondary" full style={{ marginTop: 16 }} onPress={onClose} />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function RecipeDetailScreen() {
-  useKeepAwake();
-
-  const theme = useTheme();
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const { session, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const recipeId = Array.isArray(id) ? id[0] : id;
+  const [tab, setTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [currentServings, setCurrentServings] = useState(1);
+  const [savedServings, setSavedServings] = useState(1);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [isAwake, setIsAwake] = useState(true);
+  const [isFav, setIsFav] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showAuthorNotes, setShowAuthorNotes] = useState(false);
+  const [showCookbook, setShowCookbook] = useState(false);
+  const [showWeekPicker, setShowWeekPicker] = useState(false);
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [localNotes, setLocalNotes] = useState<string | null>(null);
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const {
-    data: recipe,
-    isPending,
-    error,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: ['recipe', recipeId],
-    queryFn: () => fetchRecipe(recipeId!),
-    enabled: !!session && !!recipeId,
+  const { data, isPending, error } = useQuery({
+    queryKey: ['recipe', id],
+    queryFn: () => fetchRecipe(id),
+    enabled: !!session && !!id,
   });
 
-  const favouriteMutation = useMutation({
-    mutationFn: async (nextValue: boolean) => {
-      if (!recipeId) return;
-      const { error: updateError } = await supabase
-        .from('recipes')
-        .update({ is_favourite: nextValue })
-        .eq('id', recipeId);
-      if (updateError) throw new Error(updateError.message);
-    },
-    onMutate: async (nextValue) => {
-      await queryClient.cancelQueries({ queryKey: ['recipe', recipeId] });
-      const previousRecipe = queryClient.getQueryData<Recipe>(['recipe', recipeId]);
-      queryClient.setQueryData<Recipe>(['recipe', recipeId], (current) =>
-        current ? { ...current, is_favourite: nextValue } : current,
-      );
-      return { previousRecipe };
-    },
-    onError: (mutationError, _nextValue, context) => {
-      if (context?.previousRecipe) {
-        queryClient.setQueryData(['recipe', recipeId], context.previousRecipe);
-      }
-      Alert.alert('Could not update favourite', mutationError.message);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
-      queryClient.invalidateQueries({ queryKey: ['recipes'] });
-    },
-  });
+  const recipe = data?.recipe;
+  const tags = data?.tags ?? [];
 
-  if (authLoading) {
+  useEffect(() => {
+    if (recipe) {
+      const s = recipe.custom_servings ?? recipe.servings ?? 1;
+      setCurrentServings(s);
+      setSavedServings(s);
+      setIsFav(recipe.is_favourite);
+      setLocalNotes(recipe.user_notes);
+    }
+  }, [recipe]);
+
+  useEffect(() => {
+    if (isAwake) activateKeepAwakeAsync('recipe').catch(() => {});
+    else deactivateKeepAwake('recipe');
+    return () => {
+      deactivateKeepAwake('recipe');
+    };
+  }, [isAwake]);
+
+  const steps = useMemo(
+    () => (recipe ? [...recipe.steps].sort((a, b) => a.order - b.order) : []),
+    [recipe],
+  );
+
+  if (!authLoading && !session) return <Redirect href="/sign-in" />;
+
+  if (isPending || authLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (!session) {
-    return <Redirect href="/sign-in" />;
-  }
-
-  if (!recipeId) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>Recipe not found.</Text>
-      </View>
-    );
-  }
-
-  if (isPending) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={t.green} />
       </View>
     );
   }
 
   if (error || !recipe) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Text style={[styles.errorText, { color: theme.danger }]}>
+      <View
+        style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      >
+        <Body color={t.red} style={{ textAlign: 'center' }}>
           {error?.message ?? 'Recipe not found.'}
-        </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.retryButton,
-            { borderColor: theme.border, opacity: pressed ? 0.75 : 1 },
-          ]}
-          onPress={() => refetch()}
-        >
-          <Text style={{ color: theme.text }}>Try again</Text>
-        </Pressable>
+        </Body>
       </View>
     );
   }
 
-  const sourceDomain = getDomain(recipe.source_url);
-  const totalTime = (recipe.prep_time ?? 0) + (recipe.cook_time ?? 0);
-  const servings = recipe.custom_servings ?? recipe.servings;
+  const { head, last } = accentTitle(recipe.title);
+  const notesText = stripHtml(localNotes ?? '');
+  const videoId = recipe.video_url?.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+  )?.[1];
+
+  function saveNotes(text: string) {
+    setLocalNotes(text);
+    clearTimeout(notesTimer.current);
+    setNotesSaving(true);
+    notesTimer.current = setTimeout(async () => {
+      const clean = text.trim() === '' ? null : text;
+      await supabase.from('recipes').update({ user_notes: clean }).eq('id', id);
+      setNotesSaving(false);
+    }, 1200);
+  }
+
+  async function saveServings() {
+    await supabase.from('recipes').update({ custom_servings: currentServings }).eq('id', id);
+    setSavedServings(currentServings);
+  }
+
+  async function handleDelete() {
+    setShowDelete(false);
+    await supabase.from('recipes').delete().eq('id', id);
+    queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    router.back();
+  }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.background }}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={refetch}
-          tintColor={theme.accent}
-        />
-      }
-    >
-      {recipe.image_url ? (
-        <Image source={{ uri: recipe.image_url }} style={styles.heroImage} contentFit="cover" />
-      ) : (
-        <View style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: theme.border }]}>
-          <Text style={[styles.heroPlaceholderText, { color: theme.textSecondary }]}>Pie Keeper</Text>
-        </View>
-      )}
-
-      <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.titleBlock}>
-            <Text style={[styles.kicker, { color: theme.textSecondary }]}>
-              {sourceDomain}
-            </Text>
-            <Text style={[styles.title, { color: theme.text }]}>{recipe.title}</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={recipe.is_favourite ? 'Remove from favourites' : 'Add to favourites'}
-            style={({ pressed }) => [
-              styles.favouriteButton,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.border,
-                opacity: pressed || favouriteMutation.isPending ? 0.72 : 1,
-              },
-            ]}
-            onPress={() => favouriteMutation.mutate(!recipe.is_favourite)}
-            disabled={favouriteMutation.isPending}
-          >
-            <Text style={[styles.favouriteText, { color: recipe.is_favourite ? theme.accent : theme.textSecondary }]}>
-              {recipe.is_favourite ? '★' : '☆'}
-            </Text>
-          </Pressable>
-        </View>
-
-        {recipe.description ? (
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
-            {recipe.description}
-          </Text>
-        ) : null}
-
-        {recipe.tags?.length ? (
-          <View style={styles.tagRow}>
-            {recipe.tags.map((tag) => (
-              <View
-                key={tag.id}
-                style={[styles.tagPill, { backgroundColor: theme.card, borderColor: theme.border }]}
-              >
-                <Text style={[styles.tagText, { color: theme.textSecondary }]}>
-                  {tag.emoji ? `${tag.emoji} ` : ''}
-                  {tag.name}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.metaGrid}>
-        <View style={[styles.metaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Prep</Text>
-          <Text style={[styles.metaValue, { color: theme.text }]}>{formatTime(recipe.prep_time)}</Text>
-        </View>
-        <View style={[styles.metaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Cook</Text>
-          <Text style={[styles.metaValue, { color: theme.text }]}>{formatTime(recipe.cook_time)}</Text>
-        </View>
-        <View style={[styles.metaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Serves</Text>
-          <Text style={[styles.metaValue, { color: theme.text }]}>{servings ?? '-'}</Text>
-        </View>
-        <View style={[styles.metaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Total</Text>
-          <Text style={[styles.metaValue, { color: theme.text }]}>{formatTime(totalTime)}</Text>
-        </View>
-      </View>
-
-      <Section title="Ingredients">
-        <View style={[styles.panel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          {recipe.ingredients.length ? (
-            recipe.ingredients.map((ingredient, index) => (
-              <View
-                key={`${ingredient.item}-${index}`}
-                style={[
-                  styles.ingredientRow,
-                  index < recipe.ingredients.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: 1 },
-                ]}
-              >
-                <Text style={[styles.bullet, { color: theme.accent }]}>•</Text>
-                <Text style={[styles.ingredientText, { color: theme.text }]}>
-                  {ingredientText(ingredient)}
-                </Text>
-              </View>
-            ))
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+        {/* Hero */}
+        <View style={{ height: 340, backgroundColor: t.paper3 }}>
+          {recipe.image_url ? (
+            <Image
+              source={{ uri: recipe.image_url }}
+              style={{ width: '100%', height: '100%' }}
+              contentFit="cover"
+            />
           ) : (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No ingredients saved.</Text>
-          )}
-        </View>
-      </Section>
-
-      <Section title="Method">
-        <View style={styles.stepsList}>
-          {recipe.steps.length ? (
-            recipe.steps
-              .slice()
-              .sort((a, b) => a.order - b.order)
-              .map((step, index) => (
-                <View
-                  key={`${step.order}-${index}`}
-                  style={[styles.stepCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                >
-                  <Text style={[styles.stepNumber, { color: theme.accent }]}>
-                    {step.order || index + 1}
-                  </Text>
-                  <Text style={[styles.stepText, { color: theme.text }]}>{step.instruction}</Text>
-                </View>
-              ))
-          ) : (
-            <View style={[styles.panel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No method saved.</Text>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="flame-outline" size={44} color={t.muted} />
             </View>
           )}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0)', t.bg]}
+            locations={[0, 0.28, 0.62, 1]}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            pointerEvents="none"
+          />
+
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              position: 'absolute',
+              top: insets.top + 6,
+              left: 12,
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: 'rgba(251,248,241,0.9)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="arrow-back" size={20} color="#1f1b16" />
+          </Pressable>
+
+          <Pressable
+            onPress={() => setIsAwake((v) => !v)}
+            style={{
+              position: 'absolute',
+              top: insets.top + 6,
+              left: 58,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 12,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: 'rgba(251,248,241,0.9)',
+            }}
+          >
+            <Ionicons name={isAwake ? 'sunny' : 'moon'} size={14} color="#1f1b16" />
+            <Body size={12} weight="semi" color="#1f1b16">
+              Screen on
+            </Body>
+            <View
+              style={{
+                width: 34,
+                height: 20,
+                borderRadius: 10,
+                padding: 2,
+                backgroundColor: isAwake ? t.green : 'rgba(31,27,22,0.15)',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  backgroundColor: '#fff',
+                  transform: [{ translateX: isAwake ? 14 : 0 }],
+                }}
+              />
+            </View>
+          </Pressable>
+
+          <View style={{ position: 'absolute', top: insets.top + 6, right: 12 }}>
+            <FavouriteButton recipeId={recipe.id} isFavourite={isFav} onToggle={setIsFav} size="md" />
+          </View>
         </View>
-      </Section>
 
-      {recipe.user_notes ? (
-        <Section title="My notes">
-          <View style={[styles.notePanel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.noteText, { color: theme.text }]}>{recipe.user_notes}</Text>
+        {/* Editorial header */}
+        <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+          {tags.length > 0 && (
+            <Eyebrow style={{ marginBottom: 10 }}>
+              {tags.slice(0, 3).map((tg) => tg.name).join('  ·  ')}
+            </Eyebrow>
+          )}
+          <Serif size={32} style={{ lineHeight: 34 }}>
+            {last ? (
+              <>
+                {head}{' '}
+                <Serif size={32} italic color={t.green}>
+                  {last}
+                </Serif>
+              </>
+            ) : (
+              recipe.title
+            )}
+          </Serif>
+
+          {recipe.description && (
+            <View style={{ marginTop: 12 }}>
+              <Body
+                size={15}
+                color={t.textSoft}
+                numberOfLines={descExpanded ? undefined : 3}
+                style={{ lineHeight: 22 }}
+              >
+                {recipe.description}
+              </Body>
+              {recipe.description.length > 130 && (
+                <Pressable onPress={() => setDescExpanded((v) => !v)}>
+                  <Body size={14} color={t.green} style={{ marginTop: 4, textDecorationLine: 'underline' }}>
+                    {descExpanded ? 'show less' : 'show more'}
+                  </Body>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {(recipe.prep_time != null || recipe.cook_time != null || recipe.servings != null) && (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              {recipe.prep_time != null && (
+                <MetaCard icon="time-outline" label="Prep" value={formatTime(recipe.prep_time)} />
+              )}
+              {recipe.cook_time != null && (
+                <MetaCard icon="flame-outline" label="Cook" value={formatTime(recipe.cook_time)} />
+              )}
+              {recipe.servings != null && (
+                <MetaCard icon="people-outline" label="Serves" value={String(recipe.servings)} />
+              )}
+            </View>
+          )}
+
+          {(recipe.creator_name || recipe.source_url) && (
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 18 }}
+            >
+              {recipe.creator_name && (
+                <Body size={14} color={t.muted}>
+                  Recipe by{' '}
+                  <Serif size={14} italic>
+                    {recipe.creator_name}
+                  </Serif>
+                </Body>
+              )}
+              {recipe.source_url && (
+                <Pressable
+                  onPress={() => Linking.openURL(recipe.source_url)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Ionicons name="globe-outline" size={13} color={t.green} />
+                  <Body size={14} color={t.green}>
+                    {getDomain(recipe.source_url)} ↗
+                  </Body>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 18, marginTop: 14 }}>
+            <Pressable
+              onPress={() => setShowNotes(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Ionicons name="document-text-outline" size={15} color={t.orange} />
+              <Body size={14}>My notes{notesText ? ' •' : ''}</Body>
+            </Pressable>
+            {recipe.author_notes && (
+              <Pressable
+                onPress={() => setShowAuthorNotes(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Ionicons name="document-text-outline" size={15} color={t.muted} />
+                <Body size={14} color={t.muted}>
+                  Author&apos;s notes
+                </Body>
+              </Pressable>
+            )}
           </View>
-        </Section>
-      ) : null}
 
-      {recipe.author_notes ? (
-        <Section title="Author notes">
-          <View style={[styles.notePanel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.noteText, { color: theme.text }]}>{recipe.author_notes}</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+            <Button
+              label="Add to plan"
+              variant="filled"
+              style={{ flex: 1, backgroundColor: t.green, borderColor: t.green }}
+              icon={<Ionicons name="calendar-outline" size={16} color={t.onGreen} />}
+              onPress={() => setShowWeekPicker(true)}
+            />
+            <Button
+              label="Add to cookbook"
+              variant="filled"
+              style={{ flex: 1, backgroundColor: t.orange, borderColor: t.orange }}
+              icon={<Ionicons name="book-outline" size={16} color={t.onGreen} />}
+              onPress={() => setShowCookbook(true)}
+            />
           </View>
-        </Section>
-      ) : null}
+        </View>
 
-      <View style={styles.actionRow}>
-        {recipe.source_url ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.sourceButton,
-              { backgroundColor: theme.accent, opacity: pressed ? 0.78 : 1 },
-            ]}
-            onPress={() => Linking.openURL(recipe.source_url)}
+        {/* Tabs */}
+        <View style={{ paddingHorizontal: 20, marginTop: 26 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              borderBottomWidth: 1,
+              borderBottomColor: t.border,
+            }}
           >
-            <Text style={styles.sourceButtonText}>Open source</Text>
-          </Pressable>
-        ) : null}
-        {recipe.video_url ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.78 : 1 },
-            ]}
-            onPress={() => Linking.openURL(recipe.video_url!)}
-          >
-            <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Watch video</Text>
-          </Pressable>
-        ) : null}
-      </View>
+            <View style={{ flexDirection: 'row', gap: 24 }}>
+              {([
+                ['ingredients', 'Ingredients', recipe.ingredients.length],
+                ['steps', 'Steps', steps.length],
+              ] as const).map(([key, label, count]) => {
+                const active = tab === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setTab(key)}
+                    style={{
+                      paddingBottom: 12,
+                      marginBottom: -1,
+                      borderBottomWidth: 2,
+                      borderBottomColor: active ? t.green : 'transparent',
+                    }}
+                  >
+                    <Serif size={18} color={active ? t.text : t.muted}>
+                      {label} <Mono size={11}>· {count}</Mono>
+                    </Serif>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-      <Link href="/" asChild>
-        <Pressable style={styles.backLink}>
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>Back to recipes</Text>
-        </Pressable>
-      </Link>
-    </ScrollView>
+            {recipe.servings != null && tab === 'ingredients' && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: 8,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                  borderRadius: 999,
+                  padding: 3,
+                  backgroundColor: t.card,
+                }}
+              >
+                <Pressable
+                  onPress={() => setCurrentServings((s) => Math.max(1, s - 1))}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: t.border,
+                  }}
+                >
+                  <Ionicons name="remove" size={14} color={t.muted} />
+                </Pressable>
+                <View style={{ minWidth: 30, alignItems: 'center' }}>
+                  <Serif size={15}>
+                    {currentServings}
+                    <Mono size={9}> sv</Mono>
+                  </Serif>
+                </View>
+                <Pressable
+                  onPress={() => setCurrentServings((s) => s + 1)}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: t.green,
+                  }}
+                >
+                  <Ionicons name="add" size={14} color={t.onGreen} />
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          {tab === 'ingredients' && currentServings !== savedServings && (
+            <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
+              <Pressable
+                onPress={saveServings}
+                style={{
+                  borderWidth: 1,
+                  borderColor: t.green,
+                  backgroundColor: t.greenLight,
+                  borderRadius: 20,
+                  paddingHorizontal: 10,
+                  paddingVertical: 3,
+                }}
+              >
+                <Body size={12} weight="semi" color={t.green}>
+                  Save serving size
+                </Body>
+              </Pressable>
+            </View>
+          )}
+
+          <View
+            style={{
+              marginTop: 16,
+              backgroundColor: t.paper,
+              borderWidth: 1,
+              borderColor: t.ruleHair,
+              borderRadius: 8,
+              padding: 16,
+            }}
+          >
+            {tab === 'ingredients'
+              ? recipe.ingredients.map((ing, i) => {
+                  const key = `${i}`;
+                  const used = usedIngredients.has(key);
+                  const name = ing.item || ing.original_text || '';
+                  const qty =
+                    ing.quantity || ing.unit
+                      ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
+                      : '';
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() =>
+                        setUsedIngredients((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        })
+                      }
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        paddingVertical: 12,
+                        borderBottomWidth: i < recipe.ingredients.length - 1 ? 1 : 0,
+                        borderBottomColor: t.ruleHair,
+                      }}
+                    >
+                      <CheckSquare checked={used} />
+                      <IngredientIcon item={ing.item || ''} />
+                      <Serif
+                        size={16}
+                        color={used ? t.muted : t.text}
+                        style={{ flex: 1, textDecorationLine: used ? 'line-through' : 'none' }}
+                      >
+                        {name}
+                      </Serif>
+                      {qty ? <Mono size={11}>{qty}</Mono> : null}
+                    </Pressable>
+                  );
+                })
+              : steps.map((step, i) => {
+                  const done = completedSteps.has(step.order);
+                  return (
+                    <Pressable
+                      key={step.order}
+                      onPress={() =>
+                        setCompletedSteps((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(step.order)) next.delete(step.order);
+                          else next.add(step.order);
+                          return next;
+                        })
+                      }
+                      style={{ flexDirection: 'row', gap: 12, paddingBottom: 20 }}
+                    >
+                      <View style={{ alignItems: 'center' }}>
+                        <View
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: done ? t.muted : t.green,
+                          }}
+                        >
+                          <Body size={13} weight="bold" color={t.onGreen}>
+                            {done ? '✓' : i + 1}
+                          </Body>
+                        </View>
+                        {i < steps.length - 1 && (
+                          <View style={{ flex: 1, width: 2, backgroundColor: t.greenLight, marginTop: 2 }} />
+                        )}
+                      </View>
+                      <Body
+                        size={15}
+                        color={done ? t.muted : t.text}
+                        style={{
+                          flex: 1,
+                          lineHeight: 22,
+                          paddingTop: 4,
+                          textDecorationLine: done ? 'line-through' : 'none',
+                        }}
+                      >
+                        {step.instruction}
+                      </Body>
+                    </Pressable>
+                  );
+                })}
+          </View>
+
+          {videoId && (
+            <View style={{ marginTop: 24 }}>
+              <Eyebrow>Watch</Eyebrow>
+              <Serif size={22} style={{ marginTop: 6, marginBottom: 12 }}>
+                Video
+              </Serif>
+              <Pressable
+                onPress={() => Linking.openURL(recipe.video_url!)}
+                style={{ borderRadius: 8, overflow: 'hidden', aspectRatio: 16 / 9, backgroundColor: t.paper3 }}
+              >
+                <Image
+                  source={{ uri: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                />
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: 'rgba(0,0,0,0.55)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="play" size={26} color="#fff" />
+                  </View>
+                </View>
+              </Pressable>
+            </View>
+          )}
+
+          <Divider style={{ marginTop: 30 }} />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+            <Button
+              label="Edit"
+              variant="secondary"
+              icon={<Ionicons name="pencil" size={15} color={t.text} />}
+              onPress={() => router.push({ pathname: '/recipe/[id]/edit', params: { id } })}
+              style={{ flex: 1 }}
+            />
+            <Button
+              label="Delete"
+              variant="danger"
+              icon={<Ionicons name="trash-outline" size={15} color={t.red} />}
+              onPress={() => setShowDelete(true)}
+              style={{ flex: 1 }}
+            />
+          </View>
+
+          <Serif italic size={13} color={t.muted} style={{ textAlign: 'center', marginTop: 22 }}>
+            {recipe.source_url ? `Saved from ${getDomain(recipe.source_url)}` : 'Saved'}
+            {recipe.created_at
+              ? ` · ${new Date(recipe.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+              : ''}
+          </Serif>
+        </View>
+      </ScrollView>
+
+      <ConfirmModal
+        open={showDelete}
+        title="Delete recipe"
+        message="Are you sure you want to delete this recipe? This can't be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDelete(false)}
+      />
+      <MyNotesModal
+        open={showNotes}
+        content={localNotes}
+        saving={notesSaving}
+        onSave={saveNotes}
+        onClose={() => setShowNotes(false)}
+      />
+      <AuthorNotesModal
+        open={showAuthorNotes}
+        notes={recipe.author_notes}
+        onClose={() => setShowAuthorNotes(false)}
+      />
+      <AddToCookbookSheet open={showCookbook} recipeId={recipe.id} onClose={() => setShowCookbook(false)} />
+      {user && (
+        <WeekPickerSheet
+          open={showWeekPicker}
+          recipeId={recipe.id}
+          recipeTitle={recipe.title}
+          userId={user.id}
+          onClose={() => setShowWeekPicker(false)}
+        />
+      )}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  scrollContent: { paddingBottom: 32 },
-  heroImage: { width: '100%', aspectRatio: 1.25 },
-  heroPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  heroPlaceholderText: { fontSize: 16, fontWeight: '600' },
-  header: { paddingHorizontal: 20, paddingTop: 20, gap: 12 },
-  headerTopRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  titleBlock: { flex: 1, gap: 6 },
-  kicker: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  title: { fontSize: 34, fontWeight: '700', lineHeight: 39 },
-  favouriteButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favouriteText: { fontSize: 27, lineHeight: 31 },
-  description: { fontSize: 16, lineHeight: 23 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagPill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  tagText: { fontSize: 13, fontWeight: '600' },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
-  metaCard: {
-    width: '48.5%',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
-  },
-  metaLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase' },
-  metaValue: { fontSize: 20, fontWeight: '700' },
-  section: { paddingHorizontal: 20, paddingTop: 26, gap: 10 },
-  sectionTitle: { fontSize: 21, fontWeight: '700' },
-  panel: { borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
-  ingredientRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
-  bullet: { fontSize: 20, lineHeight: 23 },
-  ingredientText: { flex: 1, fontSize: 16, lineHeight: 23 },
-  emptyText: { padding: 14, fontSize: 15, lineHeight: 21 },
-  stepsList: { gap: 10 },
-  stepCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 15,
-    gap: 8,
-  },
-  stepNumber: { fontSize: 13, fontWeight: '800', letterSpacing: 0.8 },
-  stepText: { fontSize: 16, lineHeight: 24 },
-  notePanel: { borderWidth: 1, borderRadius: 14, padding: 15 },
-  noteText: { fontSize: 15, lineHeight: 23 },
-  actionRow: { paddingHorizontal: 20, paddingTop: 28, gap: 10 },
-  sourceButton: { borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
-  sourceButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  secondaryButton: { borderRadius: 12, borderWidth: 1, paddingVertical: 15, alignItems: 'center' },
-  secondaryButtonText: { fontSize: 16, fontWeight: '700' },
-  backLink: { alignItems: 'center', paddingTop: 22, paddingBottom: 8 },
-  backText: { fontSize: 15, fontWeight: '600' },
-  retryButton: { marginTop: 14, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
-  errorText: { textAlign: 'center', fontSize: 15, lineHeight: 21 },
-});
