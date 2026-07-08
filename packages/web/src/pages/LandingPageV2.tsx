@@ -19,6 +19,7 @@ import {
   Check,
   Minus,
   Plus,
+  Sparkles,
   ChevronLeft,
   ChevronRight,
   House,
@@ -435,6 +436,82 @@ function PhonePlan() {
         </div>
       </div>
       <PKTabBar active="plan" />
+    </IOSDevice>
+  );
+}
+
+/* ── Screen 4: Cookbooks / shelves ───────────────────────────── */
+function PhoneCookbook() {
+  const books = [
+    {
+      name: "Weeknight Dinners",
+      count: 12,
+      desc: "Fast, no-fuss favourites",
+      covers: ["/landing/tomato-pasta.jpg", "/landing/salmon.jpg", "/landing/broccoli.jpg", "/landing/cookies.jpg"],
+    },
+    {
+      name: "Sunday Baking",
+      count: 8,
+      desc: "Slow mornings, warm oven",
+      covers: ["/landing/cookies.jpg", "/landing/hero.jpg", "/landing/tomato-pasta.jpg", "/landing/broccoli.jpg"],
+    },
+  ];
+  return (
+    <IOSDevice width={340} height={720}>
+      <div style={{ height: "100%", overflow: "hidden", background: PK_BG, position: "relative" }}>
+        {/* Masthead + Suggest */}
+        <div style={{ padding: "60px 20px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <Eyebrow>The shelves</Eyebrow>
+              <div style={{ margin: "11px 0 0", fontFamily: fSerif, fontWeight: 400, fontSize: 30, lineHeight: 1.02, letterSpacing: "-0.026em", color: PK_INK }}>
+                Cookbooks
+              </div>
+              <div style={{ margin: "9px 0 0", fontFamily: fSans, fontSize: 13, lineHeight: 1.45, color: PK_INK_SOFT }}>
+                6 cookbooks · drag to reorder.
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, padding: "8px 13px", color: PK_INK, border: `1px solid ${PK_BORDER}`, borderRadius: 999, fontFamily: fSans, fontSize: 12, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <Sparkles size={13} strokeWidth={1.6} /> Suggest
+            </div>
+          </div>
+        </div>
+
+        {/* Shelf rows */}
+        <div style={{ padding: "18px 20px 110px", display: "flex", flexDirection: "column", gap: 18 }}>
+          {books.map((b, bi) => (
+            <div key={bi}>
+              {/* Title row: index · name · count */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 9 }}>
+                <span style={{ fontFamily: fSerif, fontStyle: "italic", color: PK_GREEN, fontSize: 13 }}>{String(bi + 1).padStart(2, "0")}.</span>
+                <span style={{ flex: 1, minWidth: 0, fontFamily: fSerif, fontSize: 19, fontWeight: 400, letterSpacing: "-0.018em", color: PK_INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</span>
+                <span style={{ fontFamily: fMono, fontSize: 9, color: PK_INK_MUTE, letterSpacing: "0.08em", textTransform: "uppercase" }}>{b.count} recipes</span>
+              </div>
+              {/* Photo strip — 4 plates across */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, borderTop: `1px solid ${PK_BORDER}`, paddingTop: 9 }}>
+                {b.covers.map((src, i) => (
+                  <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 3, overflow: "hidden", background: PK_PAPER3 }}>
+                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(0.92) contrast(1.02)" }} />
+                    <div style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)" }} />
+                  </div>
+                ))}
+              </div>
+              {/* Footer: description · Open → */}
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <span style={{ fontFamily: fSerif, fontStyle: "italic", fontSize: 12.5, color: PK_INK_MUTE, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.desc}</span>
+                <span style={{ color: PK_INK, borderBottom: `1px solid ${PK_INK}`, paddingBottom: 1, fontSize: 11.5, flexShrink: 0 }}>Open →</span>
+              </div>
+            </div>
+          ))}
+
+          {/* New cookbook — dashed editorial row */}
+          <div style={{ padding: "15px 16px", border: `1px dashed ${PK_GREEN}`, borderRadius: 4, color: PK_GREEN, display: "flex", alignItems: "center", gap: 11 }}>
+            <Plus size={17} strokeWidth={1.6} />
+            <span style={{ fontFamily: fSerif, fontSize: 15, fontStyle: "italic" }}>New cookbook</span>
+          </div>
+        </div>
+      </div>
+      <PKTabBar active="cook" />
     </IOSDevice>
   );
 }
@@ -968,6 +1045,30 @@ function bodyHtml() {
     </div>
   </section>
 
+  <section class="section-pad" style="background: var(--paper-2); border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft);">
+    <div class="wrap">
+      <div class="alt reverse">
+        <div>
+          <div class="alt-label">
+            <span class="num">04.</span>
+            <span class="mono" style="color: var(--ink-mute);">The shelf</span>
+          </div>
+          <h2 class="h-section">Shelved by <em>occasion.</em></h2>
+          <p class="alt-body">Group your recipes into cookbooks — weeknight dinners, party spreads, the bakes you make on repeat. Drag to reorder, or let Pie Keeper suggest new shelves from what you've already saved.</p>
+          <ul class="feat-list">
+            <li><span class="k">Themed collections</span><span class="v">Your kitchen, your way</span></li>
+            <li><span class="k">Drag to reorder</span><span class="v">Favourites up top</span></li>
+            <li><span class="k">AI suggestions</span><span class="v">From your library</span></li>
+            <li><span class="k">Shared shelves</span><span class="v">Cook together</span></li>
+          </ul>
+        </div>
+        <div class="phone-slot tilt-l">
+          <div id="phone-cookbook" class="phone-shadow"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="extension" class="ext-band">
     <div class="wrap">
       <div class="ext-grid">
@@ -1331,6 +1432,7 @@ export default function LandingPageV2() {
       ["phone-library", PhoneLibrary],
       ["phone-recipe", PhoneRecipe],
       ["phone-plan", PhonePlan],
+      ["phone-cookbook", PhoneCookbook],
     ];
     const roots: Root[] = [];
     const mountedNodes = new WeakSet<Element>();
