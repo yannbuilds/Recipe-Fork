@@ -31,6 +31,8 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ title: 'Pie Keeper' }} />
           <Stack.Screen name="sign-in" options={{ title: 'Sign in', headerShown: false }} />
           <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
+          <Stack.Screen name="cookbooks/index" options={{ title: 'Cookbooks' }} />
+          <Stack.Screen name="cookbooks/[id]" options={{ title: '' }} />
         </Stack>
       </AuthProvider>
     </QueryClientProvider>

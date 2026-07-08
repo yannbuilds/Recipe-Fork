@@ -88,6 +88,17 @@ export default function RecipeListScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={styles.navRow}>
+        <View style={[styles.navButton, styles.navButtonActive, { borderColor: theme.accent }]}>
+          <Text style={[styles.navButtonText, { color: theme.accent }]}>Recipes</Text>
+        </View>
+        <Link href="/cookbooks" asChild>
+          <Pressable style={[styles.navButton, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.navButtonText, { color: theme.text }]}>Cookbooks</Text>
+          </Pressable>
+        </Link>
+      </View>
+
       <TextInput
         style={[
           styles.search,
@@ -169,6 +180,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
+  navRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 8 },
+  navButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    paddingVertical: 11,
+  },
+  navButtonActive: { backgroundColor: 'transparent' },
+  navButtonText: { fontSize: 14, fontWeight: '700' },
   listContent: { padding: 16, gap: 12 },
   empty: { textAlign: 'center', marginTop: 48, fontSize: 15 },
   card: {
