@@ -44,10 +44,10 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
 
   return (
     <>
-      {/* Thumbnail with play button */}
+      {/* Thumbnail with play button — editorial style (cream circle + green triangle) */}
       <button
-        className="relative w-full overflow-hidden rounded-lg block group"
-        style={{ paddingBottom: '56.25%' }}
+        className="relative w-full overflow-hidden block group"
+        style={{ paddingBottom: '56.25%', borderRadius: 4, border: '1px solid var(--border)' }}
         onClick={open}
         aria-label={`Play ${title} video`}
       >
@@ -57,18 +57,23 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
           alt={`${title} video thumbnail`}
           loading="lazy"
         />
-        {/* Play icon */}
+        {/* Soft scrim */}
+        <div className="absolute inset-0" style={{ background: 'rgba(31,27,22,0.18)' }} />
+        {/* Play button */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <svg
-            viewBox="0 0 68 48"
-            className="w-16 h-12 opacity-80 group-hover:opacity-100 transition-opacity"
+          <span
+            className="flex items-center justify-center rounded-full transition-transform group-hover:scale-105"
+            style={{
+              width: 56,
+              height: 56,
+              background: 'rgba(251,248,241,0.94)',
+              border: '1px solid rgba(0,0,0,0.06)',
+            }}
           >
-            <path
-              d="M66.52,7.74c-0.78-2.93-2.49-5.41-5.42-6.19C55.79,0,34,0,34,0S12.21,0,6.9,1.55C3.97,2.33,2.27,4.81,1.48,7.74C0,13.05,0,24,0,24s0,10.95,1.48,16.26c0.78,2.93,2.49,5.41,5.42,6.19C12.21,48,34,48,34,48s21.79,0,27.1-1.55c2.93-0.78,4.64-3.26,5.42-6.19C68,34.95,68,24,68,24S68,13.05,66.52,7.74z"
-              fill="#FF0000"
-            />
-            <path d="M 45,24 27,14 27,34" fill="#fff" />
-          </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--green)" stroke="none">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
         </div>
       </button>
 

@@ -46,6 +46,21 @@ function toRoman(n: number): string {
   return out;
 }
 
+// Renders a title with its last word italic-accented in green — an editorial
+// flourish from the mock. Single-word titles fall back to plain text.
+function renderAccentedTitle(title: string): React.ReactNode {
+  const words = title.trim().split(/\s+/);
+  if (words.length < 2) return title;
+  const last = words[words.length - 1];
+  const head = words.slice(0, -1).join(' ');
+  return (
+    <>
+      {head}{' '}
+      <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>{last}</em>
+    </>
+  );
+}
+
 // Editorial meta card (Prep / Cook / Serves) — mono label + line icon, serif value.
 function MetaCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
@@ -54,7 +69,7 @@ function MetaCard({ icon, label, value }: { icon: React.ReactNode; label: string
         flex: 1,
         background: 'var(--card)',
         border: '1px solid var(--border)',
-        borderRadius: 8,
+        borderRadius: 4,
         padding: '12px 14px',
       }}
     >
@@ -678,14 +693,40 @@ export default function RecipeDetail() {
       </div>
     ));
 
-  /* Video card — shared between desktop column and the mobile layout. */
-  const renderVideo = () => {
+  /* Video — shared between desktop column and the mobile layout. `flat` (mobile)
+     drops the card wrapper so it sits directly on the paper like the mock; desktop
+     keeps the card to match its Directions card. */
+  const renderVideo = (flat = false) => {
     if (!recipe.video_url) return null;
     const match = recipe.video_url.match(
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
     );
     const videoId = match?.[1];
     if (!videoId) return null;
+
+    const player = <VideoPlayer videoId={videoId} title={recipe.title} />;
+
+    if (flat) {
+      return (
+        <div>
+          <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>Watch</div>
+          <h2
+            style={{
+              fontFamily: '"Newsreader", Georgia, serif',
+              fontSize: 24,
+              fontWeight: 400,
+              letterSpacing: '-0.02em',
+              color: 'var(--text)',
+              margin: '0 0 14px',
+            }}
+          >
+            Video
+          </h2>
+          {player}
+        </div>
+      );
+    }
+
     return (
       <div
         style={{
@@ -699,7 +740,7 @@ export default function RecipeDetail() {
         <h2 className="text-lg mb-4" style={{ fontFamily: '"Newsreader", Georgia, serif' }}>
           Video
         </h2>
-        <VideoPlayer videoId={videoId} title={recipe.title} />
+        {player}
       </div>
     );
   };
@@ -781,6 +822,7 @@ export default function RecipeDetail() {
               >
                 {isUsed && <Check size={13} strokeWidth={3} color="#fbf8f1" />}
               </span>
+              <IngredientIcon item={ing.item || ''} />
               <span
                 style={{
                   flex: 1,
@@ -819,12 +861,20 @@ export default function RecipeDetail() {
   // The two primary "save" actions, rendered together so it's obvious which
   // adds to a meal plan (green) and which adds to a cookbook (orange). Shared
   // between the desktop hero column and the mobile action row.
-  const renderPrimaryActions = () => (
-    <div className="flex items-center gap-2.5 flex-wrap">
+  // fullWidth = mobile: two equal pills spanning the row (mock). Desktop passes
+  // false so the pills stay inline/auto-width in the hero column.
+  const renderPrimaryActions = (fullWidth = false) => (
+    <div className="flex items-center gap-3" style={{ width: fullWidth ? '100%' : undefined }}>
       <button
         onClick={() => setShowWeekPicker(true)}
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
-        style={{ background: 'var(--green)', border: '1px solid var(--green)' }}
+        className="inline-flex items-center justify-center gap-2 text-sm font-medium text-white transition-all"
+        style={{
+          flex: fullWidth ? 1 : undefined,
+          padding: fullWidth ? '14px' : '11px 18px',
+          borderRadius: 999,
+          background: 'var(--green)',
+          border: '1px solid var(--green)',
+        }}
         onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
       >
@@ -833,8 +883,14 @@ export default function RecipeDetail() {
       </button>
       <button
         onClick={() => setShowAddToCookbook(true)}
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
-        style={{ background: 'var(--orange)', border: '1px solid var(--orange)' }}
+        className="inline-flex items-center justify-center gap-2 text-sm font-medium text-white transition-all"
+        style={{
+          flex: fullWidth ? 1 : undefined,
+          padding: fullWidth ? '14px' : '11px 18px',
+          borderRadius: 999,
+          background: 'var(--orange)',
+          border: '1px solid var(--orange)',
+        }}
         onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.93)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
       >
@@ -865,16 +921,16 @@ export default function RecipeDetail() {
           aria-label="Keep screen on"
           className="flex items-center gap-2 text-xs font-semibold rounded-full px-3 py-1.5"
           style={{
-            color: '#fff',
-            background: 'rgba(0,0,0,0.35)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: 'none',
+            color: '#1f1b16',
+            background: 'rgba(251,248,241,0.9)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            border: '1px solid rgba(31,27,22,0.08)',
             cursor: 'pointer',
           }}
         >
           {isAwake ? <SunIcon /> : <MoonIcon />}
-          <span>Screen on</span>
+          <span>Keep screen on</span>
           {/* Toggle track */}
           <span
             style={{
@@ -883,7 +939,7 @@ export default function RecipeDetail() {
               width: 38,
               height: 22,
               borderRadius: 11,
-              background: isAwake ? 'var(--green)' : 'rgba(255,255,255,0.3)',
+              background: isAwake ? 'var(--green)' : 'rgba(31,27,22,0.15)',
               transition: 'background 0.25s ease',
               padding: 2,
               flexShrink: 0,
@@ -944,6 +1000,15 @@ export default function RecipeDetail() {
                   <Flame size={40} strokeWidth={1.2} />
                 </div>
               )}
+              {/* Soft top scrim (keeps overlay controls legible) + bottom fade into
+                  the page ground so the photo dissolves into the body — matches the mock. */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgba(31,27,22,0.28) 0%, rgba(31,27,22,0) 32%, rgba(236,228,211,0) 60%, var(--bg) 100%)',
+                }}
+              />
               {renderScreenOnToggle()}
               <div className="absolute top-4 right-4">
                 <FavouriteButton
@@ -966,7 +1031,7 @@ export default function RecipeDetail() {
                 className="rf-heading"
                 style={{ fontSize: 'clamp(30px, 8vw, 38px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: 'var(--text)' }}
               >
-                {recipe.title}
+                {renderAccentedTitle(recipe.title)}
               </h1>
 
               {recipe.description && (
@@ -993,27 +1058,6 @@ export default function RecipeDetail() {
                     </button>
                   )}
                 </div>
-              )}
-
-              {recipe.source_url && (
-                <a
-                  href={recipe.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 mt-4"
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 999,
-                    padding: '8px 14px',
-                    fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
-                    fontSize: 12.5,
-                    color: 'var(--muted)',
-                  }}
-                >
-                  <Globe size={14} strokeWidth={1.6} style={{ color: 'var(--green)' }} />
-                  {getDomain(recipe.source_url)}
-                </a>
               )}
 
               {/* Meta cards */}
@@ -1044,8 +1088,15 @@ export default function RecipeDetail() {
                   )}
                   {recipe.creator_name && recipe.source_url && <span style={{ color: 'var(--border)' }}>·</span>}
                   {recipe.source_url && (
-                    <a href={recipe.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)' }}>
-                      View original ↗
+                    <a
+                      href={recipe.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5"
+                      style={{ color: 'var(--green)' }}
+                    >
+                      <Globe size={13} strokeWidth={1.6} />
+                      {getDomain(recipe.source_url)} ↗
                     </a>
                   )}
                 </div>
@@ -1073,7 +1124,7 @@ export default function RecipeDetail() {
 
               {/* Primary actions */}
               <div className="mt-5" style={{ position: 'relative', zIndex: 10 }}>
-                {renderPrimaryActions()}
+                {renderPrimaryActions(true)}
               </div>
             </div>
           </div>
@@ -1719,7 +1770,7 @@ export default function RecipeDetail() {
             </div>
 
             {/* Video below the tabs */}
-            {recipe.video_url && <div className="mt-6">{renderVideo()}</div>}
+            {recipe.video_url && <div className="mt-8">{renderVideo(true)}</div>}
           </div>
         )}
 
@@ -1753,7 +1804,7 @@ export default function RecipeDetail() {
         >
           <Link
             to={`/recipe/${id}/edit`}
-            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
+            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -1770,7 +1821,7 @@ export default function RecipeDetail() {
           </Link>
           <button
             onClick={() => setShowDeleteModal(true)}
-            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
+            className="rd-action-btn inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--red-border)',
