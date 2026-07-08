@@ -580,6 +580,9 @@ const STYLES = `
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
   border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: 96px;
 }
+.pk2 .stats-note { margin-top: 96px; text-align: center; }
+.pk2 .stats-note .eyebrow { color: var(--ink-mute); opacity: 0.7; }
+.pk2 .stats.stats--noted { margin-top: 20px; }
 .pk2 .stat { padding: 36px 28px; border-right: 1px solid var(--rule-soft); }
 .pk2 .stat:last-child { border-right: none; }
 .pk2 .stat-num { font-family: "Newsreader", serif; font-size: 48px; line-height: 1; letter-spacing: -0.03em; font-weight: 400; }
@@ -818,7 +821,11 @@ function bodyHtml() {
         </div>
       </div>
 
-      <div class="stats">
+      <div class="stats-note">
+        <span class="eyebrow mono">Fake stats</span>
+      </div>
+
+      <div class="stats stats--noted">
         <div class="stat">
           <div class="stat-num"><em>10,200</em></div>
           <div class="stat-label">Recipes saved this week</div>
