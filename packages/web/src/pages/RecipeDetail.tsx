@@ -1539,28 +1539,6 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {/* ── Filed under (tags, mobile) ─────────────────────────── */}
-        {tags.length > 0 && (
-          <div className="md:hidden mt-8">
-            <div className="rf-eyebrow" style={{ marginBottom: 12, display: 'block' }}>Filed under</div>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="text-xs px-3 py-1.5 rounded-full"
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-soft)',
-                  }}
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Edit / Delete ──────────────────────────────────────── */}
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 32 }} />
         <div
