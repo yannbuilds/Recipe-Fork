@@ -1141,103 +1141,87 @@ export default function RecipeDetail() {
             {/* Top group — centred in available space */}
             <div className="rd-hero-top-group">
               {tags.length > 0 && (
-                <div className="hidden md:flex flex-wrap gap-2 mb-3">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="text-xs px-3 py-1 rounded-full"
-                      style={{
-                        background: 'var(--card)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--muted)',
-                      }}
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
+                <div className="rf-eyebrow" style={{ marginBottom: 12, display: 'block' }}>
+                  {tags.slice(0, 4).map((t) => t.name).join(' · ')}
                 </div>
               )}
               <h1
-                className="font-bold leading-snug"
-                style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 26, color: 'var(--text)' }}
+                className="rf-heading"
+                style={{ lineHeight: 1.06, letterSpacing: '-0.02em', color: 'var(--text)' }}
               >
-                {recipe.title}
+                {renderAccentedTitle(recipe.title)}
               </h1>
               {recipe.description && (
                 <p
                   ref={descRef}
-                  className="rd-hero-desc mt-2"
-                  style={{ color: 'var(--muted)', fontSize: 14 }}
+                  className="rd-hero-desc mt-3"
+                  style={{ color: 'var(--text-soft)', fontSize: 15, lineHeight: 1.55 }}
                 >
                   {recipe.description}
                 </p>
               )}
+
+              {/* Meta cards (moved off the image into the editorial text flow) */}
+              {(recipe.prep_time != null || recipe.cook_time != null || recipe.servings != null) && (
+                <div className="flex gap-2.5 mt-5">
+                  {recipe.prep_time != null && (
+                    <MetaCard icon={<Clock size={12} strokeWidth={1.6} />} label="Prep" value={formatTime(recipe.prep_time)} />
+                  )}
+                  {recipe.cook_time != null && (
+                    <MetaCard icon={<Flame size={12} strokeWidth={1.6} />} label="Cook" value={formatTime(recipe.cook_time)} />
+                  )}
+                  {recipe.servings != null && (
+                    <MetaCard icon={<Users size={12} strokeWidth={1.6} />} label="Serves" value={String(recipe.servings)} />
+                  )}
+                </div>
+              )}
+
+              {/* Byline */}
               {(recipe.creator_name || recipe.source_url) && (
-                <div
-                  className="flex items-center gap-2 text-sm flex-wrap mt-6"
-                  style={{ color: 'var(--muted)' }}
-                >
+                <div className="flex items-center gap-2 flex-wrap mt-5" style={{ fontSize: 14, color: 'var(--muted)' }}>
                   {recipe.creator_name && (
                     <span>
-                      Recipe by <strong style={{ color: 'var(--text)' }}>{recipe.creator_name}</strong>
+                      Recipe by{' '}
+                      <em style={{ fontFamily: '"Newsreader", Georgia, serif', fontStyle: 'italic', color: 'var(--text)' }}>
+                        {recipe.creator_name}
+                      </em>
                     </span>
                   )}
-                  {recipe.creator_name && recipe.source_url && (
-                    <span style={{ color: 'var(--border)' }}>·</span>
-                  )}
+                  {recipe.creator_name && recipe.source_url && <span style={{ color: 'var(--border)' }}>·</span>}
                   {recipe.source_url && (
                     <a
                       href={recipe.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hover:underline"
+                      className="inline-flex items-center gap-1.5"
                       style={{ color: 'var(--green)' }}
                     >
-                      View original ↗
+                      <Globe size={13} strokeWidth={1.6} />
+                      {getDomain(recipe.source_url)} ↗
                     </a>
                   )}
-                  {recipe.author_notes && (
-                    <>
-                      <span style={{ color: 'var(--border)' }}>·</span>
-                      <button
-                        onClick={() => setShowAuthorNotes(true)}
-                        className="cursor-pointer"
-                        style={{
-                          color: 'var(--green)',
-                          background: 'var(--green-light)',
-                          border: '1px solid var(--green)',
-                          borderRadius: 20,
-                          padding: '2px 10px',
-                          font: 'inherit',
-                          fontSize: '0.8em',
-                          fontWeight: 600,
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        Author's Notes
-                      </button>
-                    </>
-                  )}
-                  <span style={{ color: 'var(--border)' }}>·</span>
-                  <button
-                    onClick={() => setShowMyNotes(true)}
-                    className="cursor-pointer"
-                    style={{
-                      color: 'var(--green)',
-                      background: 'var(--green-light)',
-                      border: '1px solid var(--green)',
-                      borderRadius: 20,
-                      padding: '2px 10px',
-                      font: 'inherit',
-                      fontSize: '0.8em',
-                      fontWeight: 600,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    My Notes
-                  </button>
                 </div>
               )}
+
+              {/* Notes */}
+              <div className="flex items-center gap-4 mt-3">
+                <button
+                  onClick={() => setShowMyNotes(true)}
+                  className="inline-flex items-center gap-1.5"
+                  style={{ fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}
+                >
+                  <FileText size={15} strokeWidth={1.6} style={{ color: 'var(--orange)' }} /> My notes
+                </button>
+                {recipe.author_notes && (
+                  <button
+                    onClick={() => setShowAuthorNotes(true)}
+                    className="inline-flex items-center gap-1.5"
+                    style={{ fontSize: 14, color: 'var(--muted)', cursor: 'pointer' }}
+                  >
+                    <FileText size={15} strokeWidth={1.6} /> Author's notes
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Bottom group: primary actions (desktop only). Screen-on toggle
@@ -1268,31 +1252,19 @@ export default function RecipeDetail() {
               </div>
             )}
 
-            {/* Gradient scrim */}
+            {/* Editorial gradient: soft top scrim keeps the overlaid controls
+                legible, then the photo dissolves into the page ground at the
+                bottom edge — the same fade-down treatment as the mobile hero. */}
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 pointer-events-none"
               style={{
-                background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
+                background:
+                  'linear-gradient(180deg, rgba(31,27,22,0.30) 0%, rgba(31,27,22,0) 26%, rgba(236,228,211,0) 78%, var(--bg) 100%)',
               }}
             />
 
-            {/* Top-right: source badge + favourite */}
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              {recipe.source_url && (
-                <a
-                  href={recipe.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-white px-3 py-1.5 rounded-full"
-                  style={{
-                    background: 'rgba(255,255,255,0.2)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                  }}
-                >
-                  {getDomain(recipe.source_url)}
-                </a>
-              )}
+            {/* Top-right: favourite (source now lives in the byline) */}
+            <div className="absolute top-4 right-4">
               <FavouriteButton
                 recipeId={recipe.id}
                 isFavourite={recipe.is_favourite}
@@ -1305,109 +1277,6 @@ export default function RecipeDetail() {
 
             {/* Top-left: keep-screen-on toggle overlay */}
             {renderScreenOnToggle()}
-
-            {/* Bottom overlay: title card (mobile only) + meta cards */}
-            <div
-              ref={overlayRef}
-              className="rd-hero-bottom-overlay absolute bottom-0 left-0 right-0 rf-glass flex items-end justify-between gap-4"
-              style={{ padding: '20px' }}
-            >
-              {/* Title card – visible on mobile, hidden on desktop via CSS */}
-              <div className="rd-hero-title rd-hero-title-overlay">
-                <h1
-                  className="font-bold leading-snug"
-                  style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: '#fff', textWrap: 'balance' }}
-                >
-                  {recipe.title}
-                </h1>
-                {recipe.description && (
-                  <div className="relative mt-1">
-                    <div
-                      style={{ overflow: 'hidden', maxHeight: descExpanded ? 'none' : 'calc(2rem + 4px)', paddingRight: descExpanded && descTruncated ? '2.5rem' : 0 }}
-                    >
-                      <p
-                        ref={descRefMobile}
-                        className="text-xs rd-mobile-desc"
-                        style={{ color: 'rgba(255,255,255,0.75)' }}
-                      >
-                        {recipe.description}
-                      </p>
-                    </div>
-                    {descTruncated && (
-                      <button
-                        onClick={() => setDescExpanded(v => !v)}
-                        className="absolute text-xs cursor-pointer"
-                        style={{
-                          bottom: -10,
-                          right: 0,
-                          color: 'rgba(255,255,255,0.75)',
-                          background: descExpanded ? 'none' : `linear-gradient(to right, transparent, rgba(0,0,0,0.5) 35%)`,
-                          border: 'none',
-                          paddingLeft: '2rem',
-                          paddingRight: 0,
-                          textDecoration: 'underline',
-                          textUnderlineOffset: 2,
-                        }}
-                      >
-                        {descExpanded ? 'show less' : 'show more'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Meta cards */}
-              <div className="rd-hero-meta flex gap-2 shrink-0">
-                {recipe.prep_time != null && (
-                  <div
-                    className="text-center px-3 py-2"
-                    style={{
-                      background: 'var(--glass-card)',
-                      backdropFilter: 'blur(12px)',
-                      WebkitBackdropFilter: 'blur(12px)',
-                      borderRadius: 10,
-                    }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Prep</div>
-                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                      {formatTime(recipe.prep_time)}
-                    </div>
-                  </div>
-                )}
-                {recipe.cook_time != null && (
-                  <div
-                    className="text-center px-3 py-2"
-                    style={{
-                      background: 'var(--glass-card)',
-                      backdropFilter: 'blur(12px)',
-                      WebkitBackdropFilter: 'blur(12px)',
-                      borderRadius: 10,
-                    }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Cook</div>
-                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                      {formatTime(recipe.cook_time)}
-                    </div>
-                  </div>
-                )}
-                {recipe.servings != null && (
-                  <div
-                    className="text-center px-3 py-2"
-                    style={{
-                      background: 'var(--glass-card)',
-                      backdropFilter: 'blur(12px)',
-                      WebkitBackdropFilter: 'blur(12px)',
-                      borderRadius: 10,
-                    }}
-                  >
-                    <div className="text-xs" style={{ color: 'var(--muted)' }}>Servings</div>
-                    <div className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
-                      {recipe.servings}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </div>
         )}
@@ -1420,212 +1289,106 @@ export default function RecipeDetail() {
         >
           {/* ─ Left: Ingredients sidebar ───────────────────────── */}
           <aside className="rd-ingredients self-start">
-            <div
-              style={{
-                background: 'var(--card)',
-                borderRadius: 'var(--radius)',
-                boxShadow: 'var(--shadow-md)',
-                padding: 20,
-              }}
-            >
-              {/* Heading row */}
-              <div className="mb-2">
-                <h2
-                  className="text-lg font-bold"
-                  style={{ fontFamily: '"Newsreader", Georgia, serif' }}
-                >
+            <div>
+              {/* Heading + serving control */}
+              <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>What you need</div>
+              <div
+                className="flex items-end justify-between gap-3"
+                style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 18 }}
+              >
+                <h2 className="rf-heading" style={{ fontSize: 24, color: 'var(--text)' }}>
                   Ingredients
                 </h2>
+                {recipe.servings != null && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      border: '1px solid var(--border)',
+                      borderRadius: 999,
+                      padding: 3,
+                      background: 'var(--card)',
+                    }}
+                  >
+                    <button
+                      onClick={() => updateServings(Math.max(1, currentServings - 1))}
+                      aria-label="Fewer servings"
+                      style={{
+                        width: 26, height: 26, borderRadius: 999,
+                        border: '1px solid var(--border)', background: 'var(--card)',
+                        color: 'var(--muted)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <Minus size={13} strokeWidth={2} />
+                    </button>
+                    <span style={{ minWidth: 34, textAlign: 'center' }}>
+                      <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 15, color: 'var(--text)' }}>
+                        {currentServings}
+                      </span>
+                      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace', fontSize: 9.5, color: 'var(--muted)' }}>
+                        {' '}sv
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => updateServings(currentServings + 1)}
+                      aria-label="More servings"
+                      style={{
+                        width: 26, height: 26, borderRadius: 999,
+                        border: '1px solid var(--green)', background: 'var(--green)',
+                        color: '#fbf8f1', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <Plus size={13} strokeWidth={2} />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Serving row */}
-              {recipe.servings != null && (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="text-sm font-semibold"
-                      style={{ color: 'var(--green)' }}
-                    >
-                      {currentServings} serving{currentServings !== 1 ? 's' : ''}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          updateServings(Math.max(1, currentServings - 1))
-                        }
-                        className="flex items-center justify-center text-sm font-bold transition-colors"
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          background: 'var(--card)',
-                          color: 'var(--muted)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--green)';
-                          e.currentTarget.style.color = 'var(--green)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--border)';
-                          e.currentTarget.style.color = 'var(--muted)';
-                        }}
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => updateServings(currentServings + 1)}
-                        className="flex items-center justify-center text-sm font-bold transition-colors"
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          background: 'var(--card)',
-                          color: 'var(--muted)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--green)';
-                          e.currentTarget.style.color = 'var(--green)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--border)';
-                          e.currentTarget.style.color = 'var(--muted)';
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  {currentServings !== savedServings && (
-                    <div className="flex justify-end mt-2">
-                      <button
-                        onClick={saveServings}
-                        className="cursor-pointer"
-                        style={{
-                          color: 'var(--green)',
-                          background: 'var(--green-light)',
-                          border: '1px solid var(--green)',
-                          borderRadius: 20,
-                          padding: '2px 10px',
-                          font: 'inherit',
-                          fontSize: '0.8em',
-                          fontWeight: 600,
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  )}
+              {/* Save adjusted servings */}
+              {recipe.servings != null && currentServings !== savedServings && (
+                <div className="flex justify-end" style={{ marginTop: -6, marginBottom: 16 }}>
+                  <button
+                    onClick={saveServings}
+                    className="cursor-pointer"
+                    style={{
+                      color: 'var(--green)', background: 'var(--green-light)',
+                      border: '1px solid var(--green)', borderRadius: 20,
+                      padding: '2px 10px', font: 'inherit', fontSize: '0.8em',
+                      fontWeight: 600, lineHeight: 1.6,
+                    }}
+                  >
+                    Save serving size
+                  </button>
                 </div>
               )}
 
-              {/* Ingredient rows */}
-              {allIngredients.map((group) => (
-                <div key={group.category} className="mb-3 last:mb-0">
-                  {group.category && (
-                    <h3
-                      className="text-sm font-bold mb-2"
-                      style={{ color: 'var(--text)' }}
-                    >
-                      {group.category}
-                    </h3>
-                  )}
-                  {group.items.map((ing, i) => {
-                    const ingKey = `${group.category}::${i}`;
-                    const isUsed = usedIngredients.has(ingKey);
-                    return (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 py-2 px-1 rounded-md transition-colors select-none"
-                        style={{
-                          borderBottom:
-                            i < group.items.length - 1
-                              ? '1px solid var(--border)'
-                              : undefined,
-                          cursor: 'pointer',
-                          opacity: isUsed ? 0.45 : 1,
-                        }}
-                        onClick={() => {
-                          setUsedIngredients((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(ingKey)) next.delete(ingKey);
-                            else next.add(ingKey);
-                            return next;
-                          });
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'var(--warm)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
-                        <IngredientIcon item={ing.item} />
-                        {ing.original_text ? (
-                          /* Full original text with quantity+unit bolded */
-                          <span
-                            className="flex-1 text-sm"
-                            style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
-                          >
-                            {renderOriginalText(ing, recipe.servings, currentServings)}
-                          </span>
-                        ) : (
-                          <>
-                            {/* Legacy: Name */}
-                            <span
-                              className="flex-1 text-sm"
-                              style={{ textDecoration: isUsed ? 'line-through' : 'none' }}
-                            >
-                              {ing.item}
-                            </span>
-                            {/* Legacy: Quantity + unit */}
-                            {(ing.quantity || ing.unit) && (
-                              <span
-                                className="text-sm font-bold shrink-0"
-                                style={{
-                                  color: 'var(--text)',
-                                  textDecoration: isUsed ? 'line-through' : 'none',
-                                }}
-                              >
-                                {scaleQuantity(ing.quantity, recipe.servings, currentServings)}
-                                {ing.unit ? ` ${ing.unit}` : ''}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              {/* Ingredient checklist (shared editorial treatment with mobile) */}
+              {renderMobileIngredients()}
             </div>
           </aside>
 
           {/* ─ Right: Directions + Video ──────────────────────── */}
-          <div className="rd-steps space-y-5">
-            {/* Directions card */}
-            <div
+          <div className="rd-steps">
+            {/* Directions */}
+            <div className="rf-eyebrow" style={{ marginBottom: 6, display: 'block' }}>Method</div>
+            <h2
+              className="rf-heading"
               style={{
-                background: 'var(--card)',
-                borderRadius: 'var(--radius)',
-                boxShadow: 'var(--shadow-md)',
-                padding: 24,
+                fontSize: 24,
+                color: 'var(--text)',
+                borderBottom: '1px solid var(--border)',
+                paddingBottom: 14,
+                marginBottom: 20,
               }}
             >
-              <h2
-                className="text-lg font-bold mb-5"
-                style={{ fontFamily: '"Newsreader", Georgia, serif' }}
-              >
-                Directions
-              </h2>
+              Directions
+            </h2>
 
-              {renderStepGroups()}
-            </div>
+            {renderStepGroups()}
 
-            {/* Video card (preserved) */}
-            {renderVideo()}
+            {/* Video (flat editorial treatment, matching mobile) */}
+            {recipe.video_url && <div style={{ marginTop: 36 }}>{renderVideo(true)}</div>}
           </div>
         </div>
         )}

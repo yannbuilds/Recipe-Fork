@@ -181,8 +181,8 @@
   }
   .rd-meal-plan-row { display: none; }
   .rd-grid { margin-top: 20px; }
-  .rd-hero-text h1 { font-size: 26px !important; }
-  .rd-hero-text .rd-hero-desc { font-size: 14px !important; color: var(--muted); }
+  .rd-hero-text h1 { font-size: 32px; line-height: 1.08; }
+  .rd-hero-text .rd-hero-desc { font-size: 15px; color: var(--text-soft); }
   .rd-hero .rd-hero-title-overlay { display: none; }
   .rd-hero-title { max-width: 100%; }
   .rd-attribution { display: none; }
