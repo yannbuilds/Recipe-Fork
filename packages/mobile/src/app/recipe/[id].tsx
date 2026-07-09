@@ -16,7 +16,7 @@ import MyNotesModal from '@/components/MyNotesModal';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
-import { useKeepAwakePref } from '@/lib/keepAwake';
+import { haptics } from '@/lib/haptics';
 import { accentTitle, formatTime, getDomain, scaleQuantity } from '@/lib/recipeFormat';
 import { supabase } from '@/lib/supabase';
 import { stripHtml } from '@/lib/text';
@@ -131,7 +131,7 @@ export default function RecipeDetailScreen() {
   const [currentServings, setCurrentServings] = useState(1);
   const [savedServings, setSavedServings] = useState(1);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [isAwake, setIsAwake] = useKeepAwakePref();
+  const [isAwake, setIsAwake] = useState(false);
   const [isFav, setIsFav] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -161,10 +161,10 @@ export default function RecipeDetailScreen() {
     }
   }, [recipe]);
 
-  // Keep-awake is scoped to *this* screen while it's focused. A per-recipe tag
-  // stops one recipe's toggle from bleeding into another, and useFocusEffect
-  // releases the lock when you navigate away — otherwise a pushed-over recipe
-  // screen stays mounted and holds the screen on across every recipe.
+  // "Keep screen on" is per-recipe and momentary: each recipe screen owns its
+  // own toggle (defaults off), and the lock is only held while this screen is
+  // focused and the toggle is on — a per-recipe tag keeps two mounted recipe
+  // screens from clobbering each other's lock.
   useFocusEffect(
     useCallback(() => {
       if (!isAwake) return;
@@ -172,6 +172,15 @@ export default function RecipeDetailScreen() {
       activateKeepAwakeAsync(tag).catch(() => {});
       return () => deactivateKeepAwake(tag);
     }, [isAwake, id]),
+  );
+
+  // Leaving the recipe (back, or pushing another recipe) switches the toggle
+  // back off, so it never lingers on when you return. Empty deps keep this
+  // callback stable so the cleanup fires on blur only — not on every toggle.
+  useFocusEffect(
+    useCallback(() => {
+      return () => setIsAwake(false);
+    }, []),
   );
 
   const steps = useMemo(
@@ -219,12 +228,14 @@ export default function RecipeDetailScreen() {
   }
 
   async function saveServings() {
+    haptics.success();
     await supabase.from('recipes').update({ custom_servings: currentServings }).eq('id', id);
     setSavedServings(currentServings);
   }
 
   async function handleDelete() {
     setShowDelete(false);
+    haptics.success();
     await supabase.from('recipes').delete().eq('id', id);
     queryClient.invalidateQueries({ queryKey: ['recipes'] });
     router.back();
@@ -274,7 +285,10 @@ export default function RecipeDetailScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => setIsAwake(!isAwake)}
+            onPress={() => {
+              haptics.light();
+              setIsAwake(!isAwake);
+            }}
             style={{
               position: 'absolute',
               top: insets.top + 6,
@@ -458,7 +472,10 @@ export default function RecipeDetailScreen() {
                 return (
                   <Pressable
                     key={key}
-                    onPress={() => setTab(key)}
+                    onPress={() => {
+                      haptics.select();
+                      setTab(key);
+                    }}
                     style={{
                       paddingBottom: 12,
                       marginBottom: -1,
@@ -489,7 +506,10 @@ export default function RecipeDetailScreen() {
                 }}
               >
                 <Pressable
-                  onPress={() => setCurrentServings((s) => Math.max(1, s - 1))}
+                  onPress={() => {
+                    haptics.select();
+                    setCurrentServings((s) => Math.max(1, s - 1));
+                  }}
                   style={{
                     width: 26,
                     height: 26,
@@ -509,7 +529,10 @@ export default function RecipeDetailScreen() {
                   </Serif>
                 </View>
                 <Pressable
-                  onPress={() => setCurrentServings((s) => s + 1)}
+                  onPress={() => {
+                    haptics.select();
+                    setCurrentServings((s) => s + 1);
+                  }}
                   style={{
                     width: 26,
                     height: 26,
@@ -567,14 +590,15 @@ export default function RecipeDetailScreen() {
                   return (
                     <Pressable
                       key={i}
-                      onPress={() =>
+                      onPress={() => {
+                        haptics.select();
                         setUsedIngredients((prev) => {
                           const next = new Set(prev);
                           if (next.has(key)) next.delete(key);
                           else next.add(key);
                           return next;
-                        })
-                      }
+                        });
+                      }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -602,14 +626,15 @@ export default function RecipeDetailScreen() {
                   return (
                     <Pressable
                       key={step.order}
-                      onPress={() =>
+                      onPress={() => {
+                        haptics.select();
                         setCompletedSteps((prev) => {
                           const next = new Set(prev);
                           if (next.has(step.order)) next.delete(step.order);
                           else next.add(step.order);
                           return next;
-                        })
-                      }
+                        });
+                      }}
                       style={{ flexDirection: 'row', gap: 12, paddingBottom: 20 }}
                     >
                       <View style={{ alignItems: 'center' }}>
