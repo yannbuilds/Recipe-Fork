@@ -1,4 +1,4 @@
-import type { FamilyGroup, FamilyMember } from '@recipe-aggregator/shared';
+import type { FamilyGroup, FamilyInvitation, FamilyMember } from '@recipe-aggregator/shared';
 import type { Session, User } from '@supabase/supabase-js';
 import {
   createContext,
@@ -22,6 +22,7 @@ interface AuthContextValue {
   loading: boolean;
   familyGroup: FamilyGroup | null;
   familyMembers: FamilyMember[];
+  familyInvitations: FamilyInvitation[];
   refreshProfile: () => Promise<void>;
   refreshFamily: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   familyGroup: null,
   familyMembers: [],
+  familyInvitations: [],
   refreshProfile: async () => {},
   refreshFamily: async () => {},
   signOut: async () => {},
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [familyInvitations, setFamilyInvitations] = useState<FamilyInvitation[]>([]);
 
   const fetchProfile = useCallback(async (userId: string, authUser?: User | null) => {
     const { data } = await supabase
@@ -89,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!membership) {
       setFamilyGroup(null);
       setFamilyMembers([]);
+      setFamilyInvitations([]);
       return;
     }
 
@@ -116,6 +120,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setFamilyMembers(
       memberList.map((m) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as FamilyMember[],
     );
+
+    // Pending invitations are only visible to (and actionable by) the owner.
+    if (membership.role === 'owner') {
+      const { data: invites } = await supabase
+        .from('family_invitations')
+        .select('*')
+        .eq('group_id', membership.group_id)
+        .eq('status', 'pending');
+      setFamilyInvitations((invites as FamilyInvitation[]) ?? []);
+    } else {
+      setFamilyInvitations([]);
+    }
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -138,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setFamilyGroup(null);
         setFamilyMembers([]);
+        setFamilyInvitations([]);
         setLoading(false);
       }
     };
@@ -160,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         familyGroup,
         familyMembers,
+        familyInvitations,
         refreshProfile,
         refreshFamily,
         signOut,

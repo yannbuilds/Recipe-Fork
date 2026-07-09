@@ -9,7 +9,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAppFonts } from '@/lib/fonts';
-import { font, useTheme } from '@/lib/theme';
+import { font, ThemePreferenceProvider, useIsDark, useTheme } from '@/lib/theme';
 
 // gcTime must be >= the persister's maxAge, otherwise cached queries are
 // garbage-collected before they can be restored. One week covers the "open the
@@ -36,7 +36,16 @@ const persister = createAsyncStoragePersister({
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  return (
+    <ThemePreferenceProvider>
+      <RootLayoutInner />
+    </ThemePreferenceProvider>
+  );
+}
+
+function RootLayoutInner() {
   const theme = useTheme();
+  const isDark = useIsDark();
   const [fontsLoaded, fontError] = useAppFonts();
 
   useEffect(() => {
@@ -53,7 +62,7 @@ export default function RootLayout() {
       persistOptions={{ persister, maxAge: ONE_WEEK }}
     >
       <AuthProvider>
-        <StatusBar style="auto" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg },

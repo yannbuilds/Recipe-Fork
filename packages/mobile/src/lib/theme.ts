@@ -1,3 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useColorScheme } from 'react-native';
 
 // ── Pie Keeper editorial palette ────────────────────────────────
@@ -71,10 +80,59 @@ export const font = {
   monoMedium: 'JetBrainsMono_500Medium',
 } as const;
 
+// ── Theme preference (System / Light / Dark) ────────────────────
+// System follows the OS colour scheme; Light/Dark force one look.
+// Persisted to AsyncStorage so the choice survives restarts.
+
+export type ThemePreference = 'auto' | 'light' | 'dark';
+
+const THEME_PREF_KEY = 'recipe-fork-theme-preference';
+
+interface ThemePrefContextValue {
+  preference: ThemePreference;
+  setPreference: (pref: ThemePreference) => void;
+}
+
+const ThemePreferenceContext = createContext<ThemePrefContextValue>({
+  preference: 'auto',
+  setPreference: () => {},
+});
+
+export function ThemePreferenceProvider({ children }: { children: ReactNode }) {
+  const [preference, setPreferenceState] = useState<ThemePreference>('auto');
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_PREF_KEY).then((stored) => {
+      if (stored === 'auto' || stored === 'light' || stored === 'dark') {
+        setPreferenceState(stored);
+      }
+    });
+  }, []);
+
+  const setPreference = (pref: ThemePreference) => {
+    setPreferenceState(pref);
+    AsyncStorage.setItem(THEME_PREF_KEY, pref).catch(() => {});
+  };
+
+  return createElement(
+    ThemePreferenceContext.Provider,
+    { value: { preference, setPreference } },
+    children,
+  );
+}
+
+export function useThemePreference(): ThemePrefContextValue {
+  return useContext(ThemePreferenceContext);
+}
+
 export function useTheme(): Theme {
-  return useColorScheme() === 'dark' ? dark : light;
+  return useIsDark() ? dark : light;
 }
 
 export function useIsDark(): boolean {
-  return useColorScheme() === 'dark';
+  const system = useColorScheme();
+  const { preference } = useContext(ThemePreferenceContext);
+  if (preference === 'light') return false;
+  if (preference === 'dark') return true;
+  return system === 'dark';
 }
