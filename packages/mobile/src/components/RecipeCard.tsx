@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Recipe } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import FavouriteButton from '@/components/FavouriteButton';
+import PressableScale from '@/components/PressableScale';
 import { Mono, Serif } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 
@@ -33,9 +34,8 @@ export default function RecipeCard({ recipe, onToggleFavourite, ownerName }: Pro
       : (recipe.prep_time ?? recipe.cook_time ?? null);
 
   return (
-    <Pressable
+    <PressableScale
       onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: recipe.id } })}
-      style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
     >
       {/* Photo */}
       <View
@@ -151,6 +151,6 @@ export default function RecipeCard({ recipe, onToggleFavourite, ownerName }: Pro
           </View>
         )}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }

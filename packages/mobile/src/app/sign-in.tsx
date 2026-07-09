@@ -8,18 +8,24 @@ import {
 } from 'react-native';
 import { Body, Button, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useOnboarding } from '@/context/OnboardingContext';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
 export default function SignInScreen() {
   const t = useTheme();
   const { session, loading: authLoading } = useAuth();
+  const { ready: onboardingReady, seen: onboardingSeen } = useOnboarding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!authLoading && session) return <Redirect href="/" />;
+  // First launch: show the onboarding carousel before the sign-in form.
+  if (!authLoading && !session && onboardingReady && !onboardingSeen) {
+    return <Redirect href="/onboarding" />;
+  }
 
   async function handleSignIn() {
     setError(null);

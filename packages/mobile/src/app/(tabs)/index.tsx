@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
 import RecipeCard from '@/components/RecipeCard';
 import RecipeFilterBar from '@/components/RecipeFilterBar';
+import { RecipeGridSkeleton } from '@/components/Skeleton';
 import { Body, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -256,7 +257,7 @@ export default function RecipeListScreen() {
         columnWrapperStyle={{ gap: 14, paddingHorizontal: 16 }}
         contentContainerStyle={{ gap: 18, paddingBottom: 24 }}
         ListHeaderComponent={header}
-        ListEmptyComponent={isPending ? null : empty}
+        ListEmptyComponent={isPending ? <RecipeGridSkeleton count={6} /> : empty}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={t.green} />
         }

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CookbookFormModal from '@/components/CookbookFormModal';
+import { CookbookListSkeleton } from '@/components/Skeleton';
 import { Body, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -165,7 +166,9 @@ export default function CookbooksScreen() {
         ListFooterComponent={!isPending ? newButton : null}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={t.green} />}
         ListEmptyComponent={
-          !isPending && error ? (
+          isPending ? (
+            <CookbookListSkeleton count={4} />
+          ) : error ? (
             <Body color={t.red} style={{ textAlign: 'center', padding: 24 }}>
               {error.message}
             </Body>
