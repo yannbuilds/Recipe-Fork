@@ -4,8 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddToCookbookSheet from '@/components/AddToCookbookSheet';
@@ -160,13 +160,18 @@ export default function RecipeDetailScreen() {
     }
   }, [recipe]);
 
-  useEffect(() => {
-    if (isAwake) activateKeepAwakeAsync('recipe').catch(() => {});
-    else deactivateKeepAwake('recipe');
-    return () => {
-      deactivateKeepAwake('recipe');
-    };
-  }, [isAwake]);
+  // Keep-awake is scoped to *this* screen while it's focused. A per-recipe tag
+  // stops one recipe's toggle from bleeding into another, and useFocusEffect
+  // releases the lock when you navigate away — otherwise a pushed-over recipe
+  // screen stays mounted and holds the screen on across every recipe.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAwake) return;
+      const tag = `recipe-${id}`;
+      activateKeepAwakeAsync(tag).catch(() => {});
+      return () => deactivateKeepAwake(tag);
+    }, [isAwake, id]),
+  );
 
   const steps = useMemo(
     () => (recipe ? [...recipe.steps].sort((a, b) => a.order - b.order) : []),
