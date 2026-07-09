@@ -16,6 +16,7 @@ import MyNotesModal from '@/components/MyNotesModal';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
+import { useKeepAwakePref } from '@/lib/keepAwake';
 import { accentTitle, formatTime, getDomain, scaleQuantity } from '@/lib/recipeFormat';
 import { supabase } from '@/lib/supabase';
 import { stripHtml } from '@/lib/text';
@@ -130,7 +131,7 @@ export default function RecipeDetailScreen() {
   const [currentServings, setCurrentServings] = useState(1);
   const [savedServings, setSavedServings] = useState(1);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [isAwake, setIsAwake] = useState(true);
+  const [isAwake, setIsAwake] = useKeepAwakePref();
   const [isFav, setIsFav] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -273,7 +274,7 @@ export default function RecipeDetailScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => setIsAwake((v) => !v)}
+            onPress={() => setIsAwake(!isAwake)}
             style={{
               position: 'absolute',
               top: insets.top + 6,
