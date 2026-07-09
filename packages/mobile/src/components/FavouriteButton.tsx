@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Pressable } from 'react-native';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
@@ -18,7 +18,7 @@ export default function FavouriteButton({ recipeId, isFavourite, onToggle, size 
 
   async function handlePress() {
     const next = !isFavourite;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.light();
     onToggle(next); // optimistic
     const { error } = await supabase.from('recipes').update({ is_favourite: next }).eq('id', recipeId);
     if (error) onToggle(!next); // revert

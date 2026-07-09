@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Button, CheckSquare, Serif } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -45,6 +46,8 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
 
   async function toggle(cookbookId: string) {
     const isMember = memberOf.has(cookbookId);
+    if (isMember) haptics.light();
+    else haptics.success();
     setMemberOf((prev) => {
       const next = new Set(prev);
       if (isMember) next.delete(cookbookId);
@@ -78,6 +81,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
       setCookbooks((prev) => [cb, ...prev]);
       await supabase.from('cookbook_recipes').insert({ cookbook_id: cb.id, recipe_id: recipeId });
       setMemberOf((prev) => new Set(prev).add(cb.id));
+      haptics.success();
     }
     setNewName('');
     setCreating(false);

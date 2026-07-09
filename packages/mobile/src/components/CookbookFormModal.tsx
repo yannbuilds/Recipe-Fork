@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Button, Serif } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -55,6 +56,7 @@ export default function CookbookFormModal({ open, cookbook, onClose, onSaved }: 
       }
     }
     setSaving(false);
+    haptics.success();
     onClose();
   }
 

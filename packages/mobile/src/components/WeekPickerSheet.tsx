@@ -1,8 +1,8 @@
-import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Mono, Serif } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import { getWeekOptions } from '@/lib/weekHelpers';
@@ -38,8 +38,9 @@ export default function WeekPickerSheet({ open, recipeId, recipeTitle, userId, o
 
   async function toggleWeek(weekStart: string) {
     setBusy(weekStart);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const isAdded = addedWeeks.has(weekStart);
+    if (isAdded) haptics.light();
+    else haptics.success();
 
     // Find or create the plan for this week
     const { data: plans } = await supabase

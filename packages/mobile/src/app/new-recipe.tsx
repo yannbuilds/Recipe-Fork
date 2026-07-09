@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Body, Button, Serif } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { saveTags } from '@/lib/saveTags';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
@@ -77,9 +78,11 @@ export default function NewRecipeModal() {
       if (saveError || !saved) throw new Error(saveError?.message ?? 'Failed to save recipe');
 
       await saveTags(saved.id, tags ?? []).catch(() => {});
+      haptics.success();
       router.back();
       setTimeout(() => router.push({ pathname: '/recipe/[id]', params: { id: saved.id } }), 250);
     } catch (err) {
+      haptics.error();
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong');
       setStep('error');
     }

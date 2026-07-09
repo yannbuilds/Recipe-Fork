@@ -10,6 +10,7 @@ import RecipeCard from '@/components/RecipeCard';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
 import { Body, Button, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
@@ -78,6 +79,7 @@ export default function CookbookDetailScreen() {
 
   async function handleDelete() {
     setShowDelete(false);
+    haptics.success();
     await supabase.from('cookbooks').delete().eq('id', id);
     queryClient.invalidateQueries({ queryKey: ['cookbooks'] });
     router.back();

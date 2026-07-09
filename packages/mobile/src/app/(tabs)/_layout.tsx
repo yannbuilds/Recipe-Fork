@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs, useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { View } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
+import { haptics } from '@/lib/haptics';
 import { font, useTheme } from '@/lib/theme';
 
 export default function TabsLayout() {
@@ -58,7 +58,7 @@ export default function TabsLayout() {
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            haptics.medium();
             router.push('/new-recipe');
           },
         }}

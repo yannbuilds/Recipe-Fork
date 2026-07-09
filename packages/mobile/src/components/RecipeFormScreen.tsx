@@ -7,6 +7,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Body, Button, Divider, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -91,6 +92,7 @@ export default function RecipeFormScreen({ recipeId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       setSaving(false);
+      haptics.success();
       router.back();
     } else {
       const { data } = await supabase
@@ -100,6 +102,7 @@ export default function RecipeFormScreen({ recipeId }: Props) {
         .single();
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       setSaving(false);
+      haptics.success();
       if (data) router.replace({ pathname: '/recipe/[id]', params: { id: data.id } });
       else router.back();
     }

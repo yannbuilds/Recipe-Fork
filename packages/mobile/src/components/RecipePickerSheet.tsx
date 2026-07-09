@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Mono, Serif } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -88,6 +89,7 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
                 <Pressable
                   key={r.id}
                   onPress={() => {
+                    haptics.success();
                     onPick(r);
                     setAdded((prev) => new Set(prev).add(r.id));
                   }}

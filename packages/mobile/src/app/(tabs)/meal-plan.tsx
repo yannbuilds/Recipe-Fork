@@ -11,6 +11,7 @@ import { Body, Button, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui
 import { useAuth } from '@/context/AuthContext';
 import { categoriseIngredients, CATEGORY_ORDER } from '@/lib/categoriseIngredients';
 import { combineIngredients, type IngredientWithRecipe } from '@/lib/combineIngredients';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import {
@@ -142,6 +143,7 @@ export default function MealPlanScreen() {
   }
 
   function toggleShopping(key: string) {
+    haptics.select();
     setCheckedItems((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -162,6 +164,7 @@ export default function MealPlanScreen() {
   }
 
   async function removeEntry(entryId: string) {
+    haptics.light();
     await supabase.from('meal_plan_recipes').delete().eq('id', entryId);
     setEntries((prev) => prev.filter((e) => e.id !== entryId));
   }
@@ -170,6 +173,9 @@ export default function MealPlanScreen() {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
     const next = !entry.is_cooked;
+    // A cooked meal is a small win — celebrate it; un-marking is just a light tick.
+    if (next) haptics.success();
+    else haptics.select();
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
   }
@@ -267,7 +273,10 @@ export default function MealPlanScreen() {
             return (
               <Pressable
                 key={key}
-                onPress={() => setTab(key)}
+                onPress={() => {
+                  haptics.select();
+                  setTab(key);
+                }}
                 style={{ paddingBottom: 12, marginBottom: -1, borderBottomWidth: 2, borderBottomColor: active ? t.green : 'transparent' }}
               >
                 <Serif size={18} color={active ? t.text : t.muted}>
