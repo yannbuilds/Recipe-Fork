@@ -23,6 +23,8 @@ export default function IngredientIcon({ item, size = 34 }: { item: string; size
       contentFit="contain"
       onError={() => setFailed(true)}
       transition={120}
+      cachePolicy="memory-disk"
+      recyclingKey={item}
     />
   );
 }

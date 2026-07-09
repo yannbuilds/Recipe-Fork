@@ -304,7 +304,7 @@ export default function MealPlanScreen() {
                   <View key={entry.id} style={{ opacity: cooked ? 0.72 : 1 }}>
                     <View style={{ position: 'relative', aspectRatio: 4 / 3, borderRadius: 4, overflow: 'hidden', backgroundColor: t.paper3 }}>
                       {entry.recipe?.image_url ? (
-                        <Image source={{ uri: entry.recipe.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                        <Image source={{ uri: entry.recipe.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={entry.recipe.id} />
                       ) : (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                           <Ionicons name="restaurant-outline" size={32} color={t.muted} />

@@ -235,6 +235,8 @@ export default function RecipeDetailScreen() {
               source={{ uri: recipe.image_url }}
               style={{ width: '100%', height: '100%' }}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              recyclingKey={recipe.id}
             />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -654,6 +656,7 @@ export default function RecipeDetailScreen() {
                   source={{ uri: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }}
                   style={{ width: '100%', height: '100%' }}
                   contentFit="cover"
+                  cachePolicy="memory-disk"
                 />
                 <View
                   style={{

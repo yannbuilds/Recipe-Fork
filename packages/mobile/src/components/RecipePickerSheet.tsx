@@ -103,6 +103,8 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
                       source={{ uri: r.image_url }}
                       style={{ width: 52, height: 52, borderRadius: 6 }}
                       contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={r.id}
                     />
                   ) : (
                     <View style={{ width: 52, height: 52, borderRadius: 6, backgroundColor: t.paper3 }} />

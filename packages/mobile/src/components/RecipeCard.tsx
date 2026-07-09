@@ -53,6 +53,8 @@ export default function RecipeCard({ recipe, onToggleFavourite, ownerName }: Pro
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
             transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={recipe.id}
           />
         ) : (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

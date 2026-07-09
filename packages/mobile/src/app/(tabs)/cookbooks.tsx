@@ -77,6 +77,8 @@ function CoverCollage({ images, emoji }: { images: string[]; emoji: string | nul
           source={{ uri: url }}
           style={{ width: images.length === 1 ? '100%' : '50%', height: images.length <= 2 ? '100%' : '50%' }}
           contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={url}
         />
       ))}
     </View>
