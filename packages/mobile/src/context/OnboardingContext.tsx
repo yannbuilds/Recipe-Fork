@@ -19,12 +19,15 @@ interface OnboardingContextValue {
   /** Whether the user has already completed onboarding. */
   seen: boolean;
   markSeen: () => void;
+  /** Clears the flag so the carousel shows again (used by a dev replay button). */
+  reset: () => Promise<void>;
 }
 
 const OnboardingContext = createContext<OnboardingContextValue>({
   ready: false,
   seen: false,
   markSeen: () => {},
+  reset: async () => {},
 });
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
@@ -42,8 +45,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(ONBOARDING_KEY, 'true').catch(() => {});
   }, []);
 
+  const reset = useCallback(async () => {
+    setSeen(false);
+    await AsyncStorage.removeItem(ONBOARDING_KEY).catch(() => {});
+  }, []);
+
   return (
-    <OnboardingContext.Provider value={{ ready, seen, markSeen }}>
+    <OnboardingContext.Provider value={{ ready, seen, markSeen, reset }}>
       {children}
     </OnboardingContext.Provider>
   );

@@ -3,8 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Body, Button, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useOnboarding } from '@/context/OnboardingContext';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
 
@@ -21,6 +23,8 @@ export default function ProfileScreen() {
     refreshFamily,
     signOut,
   } = useAuth();
+  const router = useRouter();
+  const { reset: resetOnboarding } = useOnboarding();
   const [name, setName] = useState('');
   const [measurement, setMeasurement] = useState<'metric' | 'imperial'>('metric');
   const [saving, setSaving] = useState(false);
@@ -151,6 +155,23 @@ export default function ProfileScreen() {
           onPress={signOut}
           style={{ marginTop: 32 }}
         />
+
+        {/* Dev-only: replay the first-run onboarding carousel. Stripped from
+            production builds by __DEV__. */}
+        {__DEV__ && (
+          <Pressable
+            onPress={async () => {
+              await resetOnboarding();
+              router.push('/onboarding');
+            }}
+            hitSlop={8}
+            style={{ alignItems: 'center', marginTop: 16 }}
+          >
+            <Mono size={10} color={t.muted}>
+              DEV · REPLAY ONBOARDING
+            </Mono>
+          </Pressable>
+        )}
       </View>
     </ScrollView>
   );
