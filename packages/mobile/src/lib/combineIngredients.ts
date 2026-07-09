@@ -69,13 +69,19 @@ export function combineIngredients(ingredients: IngredientWithRecipe[]): Aggrega
   const result: AggregatedIngredient[] = [];
   for (const [, unitMap] of map) {
     for (const [, entry] of unitMap) {
-      const parsed = entry.quantities.map(parseQty);
+      // Ignore ingredients with no quantity assigned — don't let them count as 0.
+      const nonEmpty = entry.quantities.filter((q) => q.trim() !== '');
+      if (nonEmpty.length === 0) {
+        result.push({ item: entry.display, quantity: '', unit: entry.unit, sources: entry.sources });
+        continue;
+      }
+      const parsed = nonEmpty.map(parseQty);
       if (parsed.every((p) => p !== null)) {
         const sum = parsed.reduce((a, b) => a! + b!, 0)!;
         const formatted = Number.isInteger(sum) ? String(sum) : sum.toFixed(1);
         result.push({ item: entry.display, quantity: formatted, unit: entry.unit, sources: entry.sources });
       } else {
-        result.push({ item: entry.display, quantity: entry.quantities.join(' + '), unit: entry.unit, sources: entry.sources });
+        result.push({ item: entry.display, quantity: nonEmpty.join(' + '), unit: entry.unit, sources: entry.sources });
       }
     }
   }
