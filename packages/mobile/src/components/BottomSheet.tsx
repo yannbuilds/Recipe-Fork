@@ -118,7 +118,8 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
         >
           {/* Handle zone — the grab target for drag-to-dismiss. */}
           <View {...pan.panHandlers} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 12 }}>
-            <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: t.border }} />
+            {/* TEMP DIAGNOSTIC: loud handle to confirm new code is reaching the device. Revert once seen. */}
+            <View style={{ width: 120, height: 10, borderRadius: 5, backgroundColor: '#FF00AA' }} />
           </View>
 
           {children}
