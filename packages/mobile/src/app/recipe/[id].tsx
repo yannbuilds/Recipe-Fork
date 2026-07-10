@@ -13,6 +13,7 @@ import ConfirmModal from '@/components/ConfirmModal';
 import FavouriteButton from '@/components/FavouriteButton';
 import IngredientIcon from '@/components/IngredientIcon';
 import MyNotesModal from '@/components/MyNotesModal';
+import { ScreenOnGlow } from '@/components/ScreenOnGlow';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
@@ -743,6 +744,9 @@ export default function RecipeDetailScreen() {
           </Serif>
         </View>
       </ScrollView>
+
+      {/* Full-screen halo while keep-awake is on (green→orange, breathing) */}
+      <ScreenOnGlow active={isAwake} />
 
       <ConfirmModal
         open={showDelete}
