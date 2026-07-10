@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CookbookFormModal from '@/components/CookbookFormModal';
+import CookbookRow from '@/components/CookbookRow';
 import { CookbookListSkeleton } from '@/components/Skeleton';
-import { Body, Eyebrow, Mono, Serif } from '@/components/ui';
+import { Body, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -61,31 +61,6 @@ async function fetchCookbooks(): Promise<CookbookListItem[]> {
   }));
 }
 
-function CoverCollage({ images, emoji }: { images: string[]; emoji: string | null }) {
-  const t = useTheme();
-  if (images.length === 0) {
-    return (
-      <View style={{ width: 96, height: 96, backgroundColor: t.paper3, alignItems: 'center', justifyContent: 'center' }}>
-        <Body size={30}>{emoji ?? '📖'}</Body>
-      </View>
-    );
-  }
-  return (
-    <View style={{ width: 96, height: 96, flexDirection: 'row', flexWrap: 'wrap', backgroundColor: t.paper3 }}>
-      {images.slice(0, 4).map((url, i) => (
-        <Image
-          key={`${url}-${i}`}
-          source={{ uri: url }}
-          style={{ width: images.length === 1 ? '100%' : '50%', height: images.length <= 2 ? '100%' : '50%' }}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          recyclingKey={url}
-        />
-      ))}
-    </View>
-  );
-}
-
 export default function CookbooksScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -111,7 +86,7 @@ export default function CookbooksScreen() {
         : `${total} cookbooks in your collection.`;
 
   const header = (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, marginBottom: 8 }}>
+    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
       <Eyebrow>The shelves</Eyebrow>
       <Serif size={34} style={{ marginTop: 10, lineHeight: 36 }}>
         Cookbooks
@@ -137,7 +112,6 @@ export default function CookbooksScreen() {
       onPress={() => setShowCreate(true)}
       style={{
         marginHorizontal: 16,
-        marginTop: 6,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
@@ -161,7 +135,7 @@ export default function CookbooksScreen() {
       <FlatList
         data={cookbooks}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 24, gap: 14 }}
+        contentContainerStyle={{ paddingBottom: 24, gap: 20 }}
         ListHeaderComponent={header}
         ListFooterComponent={!isPending ? newButton : null}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={t.green} />}
@@ -174,36 +148,14 @@ export default function CookbooksScreen() {
             </Body>
           ) : null
         }
-        renderItem={({ item }) => (
-          <Pressable
+        renderItem={({ item, index }) => (
+          <CookbookRow
+            cookbook={item}
+            recipeCount={item.recipeCount}
+            coverImages={item.coverImages}
+            index={index}
             onPress={() => router.push({ pathname: '/cookbook/[id]', params: { id: item.id } })}
-            style={({ pressed }) => ({
-              marginHorizontal: 16,
-              flexDirection: 'row',
-              borderWidth: 1,
-              borderColor: t.border,
-              borderRadius: 10,
-              overflow: 'hidden',
-              backgroundColor: t.card,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <CoverCollage images={item.coverImages} emoji={item.emoji} />
-            <View style={{ flex: 1, padding: 14, justifyContent: 'center', gap: 4 }}>
-              <Serif size={19} numberOfLines={2}>
-                {item.emoji ? `${item.emoji} ` : ''}
-                {item.name}
-              </Serif>
-              {item.description ? (
-                <Body size={13} color={t.muted} numberOfLines={2}>
-                  {item.description}
-                </Body>
-              ) : null}
-              <Mono size={10} style={{ marginTop: 2 }}>
-                {item.recipeCount === 1 ? '1 RECIPE' : `${item.recipeCount} RECIPES`}
-              </Mono>
-            </View>
-          </Pressable>
+          />
         )}
       />
 
