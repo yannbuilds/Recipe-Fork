@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Dimensions, Keyboard, Modal, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
@@ -31,9 +31,23 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
   // Keep the Modal mounted through the close animation so the slide-out is
   // actually visible; `open` drives the animation, `mounted` the Modal.
   const [mounted, setMounted] = useState(open);
+  const [kbHeight, setKbHeight] = useState(0);
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
   const sheetH = useRef(0);
+
+  // Lift the sheet above the keyboard so inputs (cookbook name, notes, etc.)
+  // aren't hidden behind it. iOS fires the *Will* events for a smooth ride.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const settle = () => {
     Animated.parallel([
@@ -99,17 +113,23 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
 
   return (
     <Modal visible transparent onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Animated.View
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: '#000',
-            opacity: backdrop.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
-          }}
-        >
-          <Pressable style={{ flex: 1 }} onPress={onClose} />
-        </Animated.View>
+      {/* Backdrop fills the whole screen (behind the keyboard too). */}
+      <Animated.View
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: '#000',
+          opacity: backdrop.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
+        }}
+      >
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+      </Animated.View>
 
+      {/* Sheet sits at the bottom, lifted above the keyboard when it's open.
+          box-none lets taps fall through to the backdrop except on the sheet. */}
+      <View
+        pointerEvents="box-none"
+        style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: kbHeight }}
+      >
         <Animated.View
           onLayout={(e) => {
             sheetH.current = e.nativeEvent.layout.height;
@@ -119,8 +139,10 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
             backgroundColor: t.card,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            paddingBottom: insets.bottom + 16,
-            maxHeight: SCREEN_H * maxHeightRatio,
+            paddingBottom: kbHeight > 0 ? 16 : insets.bottom + 16,
+            // Cap at the screen ratio, but never taller than the room left above
+            // the keyboard, so a lifted sheet can't slide off the top.
+            maxHeight: Math.min(SCREEN_H * maxHeightRatio, SCREEN_H - kbHeight - insets.top - 8),
           }}
         >
           {/* Top grab strip — a generous full-width target for drag-to-dismiss. */}
