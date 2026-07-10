@@ -1,4 +1,5 @@
-import { Modal, Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import BottomSheet from '@/components/BottomSheet';
 import { Body, Button, Serif } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 
@@ -12,6 +13,8 @@ interface Props {
   onCancel: () => void;
 }
 
+// Confirmation prompt, rendered as the standard bottom sheet (no centered
+// dialogs anywhere in the app).
 export default function ConfirmModal({
   open,
   title,
@@ -23,38 +26,24 @@ export default function ConfirmModal({
 }: Props) {
   const t = useTheme();
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <Pressable
-        onPress={onCancel}
-        style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-        }}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{ backgroundColor: t.card, borderRadius: 16, padding: 22, width: '100%', maxWidth: 400 }}
-        >
-          <Serif size={19} weight="semi">
-            {title}
-          </Serif>
-          <Body size={14} color={t.textSoft} style={{ marginTop: 8, lineHeight: 20 }}>
-            {message}
-          </Body>
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
-            <Button label="Cancel" variant="secondary" onPress={onCancel} style={{ flex: 1 }} />
-            <Button
-              label={confirmLabel}
-              variant={danger ? 'danger' : 'filled'}
-              onPress={onConfirm}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <BottomSheet open={open} onClose={onCancel}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+        <Serif size={19} weight="semi">
+          {title}
+        </Serif>
+        <Body size={14} color={t.textSoft} style={{ marginTop: 8, lineHeight: 20 }}>
+          {message}
+        </Body>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+          <Button label="Cancel" variant="secondary" onPress={onCancel} style={{ flex: 1 }} />
+          <Button
+            label={confirmLabel}
+            variant={danger ? 'danger' : 'filled'}
+            onPress={onConfirm}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </View>
+    </BottomSheet>
   );
 }

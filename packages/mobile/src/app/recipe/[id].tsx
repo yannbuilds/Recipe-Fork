@@ -6,9 +6,10 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddToCookbookSheet from '@/components/AddToCookbookSheet';
+import BottomSheet from '@/components/BottomSheet';
 import ConfirmModal from '@/components/ConfirmModal';
 import FavouriteButton from '@/components/FavouriteButton';
 import IngredientIcon from '@/components/IngredientIcon';
@@ -83,38 +84,21 @@ function AuthorNotesModal({
   onClose: () => void;
 }) {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
   if (!notes) return null;
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-        onPress={onClose}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: t.card,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            paddingHorizontal: 20,
-            paddingTop: 16,
-            paddingBottom: insets.bottom + 16,
-            maxHeight: '80%',
-          }}
-        >
-          <Serif size={18} weight="semi" style={{ marginBottom: 12 }}>
-            Author&apos;s notes
-          </Serif>
-          <ScrollView>
-            <Body size={14} color={t.text} style={{ lineHeight: 22 }}>
-              {stripHtml(notes)}
-            </Body>
-          </ScrollView>
-          <Button label="Close" variant="secondary" full style={{ marginTop: 16 }} onPress={onClose} />
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <BottomSheet open={open} onClose={onClose}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+        <Serif size={18} weight="semi" style={{ marginBottom: 12 }}>
+          Author&apos;s notes
+        </Serif>
+        <ScrollView style={{ maxHeight: 420 }}>
+          <Body size={14} color={t.text} style={{ lineHeight: 22 }}>
+            {stripHtml(notes)}
+          </Body>
+        </ScrollView>
+        <Button label="Close" variant="secondary" full style={{ marginTop: 16 }} onPress={onClose} />
+      </View>
+    </BottomSheet>
   );
 }
 
