@@ -63,16 +63,23 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Drag lives on the handle zone only, so a scrollable body still scrolls.
+  // Drag lives on the top grab strip only, so a scrollable body still scrolls.
+  // We claim the gesture the instant a finger lands on the strip (it never needs
+  // to scroll), which makes the pull feel immediate instead of finicky.
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 2,
+      onPanResponderGrant: () => {
+        translateY.stopAnimation();
+      },
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy);
       },
+      onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_, g) => {
-        const threshold = Math.min(120, sheetH.current * 0.3 || 120);
-        if (g.dy > threshold || g.vy > 0.6) {
+        // A short pull OR a downward flick dismisses; otherwise snap back.
+        if (g.dy > 80 || g.vy > 0.4) {
           haptics.light();
           onClose(); // parent flips `open`; the effect runs the slide-out
         } else {
@@ -116,10 +123,9 @@ export default function BottomSheet({ open, onClose, children, maxHeightRatio = 
             maxHeight: SCREEN_H * maxHeightRatio,
           }}
         >
-          {/* Handle zone — the grab target for drag-to-dismiss. */}
-          <View {...pan.panHandlers} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 12 }}>
-            {/* TEMP DIAGNOSTIC: loud handle to confirm new code is reaching the device. Revert once seen. */}
-            <View style={{ width: 120, height: 10, borderRadius: 5, backgroundColor: '#FF00AA' }} />
+          {/* Top grab strip — a generous full-width target for drag-to-dismiss. */}
+          <View {...pan.panHandlers} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 20 }}>
+            <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: t.border }} />
           </View>
 
           {children}
