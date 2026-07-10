@@ -1,20 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, Tabs, useRouter } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
+import { useState } from 'react';
 import { View } from 'react-native';
+import AddRecipeSheet from '@/components/AddRecipeSheet';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
 import { font, useTheme } from '@/lib/theme';
 
 export default function TabsLayout() {
   const t = useTheme();
-  const router = useRouter();
   const { session, loading } = useAuth();
+  const [showAdd, setShowAdd] = useState(false);
 
   if (!loading && !session) {
     return <Redirect href="/sign-in" />;
   }
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -60,7 +63,7 @@ export default function TabsLayout() {
           tabPress: (e) => {
             e.preventDefault();
             haptics.medium();
-            router.push('/new-recipe');
+            setShowAdd(true);
           },
         }}
       />
@@ -81,5 +84,7 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    <AddRecipeSheet open={showAdd} onClose={() => setShowAdd(false)} />
+    </>
   );
 }

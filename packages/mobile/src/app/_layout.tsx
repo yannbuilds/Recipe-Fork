@@ -102,10 +102,6 @@ function Navigator() {
       <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="recipe/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: '' }} />
-      <Stack.Screen
-        name="new-recipe"
-        options={{ presentation: 'modal', headerShown: false }}
-      />
     </Stack>
   );
 }
