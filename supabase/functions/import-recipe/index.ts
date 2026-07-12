@@ -325,10 +325,20 @@ function normaliseUnicodeFractions(text: string): string {
   });
 }
 
+// Groq's free tier caps input+output at 8K tokens/min. The system prompt is
+// ~1.5K tokens, so we hold the page payload to ~12K chars (~3.5K tokens) and
+// leave the rest for the model's JSON reply. This is a TOTAL cap: clean
+// structured data (JSON-LD, ingredient groups, video links) goes first and the
+// raw page-text excerpt fills whatever budget is left, so the cap only ever
+// trims low-value filler (footer/nav/comments), never the recipe itself.
+const MAX_PAYLOAD_CHARS = 12000;
+
 function buildLlmPayload(html: string, url: string): string {
   const jsonLd = extractJsonLd(html);
   const videoUrls = extractVideoUrls(html);
   const ingredientSections = extractIngredientSections(html);
+  const text = extractMainText(html);
+
   const videoSection =
     videoUrls.length > 0
       ? `\n\n[Video URLs found on page]:\n${videoUrls.join("\n")}`
@@ -336,21 +346,27 @@ function buildLlmPayload(html: string, url: string): string {
   const ingredientSectionBlock = ingredientSections
     ? `\n\n[Ingredient sections from page (with group headings)]:\n${ingredientSections}`
     : "";
+  // Cap JSON-LD defensively — some sites embed huge nutrition/review blobs; the
+  // recipe core sits well within 10K chars.
+  const jsonLdBlock = jsonLd
+    ? `[JSON-LD structured data]:\n${jsonLd.slice(0, 10000)}`
+    : "";
 
-  if (jsonLd) {
-    const text = extractMainText(html);
-    const truncatedText = text.slice(0, 8000);
-    return normaliseUnicodeFractions(
-      `[JSON-LD structured data]:\n${jsonLd}\n\n` +
-      `[Page text (excerpt)]:\n${truncatedText}` +
-      ingredientSectionBlock +
-      videoSection
-    );
-  }
+  // High-value blocks first; raw page text takes whatever budget remains.
+  const structured = [jsonLdBlock, ingredientSectionBlock, videoSection]
+    .filter(Boolean)
+    .join("");
 
-  const text = extractMainText(html);
+  const textBudget = Math.max(0, MAX_PAYLOAD_CHARS - structured.length);
+  const textBlock =
+    textBudget > 0 && text
+      ? structured
+        ? `\n\n[Page text (excerpt)]:\n${text.slice(0, textBudget)}`
+        : text.slice(0, textBudget)
+      : "";
+
   return normaliseUnicodeFractions(
-    text.slice(0, 12000) + ingredientSectionBlock + videoSection,
+    (structured + textBlock).slice(0, MAX_PAYLOAD_CHARS),
   );
 }
 
