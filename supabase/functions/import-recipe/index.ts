@@ -79,6 +79,106 @@ function extractJsonLd(html: string): string | null {
   return null;
 }
 
+/**
+ * Parse raw JSON-LD and keep only the recipe fields we care about.
+ * Sites like RecipeTinEats embed enormous JSON-LD (image arrays, nutrition,
+ * dozens of reviews) where the instructions/timings/video can sit past any
+ * char cap. Distilling to the useful fields keeps the payload tiny AND
+ * guarantees the method, timings and video survive. Returns null if it can't
+ * find a Recipe object (caller falls back to the raw blob).
+ */
+// deno-lint-ignore no-explicit-any
+function distillJsonLd(raw: string): string | null {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  // Flatten the possible shapes: single object, array, or { "@graph": [...] }.
+  // deno-lint-ignore no-explicit-any
+  const candidates: any[] = [];
+  // deno-lint-ignore no-explicit-any
+  const collect = (v: any) => {
+    if (Array.isArray(v)) {
+      v.forEach(collect);
+    } else if (v && typeof v === "object") {
+      if (Array.isArray(v["@graph"])) v["@graph"].forEach(collect);
+      candidates.push(v);
+    }
+  };
+  collect(parsed);
+
+  // deno-lint-ignore no-explicit-any
+  const isRecipe = (t: any) =>
+    t === "Recipe" || (Array.isArray(t) && t.includes("Recipe"));
+  const recipe = candidates.find((c) => isRecipe(c["@type"]));
+  if (!recipe) return null;
+
+  // deno-lint-ignore no-explicit-any
+  const firstUrl = (v: any): string | undefined => {
+    if (!v) return undefined;
+    if (typeof v === "string") return v;
+    if (Array.isArray(v)) return firstUrl(v[0]);
+    if (typeof v === "object") return v.url || v.contentUrl || undefined;
+    return undefined;
+  };
+
+  // Instructions come as strings, HowToStep objects, or HowToSection groups.
+  // deno-lint-ignore no-explicit-any
+  const flattenInstructions = (v: any): string[] => {
+    if (!v) return [];
+    if (typeof v === "string") return [v];
+    if (Array.isArray(v)) return v.flatMap(flattenInstructions);
+    if (typeof v === "object") {
+      if (v["@type"] === "HowToSection") {
+        const steps = flattenInstructions(v.itemListElement);
+        return v.name ? [`[${v.name}]`, ...steps] : steps;
+      }
+      if (v.text) return [String(v.text)];
+      if (v.name) return [String(v.name)];
+    }
+    return [];
+  };
+
+  let video = recipe.video;
+  if (Array.isArray(video)) video = video[0];
+  const videoUrl = video && typeof video === "object"
+    ? (video.contentUrl || video.embedUrl || undefined)
+    : (typeof video === "string" ? video : undefined);
+
+  // deno-lint-ignore no-explicit-any
+  const distilled: Record<string, any> = {
+    name: recipe.name,
+    description: typeof recipe.description === "string" ? recipe.description : undefined,
+    image: firstUrl(recipe.image),
+    prepTime: recipe.prepTime,
+    cookTime: recipe.cookTime,
+    totalTime: recipe.totalTime,
+    recipeYield: recipe.recipeYield,
+    recipeCategory: recipe.recipeCategory,
+    recipeCuisine: recipe.recipeCuisine,
+    keywords: recipe.keywords,
+    recipeIngredient: recipe.recipeIngredient,
+    recipeInstructions: flattenInstructions(recipe.recipeInstructions),
+    video: videoUrl,
+  };
+
+  // Drop empty keys so the blob stays tight.
+  for (const k of Object.keys(distilled)) {
+    const val = distilled[k];
+    if (
+      val === undefined || val === null || val === "" ||
+      (Array.isArray(val) && val.length === 0)
+    ) {
+      delete distilled[k];
+    }
+  }
+
+  return JSON.stringify(distilled);
+}
+
 function extractMainText(html: string): string {
   let text = html;
   // Remove unwanted elements and their contents
@@ -346,11 +446,14 @@ function buildLlmPayload(html: string, url: string): string {
   const ingredientSectionBlock = ingredientSections
     ? `\n\n[Ingredient sections from page (with group headings)]:\n${ingredientSections}`
     : "";
-  // Cap JSON-LD defensively — some sites embed huge nutrition/review blobs; the
-  // recipe core sits well within 10K chars.
-  const jsonLdBlock = jsonLd
-    ? `[JSON-LD structured data]:\n${jsonLd.slice(0, 10000)}`
-    : "";
+  // Distil JSON-LD to just the recipe fields (keeps method/timings/video, drops
+  // review/nutrition bloat). Fall back to a truncated raw blob if it won't parse.
+  const distilledJsonLd = jsonLd ? distillJsonLd(jsonLd) : null;
+  const jsonLdBlock = distilledJsonLd
+    ? `[JSON-LD structured data]:\n${distilledJsonLd}`
+    : jsonLd
+      ? `[JSON-LD structured data]:\n${jsonLd.slice(0, 6000)}`
+      : "";
 
   // High-value blocks first; raw page text takes whatever budget remains.
   const structured = [jsonLdBlock, ingredientSectionBlock, videoSection]
