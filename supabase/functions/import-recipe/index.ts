@@ -6,6 +6,14 @@ import {
   normaliseAiSteps,
   validateRecipeCompleteness,
 } from "./recipe-schema.ts";
+import {
+  extractNumberedRecipeSteps,
+  fetchSocialSource,
+  getSocialPlatform,
+  looksLikeRecipeText,
+  socialSourceToHtml,
+  type SocialSource,
+} from "./social-source.ts";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
@@ -722,11 +730,54 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Use provided HTML or fetch the page
+    // 1. Social posts need a different acquisition path from ordinary recipe
+    // pages. Read their public caption/description first, transcribe accessible
+    // video audio when needed, then look for a linked canonical recipe page.
     let html: string;
+    let extractionUrl = url;
+    let socialSource: SocialSource | null = null;
+    let extractionMethod = "web-page";
+    const apiKey = Deno.env.get("GROQ_API_KEY");
 
     if (providedHtml) {
       html = providedHtml;
+    } else if (getSocialPlatform(url)) {
+      socialSource = await fetchSocialSource(url, apiKey);
+      if (!socialSource) {
+        return new Response(
+          JSON.stringify({ error: "That social post could not be read. Make sure it is public and try again." }),
+          { status: 422, headers: corsHeaders },
+        );
+      }
+
+      const socialText = [socialSource.caption, socialSource.transcript].filter(Boolean).join("\n\n");
+      const recipeInPost = looksLikeRecipeText(socialText);
+      let linkedRecipe: { html: string; url: string } | null = null;
+
+      // A linked first-party recipe with complete schema is more authoritative
+      // than AI interpretation of a caption, even when the caption also has the
+      // recipe. If no usable page is linked, retain the caption/audio fallback.
+      for (const candidateUrl of socialSource.externalUrls.slice(0, 5)) {
+        const candidate = await fetchPageHtml(candidateUrl);
+        if ("error" in candidate) continue;
+        const candidateRecipe = extractSchemaRecipe(candidate.html, candidateUrl);
+        if (candidateRecipe && validateRecipeCompleteness(candidateRecipe).length === 0) {
+          linkedRecipe = { html: candidate.html, url: candidateUrl };
+          break;
+        }
+      }
+
+      if (linkedRecipe) {
+        html = linkedRecipe.html;
+        extractionUrl = linkedRecipe.url;
+        extractionMethod = "social-linked-recipe";
+      } else {
+        html = socialSourceToHtml(socialSource);
+        extractionUrl = socialSource.canonicalUrl;
+        extractionMethod = socialSource.transcript
+          ? "social-audio"
+          : recipeInPost ? "social-caption" : "social-metadata";
+      }
     } else {
       const fetched = await fetchPageHtml(url);
       if ("error" in fetched) {
@@ -742,7 +793,7 @@ Deno.serve(async (req) => {
     // 2. Extract authoritative fields directly from Recipe JSON-LD. When the
     // schema contains the core recipe, the LLM only enriches ingredient fields
     // and tags; it is never allowed to rewrite or drop ingredients/directions.
-    const schemaRecipe = extractSchemaRecipe(html, url);
+    const schemaRecipe = extractSchemaRecipe(html, extractionUrl);
     const schemaComplete = schemaRecipe !== null &&
       validateRecipeCompleteness(schemaRecipe).length === 0;
     const htmlExtractedNotes = extractRecipeNotes(html);
@@ -774,7 +825,6 @@ Deno.serve(async (req) => {
     // 3. Enrich a complete schema recipe, or fully extract pages without usable
     // recipe schema. A complete schema remains saveable if optional enrichment
     // is rate-limited or unavailable.
-    const apiKey = Deno.env.get("GROQ_API_KEY");
     let parsed: Record<string, unknown> = {};
     let aiEnrichmentSucceeded = false;
 
@@ -805,7 +855,7 @@ Deno.serve(async (req) => {
             },
           ],
           response_format: { type: "json_object" },
-          temperature: 0.1,
+          temperature: 0,
         }),
       });
 
@@ -846,6 +896,59 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Social captions are less structured than recipe pages, and a model can
+    // occasionally recognise the ingredients while omitting the directions.
+    // Retry once with the original line breaks and a narrow reminder instead
+    // of accepting a recipe that cannot be cooked.
+    const socialExtractionIncomplete = socialSource && !schemaComplete && (
+      parsed.error ||
+      typeof parsed.title !== "string" ||
+      !Array.isArray(parsed.ingredients) || parsed.ingredients.length === 0 ||
+      normaliseAiSteps(parsed.steps).length === 0
+    );
+    if (socialExtractionIncomplete && apiKey) {
+      const socialText = [socialSource.caption, socialSource.transcript]
+        .filter(Boolean)
+        .join("\n\n")
+        .slice(0, MAX_PAYLOAD_CHARS);
+      const retryRes = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: `${SYSTEM_PROMPT}\n\nThis is public social-post recipe text. Preserve every ingredient and return every numbered cooking direction. Do not report that no recipe exists when both are present.`,
+            },
+            { role: "user", content: socialText },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0,
+        }),
+      });
+      if (retryRes.ok) {
+        const retryData = await retryRes.json();
+        const retryContent = retryData.choices?.[0]?.message?.content;
+        if (retryContent) {
+          try {
+            const retryParsed = JSON.parse(retryContent);
+            if (!retryParsed.error) {
+              parsed = retryParsed;
+              aiEnrichmentSucceeded = true;
+            }
+          } catch (error) {
+            console.warn(`[import-recipe] Invalid social retry JSON: ${error}`);
+          }
+        }
+      } else {
+        console.warn(`[import-recipe] Social extraction retry failed (${retryRes.status})`);
+      }
+    }
+
     if (parsed.error && !schemaComplete) {
       return new Response(
         JSON.stringify({ error: parsed.error }),
@@ -867,10 +970,17 @@ Deno.serve(async (req) => {
     const ingredients = schemaRecipe?.ingredients.length
       ? mergeIngredientEnrichment(schemaRecipe.ingredients, aiIngredients)
       : aiIngredients;
+    const aiSteps = normaliseAiSteps(parsed.steps);
+    const captionSteps = socialSource
+      ? extractNumberedRecipeSteps(
+        [socialSource.caption, socialSource.transcript].filter(Boolean).join("\n\n"),
+      ).map((instruction, index) => ({ order: index + 1, instruction, category: "" }))
+      : [];
     const steps = schemaRecipe?.steps.length
       ? schemaRecipe.steps
-      : normaliseAiSteps(parsed.steps);
-    const videoUrl = schemaRecipe?.video_url ??
+      : captionSteps.length > aiSteps.length ? captionSteps : aiSteps;
+    const videoUrl = socialSource?.canonicalUrl ??
+      schemaRecipe?.video_url ??
       (typeof parsed.video_url === "string" && parsed.video_url.trim() ? parsed.video_url.trim() : null) ??
       extractVideoUrls(html)[0] ??
       null;
@@ -879,14 +989,15 @@ Deno.serve(async (req) => {
       firstImageUrl(parsed.image_url) ??
       extractRecipeImageFromJsonLd(html) ??
       extractOgImage(html) ??
+      socialSource?.imageUrl ??
       null;
     const recipeWithoutHostedImage = {
       title: schemaRecipe?.title || (typeof parsed.title === "string" ? parsed.title.trim() : ""),
       description: schemaRecipe?.description ?? parsed.description ?? null,
       ingredients,
       steps,
-      source_url: url,
-      creator_name: schemaRecipe?.creator_name ?? parsed.creator_name ?? null,
+      source_url: socialSource?.canonicalUrl ?? url,
+      creator_name: socialSource?.creatorName ?? schemaRecipe?.creator_name ?? parsed.creator_name ?? null,
       video_url: videoUrl,
       image_url: rawImageUrl,
       servings: schemaRecipe?.servings ?? parseServings(parsed.servings),
@@ -907,7 +1018,7 @@ Deno.serve(async (req) => {
 
     // Re-host only after completeness is proven, avoiding storage work for a
     // recipe that will be rejected.
-    const imageUrl = rawImageUrl ? await rehostImage(rawImageUrl, url) : null;
+    const imageUrl = rawImageUrl ? await rehostImage(rawImageUrl, extractionUrl) : null;
     const recipe = { ...recipeWithoutHostedImage, image_url: imageUrl };
 
     const rawTags = Array.isArray(parsed.tags) && parsed.tags.length > 0
@@ -929,7 +1040,9 @@ Deno.serve(async (req) => {
         recipe,
         tags,
         extraction: {
-          method: schemaComplete ? "json-ld" : "ai-fallback",
+          method: socialSource
+            ? extractionMethod
+            : schemaComplete ? "json-ld" : "ai-fallback",
           ai_enrichment: aiEnrichmentSucceeded,
           ingredient_count: ingredients.length,
           step_count: steps.length,

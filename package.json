@@ -5,6 +5,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "npm run build:shared && patch-package",
     "build:shared": "npm run build -w packages/shared",
     "dev:web": "npm run dev -w packages/web",
     "build:web": "npm run build -w packages/web",
@@ -13,6 +14,9 @@
     "build:extension": "npm run build -w packages/extension",
     "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json",
     "test:recipe-extraction": "tsx scripts/test-recipe-schema.ts",
+    "test:social-source": "tsx scripts/test-social-source.ts",
+    "smoke:social-source": "tsx scripts/smoke-social-source.ts",
+    "smoke:social-import:production": "tsx scripts/smoke-production-social-import.ts",
     "check:recipe-extraction:live": "tsx scripts/check-live-recipe-schema.ts",
     "smoke:recipe-import:production": "tsx scripts/smoke-production-recipe-import.ts",
     "soak:recipe-import:production": "tsx scripts/soak-production-recipe-import.ts"
@@ -25,6 +29,7 @@
     "dotenv": "^17.3.1",
     "expo": "~54.0.36",
     "expo-router": "~6.0.24",
+    "patch-package": "^8.0.1",
     "tsx": "^4.22.3"
   },
   "dependencies": {

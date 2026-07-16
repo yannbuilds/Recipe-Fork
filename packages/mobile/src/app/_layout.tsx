@@ -2,7 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { Stack } from 'expo-router';
+import Constants from 'expo-constants';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -38,11 +40,21 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   return (
-    <ThemePreferenceProvider>
-      <OnboardingProvider>
-        <RootLayoutInner />
-      </OnboardingProvider>
-    </ThemePreferenceProvider>
+    <ShareIntentProvider
+      options={{
+        // Native share extensions do not exist inside Expo Go. Keeping the
+        // module disabled there preserves the normal preview workflow.
+        disabled: Constants.appOwnership === 'expo',
+        resetOnBackground: false,
+        scheme: 'piekeeper',
+      }}
+    >
+      <ThemePreferenceProvider>
+        <OnboardingProvider>
+          <RootLayoutInner />
+        </OnboardingProvider>
+      </ThemePreferenceProvider>
+    </ShareIntentProvider>
   );
 }
 
@@ -66,10 +78,25 @@ function RootLayoutInner() {
       <AuthProvider>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         {fontsReady ? <Navigator /> : null}
+        {fontsReady ? <IncomingShareRouter /> : null}
         <BootGate fontsReady={fontsReady} />
       </AuthProvider>
     </PersistQueryClientProvider>
   );
+}
+
+function IncomingShareRouter() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { loading } = useAuth();
+  const { isReady, hasShareIntent } = useShareIntentContext();
+
+  useEffect(() => {
+    if (loading || !isReady || !hasShareIntent || pathname === '/share-recipe') return;
+    router.push('/share-recipe');
+  }, [hasShareIntent, isReady, loading, pathname, router]);
+
+  return null;
 }
 
 // Keeps the boot screen up until fonts, auth and the onboarding flag have all
@@ -100,6 +127,7 @@ function Navigator() {
         options={{ headerShown: false, animation: 'fade', gestureEnabled: false }}
       />
       <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="share-recipe" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="recipe/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: '' }} />
     </Stack>

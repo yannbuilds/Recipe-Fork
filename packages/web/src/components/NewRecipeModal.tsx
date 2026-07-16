@@ -385,10 +385,10 @@ export default function NewRecipeModal() {
                     className="rf-heading block text-sm font-semibold"
                     style={{ color: 'var(--text)' }}
                   >
-                    From the Web
+                    From a Link
                   </span>
                   <span className="block text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                    Paste a recipe URL
+                    Recipe page or social post
                   </span>
                 </div>
               </button>
@@ -575,7 +575,7 @@ export default function NewRecipeModal() {
                 className="rf-heading text-lg font-semibold"
                 style={{ color: 'var(--text)' }}
               >
-                Import from URL
+                Import from a link
               </h2>
             </div>
             <div className="space-y-3">
@@ -587,7 +587,7 @@ export default function NewRecipeModal() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleImport();
                 }}
-                placeholder="https://example.com/recipe..."
+                placeholder="Paste a recipe or social post URL..."
                 className="rf-input w-full"
               />
               <button

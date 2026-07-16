@@ -234,7 +234,7 @@ export default function AddRecipeSheet({ open, onClose }: Props) {
             </Serif>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {[
-                { icon: 'globe-outline' as const, title: 'From the web', sub: 'Paste a recipe URL', onPress: () => setStep('url') },
+                { icon: 'share-social-outline' as const, title: 'From a link', sub: 'Web, Instagram, TikTok + more', onPress: () => setStep('url') },
                 { icon: 'images-outline' as const, title: 'From photos', sub: 'Scan pages or cards', onPress: () => setStep('photo') },
                 { icon: 'create-outline' as const, title: 'Add manually', sub: 'Type it in yourself', onPress: goManual },
               ].map((opt) => (
@@ -341,13 +341,13 @@ export default function AddRecipeSheet({ open, onClose }: Props) {
                 <Ionicons name="arrow-back" size={20} color={t.muted} />
               </Pressable>
               <Serif size={18} weight="semi">
-                Import from URL
+                Import from a link
               </Serif>
             </View>
             <TextInput
               value={url}
               onChangeText={setUrl}
-              placeholder="https://example.com/recipe…"
+              placeholder="Paste a recipe or social post URL…"
               placeholderTextColor={t.muted}
               autoCapitalize="none"
               keyboardType="url"
