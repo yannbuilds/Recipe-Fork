@@ -11,7 +11,10 @@
     "dev:extension": "npm run dev -w packages/extension",
     "dev:mobile": "npm run start -w packages/mobile",
     "build:extension": "npm run build -w packages/extension",
-    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json"
+    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json",
+    "test:recipe-extraction": "tsx scripts/test-recipe-schema.ts",
+    "check:recipe-extraction:live": "tsx scripts/check-live-recipe-schema.ts",
+    "smoke:recipe-import:production": "tsx scripts/smoke-production-recipe-import.ts"
   },
   "engines": {
     "node": ">=18",

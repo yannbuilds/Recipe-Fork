@@ -1,5 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  extractSchemaRecipe,
+  mergeIngredientEnrichment,
+  normaliseAiSteps,
+  validateRecipeCompleteness,
+} from "./recipe-schema.ts";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
@@ -54,6 +60,24 @@ Rules:
 - For creator_name: extract the recipe author/creator name. Check JSON-LD "author.name", byline elements, or meta tags. Return the name as-is (e.g. "Nagi | RecipeTin Eats"). Return null if not found.
 - For author_notes: look for a "Recipe Notes", "Notes", "Tips", or similar section on the page that contains the author's tips, substitutions, or commentary about the recipe. Copy the full text verbatim as a single string, preserving numbered lists and line breaks (use "\\n" for newlines). Do NOT include the section heading itself. Return null if no notes section exists.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
+
+const ENRICHMENT_PROMPT = `You enrich ingredient data that was extracted directly from a recipe's JSON-LD.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "ingredients": [
+    { "original_text": "the exact input line", "item": "ingredient name", "quantity": "amount as string", "unit": "unit of measurement", "category": "optional grouping" }
+  ],
+  "tags": [{"name": "tag1", "emoji": "🍽️"}]
+}
+
+Rules:
+- Return exactly one ingredient for every input ingredient, in the same order. Never omit or combine lines.
+- Copy original_text exactly. Do not alter punctuation, fractions, conversions, notes, or qualifiers.
+- Parse the leading amount into quantity, the unit into unit, and the remaining ingredient into item.
+- For dual measurements separated by "/", use only the first quantity and unit; original_text retains both.
+- Suggest 3–5 useful lowercase tags limited to cuisine, main protein, meal type, or dietary restriction.
+- Never add ingredients that were not in the input.`;
 
 function parseServings(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -715,11 +739,25 @@ Deno.serve(async (req) => {
       html = fetched.html;
     }
 
-    // 2. Extract content for the LLM
+    // 2. Extract authoritative fields directly from Recipe JSON-LD. When the
+    // schema contains the core recipe, the LLM only enriches ingredient fields
+    // and tags; it is never allowed to rewrite or drop ingredients/directions.
+    const schemaRecipe = extractSchemaRecipe(html, url);
+    const schemaComplete = schemaRecipe !== null &&
+      validateRecipeCompleteness(schemaRecipe).length === 0;
     const htmlExtractedNotes = extractRecipeNotes(html);
-    const content = buildLlmPayload(html, url);
+    const content = schemaComplete
+      ? JSON.stringify({
+        title: schemaRecipe.title,
+        description: schemaRecipe.description,
+        ingredients: schemaRecipe.ingredients.map((ingredient) => ({
+          original_text: ingredient.original_text,
+          category: ingredient.category,
+        })),
+      })
+      : buildLlmPayload(html, url);
 
-    if (content.length < 100) {
+    if (!schemaComplete && content.length < 100) {
       console.error(`[import-recipe] No recipe content found (content length: ${content.length})`);
       return new Response(
         JSON.stringify({ error: "No recipe content found on this page" }),
@@ -727,9 +765,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Call Groq API
+    console.log(
+      `[import-recipe] strategy=${schemaComplete ? "json-ld" : "ai-fallback"} ` +
+      `schema_ingredients=${schemaRecipe?.ingredients.length ?? 0} ` +
+      `schema_steps=${schemaRecipe?.steps.length ?? 0}`,
+    );
+
+    // 3. Enrich a complete schema recipe, or fully extract pages without usable
+    // recipe schema. A complete schema remains saveable if optional enrichment
+    // is rate-limited or unavailable.
     const apiKey = Deno.env.get("GROQ_API_KEY");
-    if (!apiKey) {
+    let parsed: Record<string, unknown> = {};
+    let aiEnrichmentSucceeded = false;
+
+    if (!apiKey && !schemaComplete) {
       console.error("[import-recipe] GROQ_API_KEY not set in environment");
       return new Response(
         JSON.stringify({ error: "Groq API key not configured" }),
@@ -737,86 +786,133 @@ Deno.serve(async (req) => {
       );
     }
 
-    const groqRes = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Extract the recipe from this page:\n\n${content}` },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-      }),
-    });
+    if (apiKey) {
+      const groqRes = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            { role: "system", content: schemaComplete ? ENRICHMENT_PROMPT : SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: schemaComplete
+                ? `Enrich these authoritative recipe fields:\n\n${content}`
+                : `Extract the recipe from this page:\n\n${content}`,
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        }),
+      });
 
-    if (!groqRes.ok) {
-      if (groqRes.status === 429) {
-        console.error("[import-recipe] Groq rate limited (429)");
-        return new Response(
-          JSON.stringify({ error: "Daily limit reached – try again tomorrow." }),
-          { status: 429, headers: corsHeaders },
-        );
+      if (!groqRes.ok) {
+        const body = await groqRes.text().catch(() => "");
+        console.error(`[import-recipe] Groq API error (${groqRes.status}): ${body}`);
+        if (!schemaComplete) {
+          const error = groqRes.status === 429
+            ? "Daily limit reached – try again tomorrow."
+            : `AI extraction failed (${groqRes.status}): ${body}`;
+          return new Response(
+            JSON.stringify({ error }),
+            { status: groqRes.status === 429 ? 429 : 502, headers: corsHeaders },
+          );
+        }
+      } else {
+        const groqData = await groqRes.json();
+        const messageContent = groqData.choices?.[0]?.message?.content;
+        if (messageContent) {
+          try {
+            parsed = JSON.parse(messageContent);
+            aiEnrichmentSucceeded = !parsed.error;
+          } catch (error) {
+            console.error(`[import-recipe] Invalid Groq JSON: ${error}`);
+            if (!schemaComplete) {
+              return new Response(
+                JSON.stringify({ error: "AI returned invalid recipe data" }),
+                { status: 502, headers: corsHeaders },
+              );
+            }
+          }
+        } else if (!schemaComplete) {
+          return new Response(
+            JSON.stringify({ error: "No response from AI" }),
+            { status: 502, headers: corsHeaders },
+          );
+        }
       }
-      const body = await groqRes.text();
-      console.error(`[import-recipe] Groq API error (${groqRes.status}): ${body}`);
-      return new Response(
-        JSON.stringify({ error: `AI extraction failed (${groqRes.status}): ${body}` }),
-        { status: 502, headers: corsHeaders },
-      );
     }
 
-    const groqData = await groqRes.json();
-    const messageContent = groqData.choices?.[0]?.message?.content;
-
-    if (!messageContent) {
-      return new Response(
-        JSON.stringify({ error: "No response from AI" }),
-        { status: 502, headers: corsHeaders },
-      );
-    }
-
-    const parsed = JSON.parse(messageContent);
-
-    if (parsed.error) {
+    if (parsed.error && !schemaComplete) {
       return new Response(
         JSON.stringify({ error: parsed.error }),
         { status: 422, headers: corsHeaders },
       );
     }
 
-    // 4. Build structured recipe response
-    const ingredients = fixIngredientParsing(parsed.ingredients ?? []);
-    // The LLM sometimes returns "" (empty string) when it can't find an
-    // image — treat that as "not found" so the deterministic fallbacks run.
+    // 4. Build the response with deterministic fields taking precedence. AI
+    // ingredient enrichment is merged line-by-line and can never change count.
+    const aiIngredients = fixIngredientParsing(
+      Array.isArray(parsed.ingredients) ? parsed.ingredients as Array<{
+        item: string;
+        quantity: string;
+        unit: string;
+        category?: string;
+        original_text?: string;
+      }> : [],
+    );
+    const ingredients = schemaRecipe?.ingredients.length
+      ? mergeIngredientEnrichment(schemaRecipe.ingredients, aiIngredients)
+      : aiIngredients;
+    const steps = schemaRecipe?.steps.length
+      ? schemaRecipe.steps
+      : normaliseAiSteps(parsed.steps);
+    const videoUrl = schemaRecipe?.video_url ??
+      (typeof parsed.video_url === "string" && parsed.video_url.trim() ? parsed.video_url.trim() : null) ??
+      extractVideoUrls(html)[0] ??
+      null;
     const rawImageUrl =
+      schemaRecipe?.image_url ??
       firstImageUrl(parsed.image_url) ??
       extractRecipeImageFromJsonLd(html) ??
       extractOgImage(html) ??
       null;
-    // Re-host in our own storage so hotlink-protected sources (e.g.
-    // marionskitchen.com) don't show a broken image in the app.
-    const imageUrl = rawImageUrl ? await rehostImage(rawImageUrl, url) : null;
-    const recipe = {
-      title: parsed.title,
-      description: parsed.description ?? null,
+    const recipeWithoutHostedImage = {
+      title: schemaRecipe?.title || (typeof parsed.title === "string" ? parsed.title.trim() : ""),
+      description: schemaRecipe?.description ?? parsed.description ?? null,
       ingredients,
-      steps: parsed.steps ?? [],
+      steps,
       source_url: url,
-      creator_name: parsed.creator_name ?? null,
-      video_url: parsed.video_url ?? null,
-      image_url: imageUrl,
-      servings: parseServings(parsed.servings),
-      prep_time: parseServings(parsed.prep_time),
-      cook_time: parseServings(parsed.cook_time),
+      creator_name: schemaRecipe?.creator_name ?? parsed.creator_name ?? null,
+      video_url: videoUrl,
+      image_url: rawImageUrl,
+      servings: schemaRecipe?.servings ?? parseServings(parsed.servings),
+      prep_time: schemaRecipe?.prep_time ?? parseServings(parsed.prep_time),
+      cook_time: schemaRecipe?.cook_time ?? parseServings(parsed.cook_time),
       author_notes: htmlExtractedNotes ?? parsed.author_notes ?? null,
     };
+    const completenessErrors = validateRecipeCompleteness(recipeWithoutHostedImage);
+    if (completenessErrors.length > 0) {
+      console.error(`[import-recipe] Incomplete extraction: ${completenessErrors.join(", ")}`);
+      return new Response(
+        JSON.stringify({
+          error: `Recipe extraction was incomplete (${completenessErrors.join(", ")}). Nothing was saved.`,
+        }),
+        { status: 422, headers: corsHeaders },
+      );
+    }
 
-    const rawTags = parsed.tags ?? [];
+    // Re-host only after completeness is proven, avoiding storage work for a
+    // recipe that will be rejected.
+    const imageUrl = rawImageUrl ? await rehostImage(rawImageUrl, url) : null;
+    const recipe = { ...recipeWithoutHostedImage, image_url: imageUrl };
+
+    const rawTags = Array.isArray(parsed.tags) && parsed.tags.length > 0
+      ? parsed.tags
+      : schemaRecipe?.tags ?? [];
     const tags = (Array.isArray(rawTags) ? rawTags : [])
       .map((t: unknown) => {
         if (typeof t === 'string') return { name: t.trim().toLowerCase(), emoji: '🏷️' };
@@ -829,7 +925,16 @@ Deno.serve(async (req) => {
       .filter((t) => t.name.length > 0 && t.name.length < 50);
 
     return new Response(
-      JSON.stringify({ recipe, tags }),
+      JSON.stringify({
+        recipe,
+        tags,
+        extraction: {
+          method: schemaComplete ? "json-ld" : "ai-fallback",
+          ai_enrichment: aiEnrichmentSucceeded,
+          ingredient_count: ingredients.length,
+          step_count: steps.length,
+        },
+      }),
       { status: 200, headers: corsHeaders },
     );
   } catch (err) {
