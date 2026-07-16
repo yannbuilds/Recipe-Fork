@@ -4,8 +4,15 @@
     {
       "name": "web",
       "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["-c", "export PATH=/Users/jason/.nvm/versions/node/v20.19.6/bin:$PATH && npm run dev:web"],
-      "port": 5173
+      "runtimeArgs": ["-c", "export PATH=/Users/jason/.nvm/versions/node/v20.19.6/bin:$PATH && cd '/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Recipe Fork/packages/web' && npx vite --port ${PORT:-5173}"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "nwv-web",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/jason/.nvm/versions/node/v20.19.6/bin:$PATH && cd '/Users/jason/Library/Mobile Documents/com~apple~CloudDocs/Cowork OS/Build & Learn/Net Worth Visualiser/packages/web' && npx vite --port 5175"],
+      "port": 5175
     }
   ]
 }

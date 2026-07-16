@@ -58,7 +58,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx supabase:*)",
       "Bash(node -e \":*)",
-      "Bash(node --input-type=module -e \":*)"
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(grep -l \"SERVICE_ROLE\\\\|service_role\" .env*)",
+      "Bash(ls packages/extension/src/background/ packages/extension/src/lib/)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
