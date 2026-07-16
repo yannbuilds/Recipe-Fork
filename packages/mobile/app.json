@@ -32,6 +32,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 180
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Pie Keeper to choose recipe photos from your library.",
+          "cameraPermission": "Allow Pie Keeper to photograph a recipe."
+        }
       ]
     ]
   }

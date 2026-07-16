@@ -1,21 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe, PenLine, ArrowLeft, Loader2 } from 'lucide-react';
+import { Globe, PenLine, ArrowLeft, Loader2, Images, Camera, X } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 import { saveTags } from '../lib/saveTags';
 
-type Step = 'choose' | 'url-input' | 'processing' | 'error';
+type Step = 'choose' | 'url-input' | 'photo-input' | 'processing' | 'error';
+
+const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+
+interface SelectedPhoto {
+  file: File;
+  previewUrl: string;
+}
 
 export default function NewRecipeModal() {
   const { open, closeModal } = useNewRecipeModal();
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('choose');
   const [url, setUrl] = useState('');
+  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [statusText, setStatusText] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [errorReturnStep, setErrorReturnStep] = useState<Step>('url-input');
   const [dismissing, setDismissing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const dragCurrentY = useRef(0);
@@ -26,6 +38,10 @@ export default function NewRecipeModal() {
     if (open) {
       setStep('choose');
       setUrl('');
+      setPhotos((current) => {
+        current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+        return [];
+      });
       setErrorMessage('');
       setDismissing(false);
       dragStartY.current = null;
@@ -98,6 +114,114 @@ export default function NewRecipeModal() {
     navigate('/new');
   }
 
+  function showError(message: string, returnStep: Step) {
+    setErrorMessage(message);
+    setErrorReturnStep(returnStep);
+    setStep('error');
+  }
+
+  function addPhotos(files: FileList | null) {
+    if (!files) return;
+    const available = MAX_PHOTOS - photos.length;
+    const chosen = Array.from(files).slice(0, available);
+    const invalid = chosen.find((file) => !file.type.startsWith('image/'));
+    const oversized = chosen.find((file) => file.size > MAX_PHOTO_BYTES);
+    if (invalid) {
+      showError(`${invalid.name} is not an image.`, 'photo-input');
+      return;
+    }
+    if (oversized) {
+      showError(`${oversized.name} is larger than 20 MB.`, 'photo-input');
+      return;
+    }
+    setPhotos((current) => [
+      ...current,
+      ...chosen.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
+    ]);
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((current) => {
+      URL.revokeObjectURL(current[index].previewUrl);
+      return current.filter((_, photoIndex) => photoIndex !== index);
+    });
+  }
+
+  async function functionErrorMessage(error: { context?: unknown; message?: string }, fallback: string) {
+    try {
+      if (error.context instanceof Response) {
+        const clone = error.context.clone();
+        try {
+          const body = await clone.json();
+          return body?.error || fallback;
+        } catch {
+          return await error.context.text() || fallback;
+        }
+      }
+      return error.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function saveImportedRecipe(
+    userId: string,
+    data: { recipe: Record<string, unknown>; tags?: Array<{ name: string; emoji: string }> },
+  ) {
+    setStatusText('Saving recipe…');
+    const { data: saved, error: saveError } = await supabase
+      .from('recipes')
+      .insert({ ...data.recipe, user_id: userId, is_favourite: false })
+      .select('id')
+      .single();
+    if (saveError || !saved) throw new Error(saveError?.message ?? 'Failed to save recipe');
+    await saveTags(saved.id, data.tags ?? []).catch(() => {});
+    closeModal();
+    navigate(`/recipe/${saved.id}`);
+  }
+
+  async function handlePhotoImport() {
+    if (photos.length === 0) return;
+    setStep('processing');
+    setStatusText('Uploading photos…');
+    const uploadedPaths: string[] = [];
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!session || !userId) throw new Error('Please sign in to scan recipes');
+
+      for (let index = 0; index < photos.length; index++) {
+        setStatusText(`Uploading photo ${index + 1} of ${photos.length}…`);
+        const photo = photos[index].file;
+        const extension = photo.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'jpg';
+        const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from('recipe-scans')
+          .upload(path, photo, { contentType: photo.type || 'image/jpeg', upsert: false });
+        if (uploadError) throw new Error(`Could not upload ${photo.name}: ${uploadError.message}`);
+        uploadedPaths.push(path);
+      }
+
+      setStatusText('Reading your recipe…');
+      const { data, error } = await supabase.functions.invoke('import-recipe-photo', {
+        body: { paths: uploadedPaths },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to scan recipe'));
+      if (data?.error) throw new Error(data.error);
+      if (!data?.recipe) throw new Error('No recipe was found in those photos');
+
+      await saveImportedRecipe(userId, data);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Something went wrong', 'photo-input');
+    } finally {
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from('recipe-scans').remove(uploadedPaths).catch(() => {});
+      }
+    }
+  }
+
   async function handleImport() {
     const trimmed = url.trim();
     if (!trimmed) return;
@@ -106,8 +230,7 @@ export default function NewRecipeModal() {
     try {
       new URL(trimmed);
     } catch {
-      setErrorMessage('Please enter a valid URL (e.g. https://example.com/recipe)');
-      setStep('error');
+      showError('Please enter a valid URL (e.g. https://example.com/recipe)', 'url-input');
       return;
     }
 
@@ -175,29 +298,10 @@ export default function NewRecipeModal() {
       // Save recipe to Supabase
       setStatusText('Saving recipe…');
 
-      const insertData = userId
-        ? { ...recipe, user_id: userId, is_favourite: false }
-        : { ...recipe, is_favourite: false };
-
-      const { data: saved, error: saveError } = await supabase
-        .from('recipes')
-        .insert(insertData)
-        .select('id')
-        .single();
-
-      if (saveError || !saved) {
-        throw new Error(saveError?.message ?? 'Failed to save recipe');
-      }
-
-      // Save tags (non-blocking)
-      await saveTags(saved.id, tags ?? []).catch(() => {});
-
-      closeModal();
-      navigate(`/recipe/${saved.id}`);
+      await saveImportedRecipe(userId, { recipe, tags });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
-      setErrorMessage(message);
-      setStep('error');
+      showError(message, 'url-input');
     }
   }
 
@@ -256,7 +360,7 @@ export default function NewRecipeModal() {
             >
               Add a Recipe
             </h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 onClick={() => setStep('url-input')}
                 className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 transition-all"
@@ -285,6 +389,35 @@ export default function NewRecipeModal() {
                   </span>
                   <span className="block text-xs mt-1" style={{ color: 'var(--muted)' }}>
                     Paste a recipe URL
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setStep('photo-input')}
+                className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 transition-all"
+                style={{
+                  padding: '22px 16px',
+                  border: '2px solid var(--border)',
+                  background: 'var(--card)',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--green)';
+                  e.currentTarget.style.background = 'var(--green-light)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.background = 'var(--card)';
+                }}
+              >
+                <Images size={32} strokeWidth={1.5} style={{ color: 'var(--green)' }} />
+                <div className="text-center">
+                  <span className="rf-heading block text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                    From Photos
+                  </span>
+                  <span className="block text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                    Scan a page or card
                   </span>
                 </div>
               </button>
@@ -321,6 +454,102 @@ export default function NewRecipeModal() {
                 </div>
               </button>
             </div>
+          </>
+        )}
+
+        {/* Step: Photo Input */}
+        {step === 'photo-input' && (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setStep('choose')}
+                className="flex items-center justify-center rounded-lg"
+                style={{ width: 32, height: 32, color: 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none' }}
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
+                Scan a Recipe
+              </h2>
+            </div>
+            <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+              Add up to 5 clear photos in page order. Include the title, every ingredient, and the full method.
+            </p>
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(event) => {
+                addPhotos(event.currentTarget.files);
+                event.currentTarget.value = '';
+              }}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={(event) => {
+                addPhotos(event.currentTarget.files);
+                event.currentTarget.value = '';
+              }}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="rf-btn rf-btn-secondary flex items-center justify-center gap-2"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={photos.length >= MAX_PHOTOS}
+              >
+                <Images size={17} /> Choose Photos
+              </button>
+              <button
+                type="button"
+                className="rf-btn rf-btn-secondary flex items-center justify-center gap-2"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={photos.length >= MAX_PHOTOS}
+              >
+                <Camera size={17} /> Take Photo
+              </button>
+            </div>
+            {photos.length > 0 && (
+              <div className="mt-4">
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {photos.map((photo, index) => (
+                    <div key={`${photo.file.name}-${index}`} className="relative shrink-0">
+                      <img
+                        src={photo.previewUrl}
+                        alt={`Recipe page ${index + 1}`}
+                        className="object-cover rounded-lg"
+                        style={{ width: 76, height: 76, border: '1px solid var(--border)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(index)}
+                        aria-label={`Remove photo ${index + 1}`}
+                        className="absolute -top-1 -right-1 flex items-center justify-center rounded-full"
+                        style={{ width: 22, height: 22, border: 'none', color: 'white', background: 'var(--red)', cursor: 'pointer' }}
+                      >
+                        <X size={13} />
+                      </button>
+                      <span
+                        className="absolute bottom-1 left-1 text-xs rounded-full"
+                        style={{ minWidth: 18, padding: '1px 5px', color: 'white', background: 'rgba(0,0,0,.65)', textAlign: 'center' }}
+                      >
+                        {index + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={handlePhotoImport} className="rf-btn rf-btn-filled w-full mt-2">
+                  Scan {photos.length === 1 ? 'Photo' : `${photos.length} Photos`}
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -402,7 +631,7 @@ export default function NewRecipeModal() {
                 Cancel
               </button>
               <button
-                onClick={() => setStep('url-input')}
+                onClick={() => setStep(errorReturnStep)}
                 className="rf-btn rf-btn-filled"
               >
                 Try Again
