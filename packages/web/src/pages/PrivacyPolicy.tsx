@@ -11,24 +11,23 @@ export default function PrivacyPolicy() {
         Privacy Policy
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32 }}>
-        Last updated: 21 March 2026
+        Last updated: 16 July 2026
       </p>
 
       <Section title="What Pie Keeper does">
         <p>
-          Pie Keeper is a Chrome extension and companion web app that helps you save
-          recipes from any website. When you click "Save Recipe", the extension reads
-          the current page's HTML and sends it to an AI service to extract structured
-          recipe data (title, ingredients, steps, etc.). That data is then stored in
-          your personal recipe library.
+          Pie Keeper is an iOS, Android, web, and Chrome extension recipe manager. It
+          lets you save recipes from the web, organise them into cookbooks, plan meals,
+          keep cooking notes, and optionally share a collection with a family member.
         </p>
       </Section>
 
       <Section title="Data we collect">
         <ul className="list-disc pl-5 space-y-1">
           <li>
-            <strong>Account information</strong> – email address and password (or
-            OAuth profile) used to create your account.
+            <strong>Account information</strong> – your email address, display name,
+            and authentication identifier. Password handling is provided by Supabase;
+            Pie Keeper does not have access to your plain-text password.
           </li>
           <li>
             <strong>Recipe page content</strong> – when you click "Save Recipe", the
@@ -36,9 +35,16 @@ export default function PrivacyPolicy() {
             store the raw HTML after parsing is complete.
           </li>
           <li>
-            <strong>Saved recipe data</strong> – the structured recipe (title,
-            ingredients, steps, image URL, source URL, tags) is stored in our
-            database linked to your account.
+            <strong>Recipe photos</strong> – photos you choose or take for recipe
+            scanning are uploaded to a private, account-scoped area and sent to our AI
+            parsing service. Scan uploads are deleted after processing. If you choose a
+            dish photo suitable for the recipe cover, that image may be retained with
+            the saved recipe.
+          </li>
+          <li>
+            <strong>Saved content</strong> – recipes, ingredients, cooking steps,
+            source and image URLs, tags, notes, cookbooks, meal plans, shopping-list
+            state, preferences, and family-sharing choices are stored against your account.
           </li>
         </ul>
       </Section>
@@ -46,8 +52,8 @@ export default function PrivacyPolicy() {
       <Section title="Third-party services">
         <ul className="list-disc pl-5 space-y-1">
           <li>
-            <strong>Groq API</strong> – processes page HTML to extract recipe data.
-            Content is sent via their API and is subject to{' '}
+            <strong>Groq API</strong> – processes recipe page content or recipe photos
+            to extract structured recipe data. Content is sent via their API and is subject to{' '}
             <a
               href="https://groq.com/privacy-policy/"
               target="_blank"
@@ -76,34 +82,37 @@ export default function PrivacyPolicy() {
 
       <Section title="How we use your data">
         <p>
-          Your data is used solely to provide the Pie Keeper service – saving,
-          organising, and displaying your recipes. We do not sell, share, or use your
-          data for advertising purposes.
+          Your data is used solely to provide, secure, and support Pie Keeper – including
+          saving, organising, importing, syncing, sharing, and displaying your recipes.
+          We do not sell your data, use it for targeted advertising, or track you across
+          other companies' apps or websites.
         </p>
       </Section>
 
       <Section title="Data storage and security">
         <p>
           Recipe data and account credentials are stored securely in Supabase
-          (hosted on AWS). Authentication tokens are stored locally in your
-          browser's extension storage. All data is transmitted over HTTPS.
+          (hosted on AWS). Authentication tokens and a limited offline recipe cache are
+          stored locally on your device or browser. The offline cache is cleared when
+          you sign out of the mobile app. All data is transmitted over HTTPS.
         </p>
       </Section>
 
       <Section title="Your rights">
         <ul className="list-disc pl-5 space-y-1">
           <li>You can delete any saved recipe from within the app at any time.</li>
-          <li>
-            You can delete your account and all associated data by contacting us.
-          </li>
+          <li>You can delete your account and associated data in Profile → Delete account.</li>
           <li>You can sign out of the extension at any time to revoke access.</li>
         </ul>
       </Section>
 
       <Section title="Contact">
         <p>
-          If you have questions about this privacy policy, reach out via the
-          project's GitHub repository or email the developer directly.
+          If you have questions or a privacy request, email{' '}
+          <a href="mailto:hello@pompon.com.au" style={{ color: 'var(--green)' }}>
+            hello@pompon.com.au
+          </a>{' '}
+          or visit our <a href="/support" style={{ color: 'var(--green)' }}>support page</a>.
         </p>
       </Section>
     </div>

@@ -3,6 +3,7 @@ import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -31,6 +32,7 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Shown only if email confirmation is still enabled in Supabase.
   const [checkEmail, setCheckEmail] = useState(false);
@@ -92,6 +94,25 @@ export default function SignInScreen() {
       }
       haptics.success();
     }
+  }
+
+  async function handleForgotPassword() {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    setError(null);
+    setResetSent(false);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: 'https://app.piekeeper.com/reset-password',
+    });
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setResetSent(true);
   }
 
   const inputStyle = {
@@ -238,6 +259,25 @@ export default function SignInScreen() {
           </Pressable>
         </View>
 
+        {!isSignUp && (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={handleForgotPassword}
+            style={{ alignSelf: 'flex-end', paddingVertical: 2 }}
+          >
+            <Body size={13} weight="medium" color={t.green}>
+              Forgot password?
+            </Body>
+          </Pressable>
+        )}
+
+        {resetSent && (
+          <Body size={13} color={t.green}>
+            Password reset email sent. Open it to choose a new password.
+          </Body>
+        )}
+
         {error && (
           <Body size={14} color={t.red}>
             {error}
@@ -271,6 +311,31 @@ export default function SignInScreen() {
             <Body size={14} weight="semi" color={t.green}>
               {isSignUp ? 'Sign in' : 'Create an account'}
             </Body>
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 14,
+            marginTop: 14,
+          }}
+        >
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={8}
+            onPress={() => Linking.openURL('https://piekeeper.com/privacy').catch(() => {})}
+          >
+            <Body size={12.5} color={t.muted}>Privacy</Body>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={8}
+            onPress={() => Linking.openURL('https://piekeeper.com/support').catch(() => {})}
+          >
+            <Body size={12.5} color={t.muted}>Support</Body>
           </Pressable>
         </View>
       </ScrollView>

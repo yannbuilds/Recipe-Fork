@@ -13,6 +13,8 @@ import ProfilePage from "./pages/ProfilePage";
 import InvitePage from "./pages/InvitePage";
 import IconCompare from "./pages/IconCompare";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import SupportPage from "./pages/SupportPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import LandingPage from "./pages/LandingPage";
 import LandingPageV2 from "./pages/LandingPageV2";
 import BottomNav from "./components/BottomNav";
@@ -119,9 +121,9 @@ function MarketingShell() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  const isPrivacy = location.pathname === '/privacy';
+  const isPublicInfo = location.pathname === '/privacy' || location.pathname === '/support';
 
-  if (!isPrivacy && loading) {
+  if (!isPublicInfo && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div style={{ color: 'var(--muted)' }}>Loading…</div>
@@ -129,7 +131,7 @@ function MarketingShell() {
     );
   }
 
-  if (!isPrivacy && user) {
+  if (!isPublicInfo && user) {
     window.location.href = APP_URL;
     return null;
   }
@@ -139,6 +141,7 @@ function MarketingShell() {
       <Routes>
         <Route path="/" element={<LandingPageV2 />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/support" element={<SupportPage />} />
         {import.meta.env.DEV && <Route path="/landing-old" element={<LandingPage />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -160,7 +163,7 @@ function AppShell() {
     return <MarketingShell />;
   }
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/privacy' || location.pathname === '/landing' || location.pathname === '/landing-old';
+  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/reset-password' || location.pathname === '/privacy' || location.pathname === '/support' || location.pathname === '/landing' || location.pathname === '/landing-old';
 
   return (
     <NewRecipeModalProvider>
@@ -169,7 +172,9 @@ function AppShell() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/invite" element={<InvitePage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/support" element={<SupportPage />} />
           {import.meta.env.DEV && <Route path="/landing" element={<LandingPageV2 />} />}
           {import.meta.env.DEV && <Route path="/landing-old" element={<LandingPage />} />}
           {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}

@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -150,6 +151,24 @@ export default function LoginPage() {
       options: { redirectTo: window.location.origin },
     });
     if (error) setError(error.message);
+  }
+
+  async function handleForgotPassword() {
+    setError(null);
+    setResetSent(false);
+    if (!email.trim()) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setResetSent(true);
   }
 
   return (
@@ -329,6 +348,24 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {!isSignUp && (
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-sm font-medium"
+                style={{ color: 'var(--green)' }}
+              >
+                Forgot password?
+              </button>
+              {resetSent && (
+                <p className="text-xs mt-2" style={{ color: 'var(--green)' }}>
+                  Password reset email sent.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="my-5 flex items-center gap-3">
             <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
             <span className="text-xs" style={{ color: 'var(--muted)' }}>or continue with</span>
@@ -359,6 +396,11 @@ export default function LoginPage() {
             >
               {isSignUp ? 'Sign in' : 'Sign up'}
             </button>
+          </p>
+          <p className="mt-4 text-center text-xs" style={{ color: 'var(--muted)' }}>
+            <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a>
+            {' · '}
+            <a href="/support" style={{ color: 'inherit' }}>Support</a>
           </p>
         </div>
         )}

@@ -22,6 +22,8 @@ export default function ProfilePage() {
   const [measurementValue, setMeasurementValue] = useState<'metric' | 'imperial'>('metric');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   const initial = profile?.display_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? '?';
   const avatarUrl = (user?.user_metadata?.avatar_url || user?.user_metadata?.picture) as string | undefined;
@@ -59,6 +61,25 @@ export default function ProfilePage() {
     await refreshProfile();
     setSaving(false);
     setEditing(false);
+  }
+
+  async function handleDeleteAccount() {
+    const confirmed = window.confirm(
+      'Permanently delete your account, recipes, cookbooks, meal plans and notes? This cannot be undone.',
+    );
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+    setAccountError(null);
+    const { data, error: deleteError } = await supabase.functions.invoke('delete-account');
+    if (deleteError || data?.error) {
+      setDeletingAccount(false);
+      setAccountError(data?.error || deleteError?.message || 'Account deletion failed.');
+      return;
+    }
+
+    await supabase.auth.signOut({ scope: 'local' });
+    window.location.assign('/login');
   }
 
   return (
@@ -248,14 +269,49 @@ export default function ProfilePage() {
         </button>
       )}
 
+      {user && !editing && (
+        <div className="w-full max-w-sm">
+          <div
+            className="rounded-xl p-5"
+            style={{ background: 'var(--warm)', border: '1px solid var(--border)' }}
+          >
+            <h3 className="rf-heading mb-1" style={{ color: 'var(--text)', fontSize: 18 }}>
+              Help & privacy
+            </h3>
+            <div className="flex gap-4 text-sm mt-3">
+              <a href="/support" style={{ color: 'var(--green)' }}>Support</a>
+              <a href="/privacy" style={{ color: 'var(--green)' }}>Privacy policy</a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {user && (
-        <button
-          onClick={signOut}
-          className="rf-btn rf-btn-secondary"
-          style={{ marginTop: 8 }}
-        >
-          Sign out
-        </button>
+        <div className="w-full max-w-sm flex flex-col gap-3" style={{ marginTop: 8 }}>
+          <button onClick={signOut} className="rf-btn rf-btn-secondary w-full">
+            Sign out
+          </button>
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount}
+            className="rf-btn w-full"
+            style={{
+              color: 'var(--red)',
+              background: 'var(--card)',
+              border: '1px solid var(--red-border)',
+            }}
+          >
+            {deletingAccount ? 'Deleting account…' : 'Delete account'}
+          </button>
+          {accountError && (
+            <p className="text-xs text-center" style={{ color: 'var(--red)' }}>
+              {accountError}
+            </p>
+          )}
+          <p className="text-xs text-center" style={{ color: 'var(--muted)' }}>
+            Permanently removes your Pie Keeper account and its data.
+          </p>
+        </div>
       )}
     </div>
   );

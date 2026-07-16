@@ -17,3 +17,10 @@ Supabase credentials live in `.env` (gitignored). See `.env.example` — values 
 
 - Types come from `@recipe-aggregator/shared` (types only — the shared Supabase client is web-specific, mobile has its own in `src/lib/supabase.ts`).
 - The share-sheet save flow (Phase 2) requires a dev build via EAS, not Expo Go, and an Apple Developer account for iOS.
+
+## Production iOS release
+
+The release configuration lives in `app.json` and `eas.json`. Follow
+[`APP_STORE_SUBMISSION.md`](./APP_STORE_SUBMISSION.md) for App Store metadata,
+privacy answers, reviewer notes, TestFlight acceptance tests, and the remaining
+Apple/Expo account steps.

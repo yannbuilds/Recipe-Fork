@@ -1,7 +1,7 @@
 import type { FamilyInvitation, FamilyMember } from '@recipe-aggregator/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Body, Button, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
@@ -22,6 +22,7 @@ export default function ProfileScreen() {
     refreshProfile,
     refreshFamily,
     signOut,
+    deleteAccount,
   } = useAuth();
   const router = useRouter();
   const { reset: resetOnboarding } = useOnboarding();
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
   const [measurement, setMeasurement] = useState<'metric' | 'imperial'>('metric');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -52,6 +54,40 @@ export default function ProfileScreen() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  }
+
+  function openExternalUrl(url: string) {
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Unable to open link', 'Please try again or email hello@pompon.com.au.');
+    });
+  }
+
+  function confirmAccountDeletion() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account, recipes, cookbooks, meal plans and notes. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await deleteAccount();
+            } catch (error) {
+              setDeletingAccount(false);
+              Alert.alert(
+                'Account not deleted',
+                error instanceof Error
+                  ? error.message
+                  : 'Something went wrong. Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
   }
 
   const inputStyle = {
@@ -146,15 +182,75 @@ export default function ProfileScreen() {
         {/* Invite a friend */}
         {user && <FriendInviteSection />}
 
+        {/* Support and policies must remain available inside the app for App Review. */}
+        <View style={{ marginTop: 30 }}>
+          <Divider style={{ marginBottom: 20 }} />
+          <Eyebrow>Help & privacy</Eyebrow>
+          {[
+            {
+              label: 'Help and support',
+              icon: 'help-circle-outline' as const,
+              url: 'https://piekeeper.com/support',
+            },
+            {
+              label: 'Privacy policy',
+              icon: 'shield-checkmark-outline' as const,
+              url: 'https://piekeeper.com/privacy',
+            },
+          ].map((item) => (
+            <Pressable
+              key={item.label}
+              accessibilityRole="link"
+              onPress={() => openExternalUrl(item.url)}
+              style={({ pressed }) => ({
+                minHeight: 52,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                opacity: pressed ? 0.65 : 1,
+                borderBottomWidth: 1,
+                borderBottomColor: t.border,
+              })}
+            >
+              <Ionicons name={item.icon} size={20} color={t.green} />
+              <Body size={14.5} style={{ flex: 1 }}>
+                {item.label}
+              </Body>
+              <Ionicons name="open-outline" size={17} color={t.muted} />
+            </Pressable>
+          ))}
+        </View>
+
         {/* Sign out */}
         <Button
           label="Sign out"
-          variant="danger"
+          variant="secondary"
           full
-          icon={<Ionicons name="log-out-outline" size={16} color={t.red} />}
-          onPress={signOut}
+          icon={<Ionicons name="log-out-outline" size={16} color={t.text} />}
+          onPress={() => {
+            signOut().catch(() =>
+              Alert.alert('Could not sign out', 'Please check your connection and try again.'),
+            );
+          }}
           style={{ marginTop: 32 }}
         />
+
+        <Button
+          label={deletingAccount ? 'Deleting account…' : 'Delete account'}
+          variant="danger"
+          full
+          loading={deletingAccount}
+          icon={<Ionicons name="trash-outline" size={16} color={t.red} />}
+          onPress={confirmAccountDeletion}
+          style={{ marginTop: 12 }}
+        />
+        <Body
+          size={11.5}
+          color={t.muted}
+          style={{ marginTop: 9, textAlign: 'center', lineHeight: 17 }}
+        >
+          Permanently removes your Pie Keeper account and its data.
+        </Body>
 
         {/* Dev-only: replay the first-run onboarding carousel. Stripped from
             production builds by __DEV__. */}
