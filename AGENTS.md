@@ -16,12 +16,24 @@ This overrides the parent folder identity while working here.
 
 ## Stack
 
-- **Monorepo:** npm workspaces with three packages — `extension`, `web`, `shared`
+- **Monorepo:** npm workspaces with four packages — `extension`, `web`, `shared`, `mobile`
 - **Frontend:** React + TypeScript (Vite), lives in `packages/web`
 - **Extension:** Chrome MV3, lives in `packages/extension`
+- **Mobile:** Expo (React Native), lives in `packages/mobile`
 - **Backend:** Supabase (Postgres + auth + storage) — no custom API server
-- **Parsing:** Codex API (Haiku or Sonnet) — extracts structured recipe data from raw HTML
-- **Shared types:** `packages/shared` — used by both web and extension
+- **Parsing:** deterministic Recipe JSON-LD first; Groq `openai/gpt-oss-120b` only enriches ingredients/tags or handles pages without usable schema
+- **Shared types:** `packages/shared` — used by web, extension and mobile
+
+---
+
+## Cross-Platform Parity — Default Requirement
+
+- Unless Yann explicitly scopes a change to one platform, every product, behaviour, and UI change must be implemented for **both the web app and the mobile app**.
+- Backend, database, shared-type, and import-flow changes must be verified from both web and mobile consumers, even when one shared change powers both automatically.
+- UI changes require separate implementations in `packages/web` and `packages/mobile`; work is not complete until both are implemented and tested proportionately.
+- Include the Chrome extension whenever a change affects recipe capture, importing, authentication, or the extension save flow.
+- Never silently ship a one-platform implementation. If parity is technically inappropriate or blocked, flag the exception clearly before handoff and explain what remains.
+- Every final handoff for a product change must state which platforms were changed and how each platform was verified.
 
 ---
 
