@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const OPENVERSE_API_URL = "https://api.openverse.org/v1/images/";
 const SCAN_BUCKET = "recipe-scans";
 const HERO_BUCKET = "recipe-images";
 const MAX_IMAGES = 5;
@@ -126,12 +127,12 @@ function extensionForContentType(contentType: string): string {
   return "jpg";
 }
 
-async function preserveHeroImage(
+async function rehostImage(
   admin: ReturnType<typeof createClient>,
-  signedUrl: string,
+  imageUrl: string,
 ): Promise<string | null> {
   try {
-    const response = await fetch(signedUrl);
+    const response = await fetch(imageUrl, { redirect: "follow" });
     if (!response.ok) return null;
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
     if (!contentType.startsWith("image/")) return null;
@@ -143,12 +144,55 @@ async function preserveHeroImage(
       upsert: false,
     });
     if (error) {
-      console.error(`[import-recipe-photo] Could not preserve hero image: ${error.message}`);
+      console.error(`[import-recipe-photo] Could not re-host image: ${error.message}`);
       return null;
     }
     return admin.storage.from(HERO_BUCKET).getPublicUrl(path).data.publicUrl;
   } catch (error) {
-    console.error(`[import-recipe-photo] Hero image failed: ${error}`);
+    console.error(`[import-recipe-photo] Image re-host failed: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Find a relevant public-domain/CC0 dish photo without another API key.
+ * Restricting the search to CC0 and the Public Domain Mark avoids adding an
+ * attribution field (and accidentally using a licensed image without credit).
+ * A miss is harmless: recipe cards already have a designed no-image state.
+ */
+async function findPublicDomainRecipeImage(
+  admin: ReturnType<typeof createClient>,
+  title: string,
+): Promise<string | null> {
+  try {
+    const url = new URL(OPENVERSE_API_URL);
+    url.searchParams.set("q", title);
+    url.searchParams.set("page_size", "10");
+    url.searchParams.set("license", "cc0,pdm");
+    url.searchParams.set("mature", "false");
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Pie Keeper/1.0 (https://piekeeper.com)",
+      },
+    });
+    if (!response.ok) {
+      console.warn(`[import-recipe-photo] Openverse search returned ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json() as { results?: Array<Record<string, unknown>> };
+    const candidate = data.results?.find((result) =>
+      result.mature !== true &&
+      (result.license === "cc0" || result.license === "pdm") &&
+      typeof result.thumbnail === "string" &&
+      result.thumbnail.startsWith("https://")
+    );
+    if (!candidate || typeof candidate.thumbnail !== "string") return null;
+    return await rehostImage(admin, candidate.thumbnail);
+  } catch (error) {
+    console.warn(`[import-recipe-photo] Openverse image search failed: ${error}`);
     return null;
   }
 }
@@ -247,9 +291,13 @@ Deno.serve(async (req) => {
     const requestedHeroIndex = typeof parsed.hero_image_index === "number"
       ? Math.trunc(parsed.hero_image_index)
       : -1;
-    const imageUrl = requestedHeroIndex >= 0 && requestedHeroIndex < signedUrls.length
-      ? await preserveHeroImage(admin, signedUrls[requestedHeroIndex])
+    const photoHeroUrl = requestedHeroIndex >= 0 && requestedHeroIndex < signedUrls.length
+      ? await rehostImage(admin, signedUrls[requestedHeroIndex])
       : null;
+    const publicDomainImageUrl = photoHeroUrl
+      ? null
+      : await findPublicDomainRecipeImage(admin, title);
+    const imageUrl = photoHeroUrl ?? publicDomainImageUrl;
 
     return json({
       recipe: {
@@ -270,7 +318,11 @@ Deno.serve(async (req) => {
       extraction: {
         method: "vision-ocr",
         image_count: paths.length,
-        hero_from_photo: Boolean(imageUrl),
+        image_source: photoHeroUrl
+          ? "uploaded-photo"
+          : publicDomainImageUrl
+            ? "openverse-public-domain"
+            : "none",
       },
     });
   } catch (error) {
