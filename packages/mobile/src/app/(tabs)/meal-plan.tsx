@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { MealPlan, MealPlanEntry, Recipe } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ import {
   isPlanningMode,
   shiftWeek,
 } from '@/lib/weekHelpers';
-import { toRoman } from '@/lib/recipeFormat';
+import { scaleIngredientsForServings, toRoman } from '@/lib/recipeFormat';
 
 type Tab = 'meals' | 'shopping';
 
@@ -87,14 +87,39 @@ export default function MealPlanScreen() {
     loadPlan();
   }, [loadPlan]);
 
+  // The Plan tab stays mounted while you're on a recipe screen, so servings saved there
+  // wouldn't reach the shopping list. Re-pull the recipes (not the checked state) on focus.
+  const planId = plan?.id;
+  useFocusEffect(
+    useCallback(() => {
+      if (!planId) return;
+      let cancelled = false;
+      (async () => {
+        const { data } = await supabase
+          .from('meal_plan_recipes')
+          .select('*, recipe:recipes(*)')
+          .eq('meal_plan_id', planId);
+        if (!cancelled && data) setEntries(data as MealPlanEntry[]);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [planId]),
+  );
+
   const sortedEntries = useMemo(
     () => [...entries].sort((a, b) => (a.is_cooked === b.is_cooked ? 0 : a.is_cooked ? 1 : -1)),
     [entries],
   );
 
   const uncooked = entries.filter((e) => !e.is_cooked);
+  // Shop for the servings the user actually saved on the recipe, not the source recipe's yield.
   const allIngredients: IngredientWithRecipe[] = uncooked.flatMap((e) =>
-    (e.recipe?.ingredients || []).map((ing) => ({
+    scaleIngredientsForServings(
+      e.recipe?.ingredients || [],
+      e.recipe?.servings,
+      e.recipe?.custom_servings ?? e.recipe?.servings,
+    ).map((ing) => ({
       ...ing,
       _recipeTitle: e.recipe?.title || 'Unknown',
       _recipeId: e.recipe?.id || '',
@@ -308,7 +333,8 @@ export default function MealPlanScreen() {
                 const meta: string[] = [];
                 if (entry.recipe?.prep_time != null) meta.push(`Prep ${formatMins(entry.recipe.prep_time)}`);
                 if (entry.recipe?.cook_time != null) meta.push(`Cook ${formatMins(entry.recipe.cook_time)}`);
-                if (entry.recipe?.servings != null) meta.push(`Serves ${entry.recipe.servings}`);
+                const plannedServings = entry.recipe?.custom_servings ?? entry.recipe?.servings;
+                if (plannedServings != null) meta.push(`Serves ${plannedServings}`);
                 return (
                   <View key={entry.id} style={{ opacity: cooked ? 0.72 : 1 }}>
                     <View style={{ position: 'relative', aspectRatio: 4 / 3, borderRadius: 4, overflow: 'hidden', backgroundColor: t.paper3 }}>

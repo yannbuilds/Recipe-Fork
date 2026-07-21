@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
+import { scaleIngredientsForServings } from '../utils/scaleQuantity';
 import { getMonday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import IngredientIcon from '../components/IngredientIcon';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
@@ -157,8 +158,13 @@ export default function MealPlan() {
 
   // Derived data
   const uncookedEntries = entries.filter((e) => !e.is_cooked);
+  // Shop for the servings the user actually saved on the recipe, not the source recipe's yield.
   const allIngredients: IngredientWithRecipe[] = uncookedEntries.flatMap((e) =>
-    (e.recipe?.ingredients || []).map((ing) => ({
+    scaleIngredientsForServings(
+      e.recipe?.ingredients || [],
+      e.recipe?.servings,
+      e.recipe?.custom_servings ?? e.recipe?.servings,
+    ).map((ing) => ({
       ...ing,
       _recipeTitle: e.recipe?.title || 'Unknown',
       _recipeId: e.recipe?.id || '',
@@ -485,7 +491,8 @@ export default function MealPlan() {
               const meta: string[] = [];
               if (entry.recipe?.prep_time != null) meta.push(`Prep ${formatMins(entry.recipe.prep_time)}`);
               if (entry.recipe?.cook_time != null) meta.push(`Cook ${formatMins(entry.recipe.cook_time)}`);
-              if (entry.recipe?.servings != null) meta.push(`Serves ${entry.recipe.servings}`);
+              const plannedServings = entry.recipe?.custom_servings ?? entry.recipe?.servings;
+              if (plannedServings != null) meta.push(`Serves ${plannedServings}`);
               return (
                 <div
                   key={entry.id}

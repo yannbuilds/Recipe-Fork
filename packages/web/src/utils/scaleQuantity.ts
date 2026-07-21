@@ -1,6 +1,6 @@
-// Quantity scaling + formatting helpers, ported from packages/web RecipeDetail.
+// Quantity scaling + formatting helpers shared by the recipe detail page and the meal plan.
 
-function parseFraction(q: string): number | null {
+export function parseFraction(q: string): number | null {
   const parts = q.trim().split(/\s+/);
   let total = 0;
   let parsedAny = false;
@@ -16,12 +16,13 @@ function parseFraction(q: string): number | null {
         total += n;
         parsedAny = true;
       } else {
+        // Try extracting leading digits (e.g. "750g" → 750)
         const leading = p.match(/^(\d+(?:\.\d+)?)/);
         if (leading) {
           total += Number(leading[1]);
           parsedAny = true;
         }
-        break;
+        break; // stop after first non-pure-numeric token
       }
     }
   }
@@ -29,22 +30,20 @@ function parseFraction(q: string): number | null {
 }
 
 const COMMON_FRACTIONS: [number, string][] = [
-  [0.125, '1/8'],
-  [0.25, '1/4'],
-  [0.333, '1/3'],
-  [0.5, '1/2'],
-  [0.667, '2/3'],
-  [0.75, '3/4'],
+  [0.125, '1/8'], [0.25, '1/4'], [0.333, '1/3'], [0.5, '1/2'],
+  [0.667, '2/3'], [0.75, '3/4'],
 ];
 
-function formatQuantity(value: number): string {
+export function formatQuantity(value: number): string {
   const whole = Math.floor(value);
   const frac = value - whole;
+
   for (const [target, label] of COMMON_FRACTIONS) {
     if (Math.abs(frac - target) < 0.02) {
       return whole > 0 ? `${whole} ${label}` : label;
     }
   }
+
   if (value % 1 === 0) return String(value);
   return value.toFixed(1);
 }
@@ -60,6 +59,7 @@ export function scaleQuantity(
   const parsed = parseFraction(quantity);
   if (parsed === null) return quantity;
   const scaled = parsed * (currentServings / originalServings);
+  // Preserve trailing unit suffix glued to the number (e.g. "750g" → "1500g")
   const suffixMatch = quantity.match(/[a-zA-Z]+$/);
   const suffix = suffixMatch ? suffixMatch[0] : '';
   return formatQuantity(scaled) + suffix;
@@ -79,45 +79,4 @@ export function scaleIngredientsForServings<T extends { quantity: string }>(
     ...ing,
     quantity: scaleQuantity(ing.quantity, originalServings, targetServings),
   }));
-}
-
-export function formatTime(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
-
-export function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return 'Source';
-  }
-}
-
-// Splits a title so the last word can be rendered italic-green (editorial flourish).
-export function accentTitle(title: string): { head: string; last: string | null } {
-  const words = title.trim().split(/\s+/);
-  if (words.length < 2) return { head: title, last: null };
-  return { head: words.slice(0, -1).join(' '), last: words[words.length - 1] };
-}
-
-// Lowercase roman numeral for group labels (i, ii, iii …).
-export function toRoman(n: number): string {
-  const map: [number, string][] = [
-    [10, 'x'],
-    [9, 'ix'],
-    [5, 'v'],
-    [4, 'iv'],
-    [1, 'i'],
-  ];
-  let out = '';
-  for (const [v, s] of map) {
-    while (n >= v) {
-      out += s;
-      n -= v;
-    }
-  }
-  return out;
 }
