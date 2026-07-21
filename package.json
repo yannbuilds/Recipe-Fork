@@ -14,6 +14,7 @@
     "build:extension": "npm run build -w packages/extension",
     "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json",
     "test:recipe-extraction": "tsx scripts/test-recipe-schema.ts",
+    "test:ingredient-aggregation": "tsx scripts/test-ingredient-aggregation.ts",
     "test:social-source": "tsx scripts/test-social-source.ts",
     "smoke:social-source": "tsx scripts/smoke-social-source.ts",
     "smoke:social-import:production": "tsx scripts/smoke-production-social-import.ts",
