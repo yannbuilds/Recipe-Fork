@@ -353,7 +353,11 @@ export default function MealPlanScreen() {
                 if (plannedServings != null) meta.push(`Serves ${plannedServings}`);
                 return (
                   <View key={entry.id} style={{ opacity: cooked ? 0.72 : 1 }}>
-                    <View style={{ position: 'relative', aspectRatio: 4 / 3, borderRadius: 4, overflow: 'hidden', backgroundColor: t.paper3 }}>
+                    {/* Photo — tapping it just views the recipe (no cook mode) */}
+                    <Pressable
+                      onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } })}
+                      style={{ position: 'relative', aspectRatio: 4 / 3, borderRadius: 4, overflow: 'hidden', backgroundColor: t.paper3 }}
+                    >
                       {entry.recipe?.image_url ? (
                         <Image source={{ uri: entry.recipe.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={entry.recipe.id} />
                       ) : (
@@ -373,11 +377,14 @@ export default function MealPlanScreen() {
                           <Mono size={9} color={t.greenDeep}>COOKED</Mono>
                         </View>
                       )}
-                    </View>
+                    </Pressable>
                     <View style={{ marginTop: 10 }}>
-                      <Serif size={19} style={{ textDecorationLine: cooked ? 'line-through' : 'none' }}>
-                        {entry.recipe?.title}
-                      </Serif>
+                      {/* Title — also a plain "view recipe" tap target */}
+                      <Pressable onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } })}>
+                        <Serif size={19} style={{ textDecorationLine: cooked ? 'line-through' : 'none' }}>
+                          {entry.recipe?.title}
+                        </Serif>
+                      </Pressable>
                       {meta.length > 0 && (
                         <Mono size={10} style={{ marginTop: 5, letterSpacing: 0.6 }}>
                           {meta.join('   ').toUpperCase()}

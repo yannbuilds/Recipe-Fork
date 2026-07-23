@@ -524,14 +524,16 @@ export default function MealPlan() {
                     animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
                   }}
                 >
-                  {/* Photo */}
+                  {/* Photo — tapping it just views the recipe (no cook mode) */}
                   <div
+                    onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
                     style={{
                       position: 'relative',
                       aspectRatio: '4 / 3',
                       borderRadius: 4,
                       overflow: 'hidden',
                       background: 'var(--paper3)',
+                      cursor: 'pointer',
                     }}
                   >
                     {entry.recipe?.image_url ? (
@@ -558,7 +560,10 @@ export default function MealPlan() {
 
                     {/* Remove button */}
                     <button
-                      onClick={() => handleRemove(entry.id)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // don't open the recipe underneath
+                        handleRemove(entry.id);
+                      }}
                       className="absolute flex items-center justify-center rounded-full rf-glass-dark text-white transition-colors"
                       style={{ top: 10, right: 10, width: 28, height: 28 }}
                       title="Remove from meal plan"
@@ -593,6 +598,7 @@ export default function MealPlan() {
                   {/* Caption */}
                   <div style={{ marginTop: 12 }}>
                     <h3
+                      onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
                       style={{
                         margin: 0,
                         fontFamily: fSerif,
@@ -602,6 +608,7 @@ export default function MealPlan() {
                         letterSpacing: '-0.015em',
                         color: 'var(--text)',
                         textDecoration: cooked ? 'line-through' : 'none',
+                        cursor: 'pointer',
                       }}
                     >
                       {entry.recipe?.title}
