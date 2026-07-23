@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BookOpen } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -245,11 +246,11 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
                             style={{
                               width: 44,
                               height: 44,
-                              fontSize: 26,
-                              background: 'var(--warm)',
+                              border: '1px solid var(--border)',
+                              color: 'var(--green)',
                             }}
                           >
-                            {s.emoji}
+                            <BookOpen size={20} strokeWidth={1.5} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold" style={{ color: 'var(--text)' }}>

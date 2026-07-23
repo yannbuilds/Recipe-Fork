@@ -104,7 +104,7 @@ export default function CookbookDetailScreen() {
             justifyContent: 'center',
           }}
         >
-          <Body size={22}>{cookbook?.emoji ?? '📖'}</Body>
+          <Ionicons name="book-outline" size={22} color={t.green} />
         </View>
         <View style={{ flex: 1 }}>
           <Eyebrow>Cookbook</Eyebrow>
