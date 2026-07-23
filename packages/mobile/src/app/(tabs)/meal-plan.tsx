@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import IngredientIcon from '@/components/IngredientIcon';
+import RateCookSheet from '@/components/RateCookSheet';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
 import { Body, Button, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -46,6 +47,8 @@ export default function MealPlanScreen() {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [showAdd, setShowAdd] = useState(false);
+  // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
+  const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorised = useRef('');
 
@@ -203,6 +206,19 @@ export default function MealPlanScreen() {
     else haptics.select();
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
+
+    if (next && user) {
+      // Log the cook in the recipe's history, then ask how it went.
+      const { data: cook } = await supabase
+        .from('recipe_cooks')
+        .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
+        .select('id')
+        .single();
+      if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
+    } else if (!next) {
+      // Un-marking means "I didn't actually cook this" — clear the logged cook.
+      await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
+    }
   }
 
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
@@ -378,11 +394,30 @@ export default function MealPlanScreen() {
                           </Body>
                         </Pressable>
                         <Pressable
-                          onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } })}
-                          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: t.border, backgroundColor: t.card }}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/recipe/[id]',
+                              params: cooked
+                                ? { id: entry.recipe_id }
+                                : { id: entry.recipe_id, cook: '1', entry: entry.id },
+                            })
+                          }
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 5,
+                            paddingVertical: 9,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: cooked ? t.border : t.greenSolid,
+                            backgroundColor: cooked ? t.card : t.greenSolid,
+                          }}
                         >
-                          <Body size={13} weight="medium">
-                            View recipe
+                          {!cooked && <Ionicons name="flame" size={13} color={t.onGreen} />}
+                          <Body size={13} weight="medium" color={cooked ? t.text : t.onGreen}>
+                            {cooked ? 'View recipe' : 'Cook recipe'}
                           </Body>
                         </Pressable>
                       </View>
@@ -482,6 +517,13 @@ export default function MealPlanScreen() {
         existingIds={existingIds}
         onPick={(r) => addRecipe(r)}
         onClose={() => setShowAdd(false)}
+      />
+
+      <RateCookSheet
+        open={rateCook !== null}
+        cookId={rateCook?.cookId ?? null}
+        recipeTitle={rateCook?.title}
+        onClose={() => setRateCook(null)}
       />
     </View>
   );

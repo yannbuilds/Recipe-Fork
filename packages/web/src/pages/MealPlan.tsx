@@ -6,6 +6,7 @@ import {
   Check,
   X,
   Utensils,
+  Flame,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -15,6 +16,7 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
+import RateCookModal from '../components/RateCookModal';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { scaleIngredientsForServings } from '../utils/scaleQuantity';
@@ -60,6 +62,8 @@ export default function MealPlan() {
     setTab(searchParams.get('tab') === 'shopping' ? 'shopping' : 'meals');
   }, [searchParams]);
   const [showAddModal, setShowAddModal] = useState(false);
+  // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
+  const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [categorising, setCategorising] = useState(false);
@@ -281,6 +285,19 @@ export default function MealPlan() {
     const next = !entry.is_cooked;
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
+
+    if (next && user) {
+      // Log the cook in the recipe's history, then ask how it went.
+      const { data: cook } = await supabase
+        .from('recipe_cooks')
+        .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
+        .select('id')
+        .single();
+      if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
+    } else if (!next) {
+      // Un-marking means "I didn't actually cook this" — clear the logged cook.
+      await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
+    }
   }
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id));
@@ -630,8 +647,14 @@ export default function MealPlan() {
                         {cooked ? 'Cooked' : 'Mark cooked'}
                       </button>
                       <button
-                        onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
-                        className="flex-1 text-center transition-colors"
+                        onClick={() =>
+                          navigate(
+                            cooked
+                              ? `/recipe/${entry.recipe_id}`
+                              : `/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`,
+                          )
+                        }
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 transition-colors"
                         style={{
                           padding: '9px 0',
                           borderRadius: 999,
@@ -639,14 +662,19 @@ export default function MealPlan() {
                           fontSize: 13,
                           fontWeight: 500,
                           cursor: 'pointer',
-                          border: '1px solid var(--border)',
-                          background: 'var(--card)',
-                          color: 'var(--text)',
+                          border: cooked ? '1px solid var(--border)' : '1px solid var(--green)',
+                          background: cooked ? 'var(--card)' : 'var(--green)',
+                          color: cooked ? 'var(--text)' : '#fff',
                         }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--warm)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--card)'; }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(0.95)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = 'none'; }}
                       >
-                        View recipe
+                        {cooked ? 'View recipe' : (
+                          <>
+                            <Flame size={14} strokeWidth={2} />
+                            Cook recipe
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -909,6 +937,13 @@ export default function MealPlan() {
           handleAddRecipe(recipe);
         }}
         onClose={() => setShowAddModal(false)}
+      />
+
+      <RateCookModal
+        open={rateCook !== null}
+        cookId={rateCook?.cookId ?? null}
+        recipeTitle={rateCook?.title}
+        onClose={() => setRateCook(null)}
       />
     </div>
   );

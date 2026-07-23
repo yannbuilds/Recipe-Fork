@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,7 @@ import IngredientIcon from '../components/IngredientIcon';
 import VideoPlayer from '../components/VideoPlayer';
 import MyNotesModal from '../components/MyNotesModal';
 import AddToCookbookSheet from '../components/AddToCookbookSheet';
+import RateCookModal from '../components/RateCookModal';
 import { scaleQuantity } from '../utils/scaleQuantity';
 
 /* ------------------------------------------------------------------ */
@@ -45,6 +46,15 @@ function toRoman(n: number): string {
     }
   }
   return out;
+}
+
+// Compact date for the cooked-history line: "12 Jul", with the year added
+// once it's no longer this year ("12 Jul 2025").
+function formatCookDate(iso: string): string {
+  const d = new Date(iso);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('en-AU', opts);
 }
 
 // Renders a title with its last word italic-accented in green — an editorial
@@ -334,6 +344,12 @@ export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Cook mode: arrived via the plan's "Cook recipe" button. Auto-enables the
+  // screen-on toggle and shows a floating "Mark as cooked" action; `entry` is
+  // the meal_plan_recipes row to flip when done.
+  const [searchParams] = useSearchParams();
+  const cookMode = searchParams.get('cook') === '1';
+  const cookEntryId = searchParams.get('entry');
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,9 +369,15 @@ export default function RecipeDetail() {
   const saveNotesRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // ── Cooking history + post-cook rating ────────────────────
+  const [cookHistory, setCookHistory] = useState<{ count: number; last: string | null }>({ count: 0, last: null });
+  const [markingCooked, setMarkingCooked] = useState(false);
+  const [rateCookId, setRateCookId] = useState<string | null>(null);
+
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
-  const [isAwake, setIsAwake] = useState(false);
+  // Cook mode starts with the screen-on toggle already on.
+  const [isAwake, setIsAwake] = useState(cookMode && supportsWakeLock);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [showAwakeTooltip, setShowAwakeTooltip] = useState(false);
 
@@ -415,10 +437,22 @@ export default function RecipeDetail() {
 
   useEffect(() => {
     async function fetchRecipe() {
-      const [recipeResult, tagsResult] = await Promise.all([
+      const [recipeResult, tagsResult, cooksResult] = await Promise.all([
         supabase.from('recipes').select('*').eq('id', id!).single(),
         supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', id!),
+        supabase
+          .from('recipe_cooks')
+          .select('cooked_at')
+          .eq('recipe_id', id!)
+          .order('cooked_at', { ascending: false }),
       ]);
+
+      if (!cooksResult.error && cooksResult.data) {
+        setCookHistory({
+          count: cooksResult.data.length,
+          last: cooksResult.data[0]?.cooked_at ?? null,
+        });
+      }
 
       if (recipeResult.error) {
         setError(recipeResult.error.message);
@@ -491,6 +525,29 @@ export default function RecipeDetail() {
       setHeroMinHeight(Math.max(360, overlayH + 20));
     });
   }, [descExpanded]);
+
+  // Cook-mode completion: flip the plan entry to cooked, log the cook in the
+  // recipe's history, then ask how it went. Closing the rating modal (save or
+  // skip) lands back on the meal plan.
+  async function handleMarkCooked() {
+    if (!user || !id || markingCooked) return;
+    setMarkingCooked(true);
+    if (cookEntryId) {
+      await supabase.from('meal_plan_recipes').update({ is_cooked: true }).eq('id', cookEntryId);
+    }
+    const { data: cook } = await supabase
+      .from('recipe_cooks')
+      .insert({ recipe_id: id, user_id: user.id, meal_plan_recipe_id: cookEntryId })
+      .select('id')
+      .single();
+    setMarkingCooked(false);
+    if (cook) {
+      setCookHistory((prev) => ({ count: prev.count + 1, last: new Date().toISOString() }));
+      setRateCookId(cook.id);
+    } else {
+      navigate('/meal-plan');
+    }
+  }
 
   async function handleDelete() {
     setShowDeleteModal(false);
@@ -838,6 +895,28 @@ export default function RecipeDetail() {
     </div>
   );
 
+  // Quiet mono line under the meta cards: how often this recipe has been
+  // cooked and when it last was. Grows into a richer history view later.
+  const renderCookedHistory = () =>
+    cookHistory.count > 0 ? (
+      <div
+        className="flex items-center gap-1.5 mt-3"
+        style={{
+          fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+          fontSize: 10,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'var(--muted)',
+        }}
+      >
+        <Flame size={11} strokeWidth={1.6} />
+        <span>
+          Cooked {cookHistory.count}&times;
+          {cookHistory.last ? ` · last ${formatCookDate(cookHistory.last)}` : ''}
+        </span>
+      </div>
+    ) : null;
+
   // Wake-lock toggle, overlaid on the top-left of the hero image so it doesn't
   // take a row of its own below the action buttons. Styled as a glass pill to
   // stay legible over any photo.
@@ -1012,6 +1091,7 @@ export default function RecipeDetail() {
                   )}
                 </div>
               )}
+              {renderCookedHistory()}
 
               {/* Byline */}
               {(recipe.creator_name || recipe.source_url) && (
@@ -1113,6 +1193,7 @@ export default function RecipeDetail() {
                   )}
                 </div>
               )}
+              {renderCookedHistory()}
 
               {/* Byline */}
               {(recipe.creator_name || recipe.source_url) && (
@@ -1603,6 +1684,48 @@ export default function RecipeDetail() {
           onClose={() => setShowWeekPicker(false)}
         />
       )}
+
+      {/* ── Cook mode: floating "Mark as cooked" ─────────────── */}
+      {cookMode && !rateCookId && (
+        <div
+          className="fixed left-0 right-0 z-40 flex justify-center pointer-events-none"
+          style={{ bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 84px)' : 28 }}
+        >
+          <button
+            onClick={handleMarkCooked}
+            disabled={markingCooked}
+            className="pointer-events-auto inline-flex items-center gap-2 transition-transform"
+            style={{
+              padding: '13px 26px',
+              borderRadius: 999,
+              border: 'none',
+              background: 'var(--green)',
+              color: '#fff',
+              fontFamily: '"DM Sans", system-ui, sans-serif',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+              opacity: markingCooked ? 0.7 : 1,
+              animation: 'fadeUp 0.4s ease both',
+            }}
+          >
+            <Check size={17} strokeWidth={2.5} />
+            {markingCooked ? 'Saving…' : 'Mark as cooked'}
+          </button>
+        </div>
+      )}
+
+      {/* Post-cook rating — closing (save or skip) returns to the plan. */}
+      <RateCookModal
+        open={rateCookId !== null}
+        cookId={rateCookId}
+        recipeTitle={recipe?.title}
+        onClose={() => {
+          setRateCookId(null);
+          navigate('/meal-plan');
+        }}
+      />
     </div>
   );
 }

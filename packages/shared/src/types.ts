@@ -71,6 +71,19 @@ export interface MealPlanEntry extends MealPlanRecipe {
   recipe: Recipe;
 }
 
+// One row per cook of a recipe. Ratings (1–5) are collected right after
+// cooking and are all optional — a skipped rating still logs the cook.
+export interface RecipeCook {
+  id: string;
+  recipe_id: string;
+  user_id: string;
+  meal_plan_recipe_id: string | null;
+  cooked_at: string;
+  rating_taste: number | null;
+  rating_ease: number | null;
+  rating_value: number | null;
+}
+
 export interface Cookbook {
   id: string;
   user_id: string;

@@ -14,6 +14,7 @@ import ConfirmModal from '@/components/ConfirmModal';
 import FavouriteButton from '@/components/FavouriteButton';
 import IngredientIcon from '@/components/IngredientIcon';
 import MyNotesModal from '@/components/MyNotesModal';
+import RateCookSheet from '@/components/RateCookSheet';
 import { ScreenOnGlow } from '@/components/ScreenOnGlow';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
@@ -27,6 +28,17 @@ import { useTheme } from '@/lib/theme';
 interface RecipeData {
   recipe: Recipe;
   tags: Tag[];
+  /** Cooking-history summary for the quiet "COOKED 3× · LAST …" line. */
+  cooks: { count: number; last: string | null };
+}
+
+// Compact date for the cooked-history line: "12 Jul", with the year added
+// once it's no longer this year ("12 Jul 2025").
+function formatCookDate(iso: string): string {
+  const d = new Date(iso);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('en-AU', opts);
 }
 
 // Lowercase roman numeral for editorial group labels (i, ii, iii …).
@@ -59,13 +71,23 @@ function groupByCategory<T extends { category?: string | null }>(
 }
 
 async function fetchRecipe(id: string): Promise<RecipeData> {
-  const [recipeRes, tagsRes] = await Promise.all([
+  const [recipeRes, tagsRes, cooksRes] = await Promise.all([
     supabase.from('recipes').select('*').eq('id', id).single(),
     supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', id),
+    supabase
+      .from('recipe_cooks')
+      .select('cooked_at')
+      .eq('recipe_id', id)
+      .order('cooked_at', { ascending: false }),
   ]);
   if (recipeRes.error) throw new Error(recipeRes.error.message);
   const tags = ((tagsRes.data ?? []) as any[]).map((rt) => rt.tags).filter(Boolean) as Tag[];
-  return { recipe: recipeRes.data as Recipe, tags };
+  const cookRows = cooksRes.data ?? [];
+  return {
+    recipe: recipeRes.data as Recipe,
+    tags,
+    cooks: { count: cookRows.length, last: cookRows[0]?.cooked_at ?? null },
+  };
 }
 
 function MetaCard({
@@ -137,7 +159,11 @@ export default function RecipeDetailScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, session, loading: authLoading } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // Cook mode: arrived via the plan's "Cook recipe" button. Auto-enables
+  // keep-awake and shows a floating "Mark as cooked" action; `entry` is the
+  // meal_plan_recipes row to flip when done.
+  const { id, cook, entry } = useLocalSearchParams<{ id: string; cook?: string; entry?: string }>();
+  const cookMode = cook === '1';
 
   const [tab, setTab] = useState<'ingredients' | 'steps'>('ingredients');
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
@@ -145,7 +171,10 @@ export default function RecipeDetailScreen() {
   const [currentServings, setCurrentServings] = useState(1);
   const [savedServings, setSavedServings] = useState(1);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [isAwake, setIsAwake] = useState(false);
+  // Cook mode starts with the screen-on toggle already on.
+  const [isAwake, setIsAwake] = useState(cookMode);
+  const [markingCooked, setMarkingCooked] = useState(false);
+  const [rateCookId, setRateCookId] = useState<string | null>(null);
   const [isFav, setIsFav] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -201,6 +230,30 @@ export default function RecipeDetailScreen() {
     () => (recipe ? [...recipe.steps].sort((a, b) => a.order - b.order) : []),
     [recipe],
   );
+
+  // Cook-mode completion: flip the plan entry to cooked, log the cook in the
+  // recipe's history, then ask how it went. Closing the rating sheet (save or
+  // skip) lands back on the meal plan.
+  async function handleMarkCooked() {
+    if (!user || !id || markingCooked) return;
+    setMarkingCooked(true);
+    if (entry) {
+      await supabase.from('meal_plan_recipes').update({ is_cooked: true }).eq('id', entry);
+    }
+    const { data: cook } = await supabase
+      .from('recipe_cooks')
+      .insert({ recipe_id: id, user_id: user.id, meal_plan_recipe_id: entry ?? null })
+      .select('id')
+      .single();
+    setMarkingCooked(false);
+    queryClient.invalidateQueries({ queryKey: ['recipe', id] });
+    if (cook) {
+      haptics.success();
+      setRateCookId(cook.id);
+    } else {
+      router.back();
+    }
+  }
 
   if (!authLoading && !session) return <Redirect href="/sign-in" />;
 
@@ -258,7 +311,7 @@ export default function RecipeDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + (cookMode ? 110 : 40) }}>
         {/* Hero */}
         <View style={{ height: 340, backgroundColor: t.paper3 }}>
           {recipe.image_url ? (
@@ -398,6 +451,17 @@ export default function RecipeDetailScreen() {
               {recipe.servings != null && (
                 <MetaCard icon="people-outline" label="Serves" value={String(recipe.servings)} />
               )}
+            </View>
+          )}
+
+          {/* Quiet cooked-history line — grows into a richer view later. */}
+          {(data?.cooks?.count ?? 0) > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+              <Ionicons name="flame-outline" size={11} color={t.muted} />
+              <Mono size={10} style={{ letterSpacing: 1 }}>
+                COOKED {data!.cooks.count}&times;
+                {data!.cooks.last ? ` · LAST ${formatCookDate(data!.cooks.last).toUpperCase()}` : ''}
+              </Mono>
             </View>
           )}
 
@@ -792,6 +856,45 @@ export default function RecipeDetailScreen() {
       {/* Full-screen halo while keep-awake is on (green→orange, breathing) */}
       <ScreenOnGlow active={isAwake} />
 
+      {/* Cook mode: floating "Mark as cooked" */}
+      {cookMode && !rateCookId && (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: insets.bottom + 16,
+            alignItems: 'center',
+          }}
+        >
+          <Pressable
+            onPress={handleMarkCooked}
+            disabled={markingCooked}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingVertical: 13,
+              paddingHorizontal: 26,
+              borderRadius: 999,
+              backgroundColor: t.greenSolid,
+              opacity: markingCooked ? 0.7 : 1,
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 6,
+            }}
+          >
+            <Ionicons name="checkmark" size={17} color={t.onGreen} />
+            <Body size={15} weight="semi" color={t.onGreen}>
+              {markingCooked ? 'Saving…' : 'Mark as cooked'}
+            </Body>
+          </Pressable>
+        </View>
+      )}
+
       <ConfirmModal
         open={showDelete}
         title="Delete recipe"
@@ -822,6 +925,17 @@ export default function RecipeDetailScreen() {
           onClose={() => setShowWeekPicker(false)}
         />
       )}
+
+      {/* Post-cook rating — closing (save or skip) returns to the plan. */}
+      <RateCookSheet
+        open={rateCookId !== null}
+        cookId={rateCookId}
+        recipeTitle={recipe.title}
+        onClose={() => {
+          setRateCookId(null);
+          router.back();
+        }}
+      />
     </View>
   );
 }
