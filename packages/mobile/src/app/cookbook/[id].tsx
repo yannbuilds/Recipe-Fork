@@ -31,7 +31,7 @@ async function fetchDetail(id: string): Promise<Data> {
   const [cbRes, crRes] = await Promise.all([
     supabase
       .from('cookbooks')
-      .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+      .select('id, user_id, name, description, emoji, cover_recipe_id, sort_order, created_at, updated_at')
       .eq('id', id)
       .maybeSingle(),
     supabase.from('cookbook_recipes').select(`recipe_id, recipes(${RECIPE_SELECT})`).eq('cookbook_id', id),
@@ -223,6 +223,7 @@ export default function CookbookDetailScreen() {
           <CookbookFormModal
             open={showEdit}
             cookbook={cookbook}
+            recipes={recipes}
             onClose={() => setShowEdit(false)}
             onSaved={invalidate}
           />

@@ -77,6 +77,9 @@ export interface Cookbook {
   name: string;
   description: string | null;
   emoji: string | null;
+  // Chosen cover recipe (shown as the cookbook's thumbnail in the
+  // save-to-cookbook sheet). Null = automatic (newest recipe photo).
+  cover_recipe_id?: string | null;
   // Manual display order (ascending). Lower = earlier. Defaults to 0 server-side.
   sort_order?: number;
   created_at: string;

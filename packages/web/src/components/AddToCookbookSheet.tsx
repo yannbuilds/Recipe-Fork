@@ -20,6 +20,7 @@ interface Toast {
 // `recipes` relation as an object or a single-element array.
 interface CoverRow {
   cookbook_id: string;
+  recipe_id: string;
   recipes:
     | { image_url: string | null; created_at: string }
     | { image_url: string | null; created_at: string }[]
@@ -48,25 +49,35 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
       const [cbResult, crResult, coverResult] = await Promise.all([
         supabase
           .from('cookbooks')
-          .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+          .select('id, user_id, name, description, emoji, cover_recipe_id, sort_order, created_at, updated_at')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id').eq('recipe_id', recipeId),
-        // Newest recipe photo per cookbook — same source the shelf covers use.
-        supabase.from('cookbook_recipes').select('cookbook_id, recipes(image_url, created_at)'),
+        // Recipe photos per cookbook — chosen cover first, newest as fallback.
+        supabase.from('cookbook_recipes').select('cookbook_id, recipe_id, recipes(image_url, created_at)'),
       ]);
       if (cancelled) return;
-      setCookbooks((cbResult.data as Cookbook[]) ?? []);
+      const cbList = (cbResult.data as Cookbook[]) ?? [];
+      setCookbooks(cbList);
       setMemberOf(new Set(((crResult.data ?? []) as { cookbook_id: string }[]).map((r) => r.cookbook_id)));
       const newest: Record<string, { url: string; at: number }> = {};
+      const byPair: Record<string, string> = {};
       for (const row of ((coverResult.data ?? []) as unknown) as CoverRow[]) {
         const rec = Array.isArray(row.recipes) ? row.recipes[0] : row.recipes;
         if (!rec?.image_url) continue;
+        byPair[`${row.cookbook_id}:${row.recipe_id}`] = rec.image_url;
         const at = new Date(rec.created_at).getTime();
         const cur = newest[row.cookbook_id];
         if (!cur || at > cur.at) newest[row.cookbook_id] = { url: rec.image_url, at };
       }
-      setCovers(Object.fromEntries(Object.entries(newest).map(([id, v]) => [id, v.url])));
+      const next: Record<string, string> = {};
+      for (const cb of cbList) {
+        const url =
+          (cb.cover_recipe_id ? byPair[`${cb.id}:${cb.cover_recipe_id}`] : undefined) ??
+          newest[cb.id]?.url;
+        if (url) next[cb.id] = url;
+      }
+      setCovers(next);
       setLoading(false);
     }
     load();

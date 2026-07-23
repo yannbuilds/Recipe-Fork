@@ -30,11 +30,13 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
+  const [coverRecipeId, setCoverRecipeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(cookbook?.name ?? initialValues?.name ?? '');
       setDescription(cookbook?.description ?? initialValues?.description ?? '');
+      setCoverRecipeId(cookbook?.cover_recipe_id ?? null);
       setError(null);
       setPendingRemoval(new Set());
     }
@@ -61,6 +63,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
         .update({
           name: name.trim(),
           description: description.trim() || null,
+          cover_recipe_id: coverRecipeId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', cookbook.id)
@@ -154,6 +157,58 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
             maxLength={140}
           />
         </div>
+
+        {cookbook && recipes && recipes.some((r) => r.image_url) && (
+          <div>
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
+              Cover
+            </label>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setCoverRecipeId(null)}
+                className="shrink-0 flex items-center justify-center text-xs font-semibold"
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 10,
+                  border: `1.5px dashed ${coverRecipeId === null ? 'var(--green)' : 'var(--border)'}`,
+                  background: coverRecipeId === null ? 'var(--green-light)' : 'transparent',
+                  color: coverRecipeId === null ? 'var(--green)' : 'var(--muted)',
+                }}
+                title="Automatic — newest recipe photo"
+              >
+                Auto
+              </button>
+              {recipes
+                .filter((r) => r.image_url)
+                .map((r) => (
+                  <button
+                    type="button"
+                    key={r.id}
+                    onClick={() => setCoverRecipeId(r.id)}
+                    className="shrink-0 p-0"
+                    style={{
+                      borderRadius: 10,
+                      border: `2px solid ${coverRecipeId === r.id ? 'var(--green)' : 'transparent'}`,
+                      lineHeight: 0,
+                    }}
+                    title={r.title}
+                  >
+                    <img
+                      src={r.image_url!}
+                      alt={r.title}
+                      className="object-cover"
+                      style={{ width: 52, height: 52, borderRadius: 8 }}
+                    />
+                  </button>
+                ))}
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Shown next to the cookbook when saving a recipe.
+            </p>
+          </div>
+        )}
 
         {cookbook && recipes && recipes.length > 0 && onCommitRemovals && (
           <div>

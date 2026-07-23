@@ -36,7 +36,7 @@ export default function CookbookDetail() {
       setLoading(true);
       const cbResult = await supabase
         .from('cookbooks')
-        .select('id, user_id, name, description, emoji, created_at, updated_at')
+        .select('id, user_id, name, description, emoji, cover_recipe_id, created_at, updated_at')
         .eq('id', id!)
         .maybeSingle();
       if (cancelled) return;
