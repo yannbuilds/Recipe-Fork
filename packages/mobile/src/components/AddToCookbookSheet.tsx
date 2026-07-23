@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Cookbook } from '@recipe-aggregator/shared';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Button, CheckSquare, Serif } from '@/components/ui';
 import { haptics } from '@/lib/haptics';
@@ -13,6 +14,12 @@ interface Props {
   onClose: () => void;
 }
 
+interface Toast {
+  key: number;
+  text: string;
+  kind: 'added' | 'removed' | 'error';
+}
+
 export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
   const t = useTheme();
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
@@ -20,6 +27,28 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Slide the toast in, hold, fade it out. Re-tapping re-runs the entrance so
+  // rapid saves each get their own beat of confirmation.
+  useEffect(() => {
+    if (!toast) return;
+    toastAnim.setValue(0);
+    Animated.spring(toastAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 300,
+    }).start();
+    const timer = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(
+        () => setToast(null),
+      );
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +75,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
 
   async function toggle(cookbookId: string) {
     const isMember = memberOf.has(cookbookId);
+    const name = cookbooks.find((cb) => cb.id === cookbookId)?.name ?? 'cookbook';
     if (isMember) haptics.light();
     else haptics.success();
     setMemberOf((prev) => {
@@ -54,14 +84,29 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
       else next.add(cookbookId);
       return next;
     });
-    if (isMember) {
-      await supabase
-        .from('cookbook_recipes')
-        .delete()
-        .eq('cookbook_id', cookbookId)
-        .eq('recipe_id', recipeId);
+    const { error } = isMember
+      ? await supabase
+          .from('cookbook_recipes')
+          .delete()
+          .eq('cookbook_id', cookbookId)
+          .eq('recipe_id', recipeId)
+      : await supabase.from('cookbook_recipes').insert({ cookbook_id: cookbookId, recipe_id: recipeId });
+    if (error) {
+      // Revert the optimistic tick — never leave a tick that lied.
+      haptics.error();
+      setMemberOf((prev) => {
+        const next = new Set(prev);
+        if (isMember) next.add(cookbookId);
+        else next.delete(cookbookId);
+        return next;
+      });
+      setToast({ key: Date.now(), kind: 'error', text: 'Couldn’t save – try again' });
     } else {
-      await supabase.from('cookbook_recipes').insert({ cookbook_id: cookbookId, recipe_id: recipeId });
+      setToast({
+        key: Date.now(),
+        kind: isMember ? 'removed' : 'added',
+        text: isMember ? `Removed from ${name}` : `Added to ${name}`,
+      });
     }
   }
 
@@ -79,9 +124,17 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
     if (data) {
       const cb = data as Cookbook;
       setCookbooks((prev) => [cb, ...prev]);
-      await supabase.from('cookbook_recipes').insert({ cookbook_id: cb.id, recipe_id: recipeId });
-      setMemberOf((prev) => new Set(prev).add(cb.id));
-      haptics.success();
+      const { error } = await supabase
+        .from('cookbook_recipes')
+        .insert({ cookbook_id: cb.id, recipe_id: recipeId });
+      if (error) {
+        haptics.error();
+        setToast({ key: Date.now(), kind: 'error', text: 'Couldn’t save – try again' });
+      } else {
+        setMemberOf((prev) => new Set(prev).add(cb.id));
+        haptics.success();
+        setToast({ key: Date.now(), kind: 'added', text: `Added to ${cb.name}` });
+      }
     }
     setNewName('');
     setCreating(false);
@@ -122,7 +175,19 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
                     marginBottom: 4,
                   }}
                 >
-                  <Body size={20}>{cb.emoji ?? '📖'}</Body>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: t.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="book-outline" size={16} color={t.green} />
+                  </View>
                   <Body size={14} weight="semi" style={{ flex: 1 }}>
                     {cb.name}
                   </Body>
@@ -164,6 +229,63 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
             style={{ marginTop: 12 }}
             onPress={() => setCreating(true)}
           />
+        )}
+
+        {/* Save confirmation toast — floats over the list, never blocks taps. */}
+        {toast && (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 20,
+              right: 20,
+              bottom: 68,
+              alignItems: 'center',
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [12, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 999,
+                maxWidth: '100%',
+                backgroundColor:
+                  toast.kind === 'added' ? t.greenSolid : toast.kind === 'error' ? t.red : t.text,
+                shadowColor: '#000',
+                shadowOpacity: 0.18,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 6,
+              }}
+            >
+              {toast.kind === 'added' && (
+                <Ionicons name="checkmark-circle" size={16} color={t.onGreen} />
+              )}
+              {toast.kind === 'error' && (
+                <Ionicons name="alert-circle" size={16} color="#fff" />
+              )}
+              <Body
+                size={13}
+                weight="semi"
+                numberOfLines={1}
+                color={toast.kind === 'removed' ? t.card : toast.kind === 'added' ? t.onGreen : '#fff'}
+              >
+                {toast.text}
+              </Body>
+            </View>
+          </Animated.View>
         )}
       </View>
     </BottomSheet>

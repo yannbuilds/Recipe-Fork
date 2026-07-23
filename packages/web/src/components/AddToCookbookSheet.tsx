@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BookOpen } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import CookbookFormModal from './CookbookFormModal';
@@ -9,11 +10,24 @@ interface AddToCookbookSheetProps {
   onClose: () => void;
 }
 
+interface Toast {
+  key: number;
+  text: string;
+  kind: 'added' | 'removed' | 'error';
+}
+
 export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCookbookSheetProps) {
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
   const [memberOf, setMemberOf] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +66,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
 
   async function toggle(cookbookId: string) {
     const isMember = memberOf.has(cookbookId);
+    const name = cookbooks.find((cb) => cb.id === cookbookId)?.name ?? 'cookbook';
     // Optimistic
     setMemberOf((prev) => {
       const next = new Set(prev);
@@ -59,16 +74,30 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
       else next.add(cookbookId);
       return next;
     });
-    if (isMember) {
-      await supabase
-        .from('cookbook_recipes')
-        .delete()
-        .eq('cookbook_id', cookbookId)
-        .eq('recipe_id', recipeId);
+    const { error } = isMember
+      ? await supabase
+          .from('cookbook_recipes')
+          .delete()
+          .eq('cookbook_id', cookbookId)
+          .eq('recipe_id', recipeId)
+      : await supabase
+          .from('cookbook_recipes')
+          .insert({ cookbook_id: cookbookId, recipe_id: recipeId });
+    if (error) {
+      // Revert the optimistic tick — never leave a tick that lied.
+      setMemberOf((prev) => {
+        const next = new Set(prev);
+        if (isMember) next.add(cookbookId);
+        else next.delete(cookbookId);
+        return next;
+      });
+      setToast({ key: Date.now(), kind: 'error', text: 'Couldn’t save – try again' });
     } else {
-      await supabase
-        .from('cookbook_recipes')
-        .insert({ cookbook_id: cookbookId, recipe_id: recipeId });
+      setToast({
+        key: Date.now(),
+        kind: isMember ? 'removed' : 'added',
+        text: isMember ? `Removed from ${name}` : `Added to ${name}`,
+      });
     }
   }
 
@@ -122,7 +151,18 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
                       borderColor: checked ? 'var(--green)' : 'transparent',
                     }}
                   >
-                    <span style={{ fontSize: 22 }}>{cb.emoji ?? '📖'}</span>
+                    <span
+                      className="shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        color: 'var(--green)',
+                      }}
+                    >
+                      <BookOpen size={16} strokeWidth={1.6} />
+                    </span>
                     <span
                       className="flex-1 text-left text-sm font-semibold"
                       style={{ color: 'var(--text)' }}
@@ -159,6 +199,42 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
             + New cookbook
           </button>
         </div>
+
+        {/* Save confirmation toast — floats above the sheet, never blocks taps. */}
+        {toast && (
+          <div
+            className="fixed left-1/2 z-[60]"
+            style={{
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)',
+              transform: 'translateX(-50%)',
+              pointerEvents: 'none',
+            }}
+          >
+            <div
+              key={toast.key}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold"
+              style={{
+                background:
+                  toast.kind === 'added'
+                    ? 'var(--green-solid)'
+                    : toast.kind === 'error'
+                      ? 'var(--red)'
+                      : 'var(--text)',
+                color: toast.kind === 'removed' ? 'var(--card)' : '#fff',
+                boxShadow: 'var(--shadow-md)',
+                whiteSpace: 'nowrap',
+                maxWidth: '85vw',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                animation: 'fadeUp 0.25s ease both',
+              }}
+              role="status"
+            >
+              {toast.kind === 'added' ? '✓ ' : toast.kind === 'error' ? '⚠ ' : ''}
+              {toast.text}
+            </div>
+          </div>
+        )}
       </div>
 
       <CookbookFormModal
@@ -170,8 +246,13 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
           supabase
             .from('cookbook_recipes')
             .insert({ cookbook_id: cb.id, recipe_id: recipeId })
-            .then(() => {
+            .then(({ error }) => {
+              if (error) {
+                setToast({ key: Date.now(), kind: 'error', text: 'Couldn’t save – try again' });
+                return;
+              }
               setMemberOf((prev) => new Set(prev).add(cb.id));
+              setToast({ key: Date.now(), kind: 'added', text: `Added to ${cb.name}` });
             });
         }}
       />
