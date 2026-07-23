@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { BookOpen } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import CookbookFormModal from './CookbookFormModal';
+import { fSerif } from '../styles/pieKeeper';
 
 interface Suggestion {
   name: string;
@@ -248,9 +248,12 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
                               height: 44,
                               border: '1px solid var(--border)',
                               color: 'var(--green)',
+                              fontFamily: fSerif,
+                              fontSize: 22,
+                              fontStyle: 'italic',
                             }}
                           >
-                            <BookOpen size={20} strokeWidth={1.5} />
+                            {(s.name.trim()[0] ?? '?').toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold" style={{ color: 'var(--text)' }}>

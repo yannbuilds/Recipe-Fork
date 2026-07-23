@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { BookOpen } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import CookbookFormModal from './CookbookFormModal';
+import { fSerif } from '../styles/pieKeeper';
 
 interface AddToCookbookSheetProps {
   open: boolean;
@@ -16,8 +16,19 @@ interface Toast {
   kind: 'added' | 'removed' | 'error';
 }
 
+// Row from the cover-photo query; Supabase may return the joined
+// `recipes` relation as an object or a single-element array.
+interface CoverRow {
+  cookbook_id: string;
+  recipes:
+    | { image_url: string | null; created_at: string }
+    | { image_url: string | null; created_at: string }[]
+    | null;
+}
+
 export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCookbookSheetProps) {
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
+  const [covers, setCovers] = useState<Record<string, string>>({});
   const [memberOf, setMemberOf] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -34,17 +45,28 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const [cbResult, crResult] = await Promise.all([
+      const [cbResult, crResult, coverResult] = await Promise.all([
         supabase
           .from('cookbooks')
           .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id').eq('recipe_id', recipeId),
+        // Newest recipe photo per cookbook — same source the shelf covers use.
+        supabase.from('cookbook_recipes').select('cookbook_id, recipes(image_url, created_at)'),
       ]);
       if (cancelled) return;
       setCookbooks((cbResult.data as Cookbook[]) ?? []);
       setMemberOf(new Set(((crResult.data ?? []) as { cookbook_id: string }[]).map((r) => r.cookbook_id)));
+      const newest: Record<string, { url: string; at: number }> = {};
+      for (const row of ((coverResult.data ?? []) as unknown) as CoverRow[]) {
+        const rec = Array.isArray(row.recipes) ? row.recipes[0] : row.recipes;
+        if (!rec?.image_url) continue;
+        const at = new Date(rec.created_at).getTime();
+        const cur = newest[row.cookbook_id];
+        if (!cur || at > cur.at) newest[row.cookbook_id] = { url: rec.image_url, at };
+      }
+      setCovers(Object.fromEntries(Object.entries(newest).map(([id, v]) => [id, v.url])));
       setLoading(false);
     }
     load();
@@ -151,18 +173,35 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
                       borderColor: checked ? 'var(--green)' : 'transparent',
                     }}
                   >
-                    <span
-                      className="shrink-0 flex items-center justify-center"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        border: '1px solid var(--border)',
-                        color: 'var(--green)',
-                      }}
-                    >
-                      <BookOpen size={16} strokeWidth={1.6} />
-                    </span>
+                    {covers[cb.id] ? (
+                      <img
+                        src={covers[cb.id]}
+                        alt=""
+                        className="shrink-0 object-cover"
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          border: '1px solid var(--border)',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="shrink-0 flex items-center justify-center"
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          border: '1px solid var(--border)',
+                          color: 'var(--green)',
+                          fontFamily: fSerif,
+                          fontSize: 17,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        {(cb.name.trim()[0] ?? '?').toUpperCase()}
+                      </span>
+                    )}
                     <span
                       className="flex-1 text-left text-sm font-semibold"
                       style={{ color: 'var(--text)' }}

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Cookbook } from '@recipe-aggregator/shared';
+import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
@@ -20,9 +21,20 @@ interface Toast {
   kind: 'added' | 'removed' | 'error';
 }
 
+// Row from the cover-photo query; Supabase may return the joined
+// `recipes` relation as an object or a single-element array.
+interface CoverRow {
+  cookbook_id: string;
+  recipes:
+    | { image_url: string | null; created_at: string }
+    | { image_url: string | null; created_at: string }[]
+    | null;
+}
+
 export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
   const t = useTheme();
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
+  const [covers, setCovers] = useState<Record<string, string>>({});
   const [memberOf, setMemberOf] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -55,17 +67,28 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [cbRes, crRes] = await Promise.all([
+      const [cbRes, crRes, coverRes] = await Promise.all([
         supabase
           .from('cookbooks')
           .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id').eq('recipe_id', recipeId),
+        // Newest recipe photo per cookbook — same source the shelf covers use.
+        supabase.from('cookbook_recipes').select('cookbook_id, recipes(image_url, created_at)'),
       ]);
       if (cancelled) return;
       setCookbooks((cbRes.data as Cookbook[]) ?? []);
       setMemberOf(new Set(((crRes.data ?? []) as { cookbook_id: string }[]).map((r) => r.cookbook_id)));
+      const newest: Record<string, { url: string; at: number }> = {};
+      for (const row of ((coverRes.data ?? []) as unknown) as CoverRow[]) {
+        const rec = Array.isArray(row.recipes) ? row.recipes[0] : row.recipes;
+        if (!rec?.image_url) continue;
+        const at = new Date(rec.created_at).getTime();
+        const cur = newest[row.cookbook_id];
+        if (!cur || at > cur.at) newest[row.cookbook_id] = { url: rec.image_url, at };
+      }
+      setCovers(Object.fromEntries(Object.entries(newest).map(([id, v]) => [id, v.url])));
       setLoading(false);
     })();
     return () => {
@@ -175,19 +198,38 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
                     marginBottom: 4,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: t.border,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Ionicons name="book-outline" size={16} color={t.green} />
-                  </View>
+                  {covers[cb.id] ? (
+                    <Image
+                      source={{ uri: covers[cb.id] }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: t.border,
+                      }}
+                      contentFit="cover"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                      recyclingKey={covers[cb.id]}
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: t.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Serif size={15} italic color={t.green}>
+                        {(cb.name.trim()[0] ?? '?').toUpperCase()}
+                      </Serif>
+                    </View>
+                  )}
                   <Body size={14} weight="semi" style={{ flex: 1 }}>
                     {cb.name}
                   </Body>
