@@ -237,6 +237,82 @@ export function parseIngredientLine(originalLine: string, category = ""): Extrac
   };
 }
 
+interface HtmlIngredientGroup {
+  category: string;
+  lines: string[];
+}
+
+/**
+ * Parse WordPress Recipe Maker ingredient groups out of raw page HTML.
+ * WPRM sites (RecipeTin Eats et al.) emit recipeIngredient as a FLAT list in
+ * JSON-LD — the group headings ("Aromatics", "Broth") exist only in the HTML.
+ */
+function extractWprmIngredientGroups(html: string): HtmlIngredientGroup[] {
+  const groups: HtmlIngredientGroup[] = [];
+  const groupBlocks = html.matchAll(
+    /<div\b[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi,
+  );
+  for (const block of groupBlocks) {
+    const name = block[1].match(
+      /class="[^"]*wprm-recipe-ingredient-group-name[^"]*"[^>]*>([\s\S]*?)<\/h\d>/i,
+    );
+    const category = name ? cleanText(name[1]).replace(/:$/, "").trim() : "";
+    const lines: string[] = [];
+    const items = block[1].matchAll(
+      /<li\b[^>]*class="[^"]*wprm-recipe-ingredient\b[^"]*"[^>]*>([\s\S]*?)<\/li>/gi,
+    );
+    for (const item of items) {
+      // Strip the checkbox widget (its sr-only span leaves a "□" glyph).
+      const text = cleanText(item[1])
+        .replace(/^[□▢☐\s]+/, "")
+        .trim();
+      if (text) lines.push(text);
+    }
+    if (lines.length > 0) groups.push({ category, lines });
+  }
+  return groups;
+}
+
+/**
+ * Assign categories to schema ingredients from the page's WPRM group markup.
+ * Positional when the counts line up (WPRM generates JSON-LD from the same
+ * data, in the same order), falling back to normalised text matching.
+ * No-op when the schema already carries categories or no named groups exist.
+ */
+function applyHtmlIngredientGroups(
+  ingredients: ExtractedIngredient[],
+  html: string,
+): ExtractedIngredient[] {
+  if (ingredients.length === 0 || ingredients.some((i) => i.category)) {
+    return ingredients;
+  }
+  const groups = extractWprmIngredientGroups(html);
+  if (!groups.some((g) => g.category)) return ingredients;
+
+  const flat = groups.flatMap((g) =>
+    g.lines.map((line) => ({ category: g.category, line }))
+  );
+
+  if (flat.length === ingredients.length) {
+    return ingredients.map((ingredient, index) => ({
+      ...ingredient,
+      category: flat[index].category,
+    }));
+  }
+
+  const normalise = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const byText = new Map<string, string[]>();
+  for (const { category, line } of flat) {
+    const key = normalise(line);
+    byText.set(key, [...(byText.get(key) ?? []), category]);
+  }
+  return ingredients.map((ingredient) => {
+    const category = byText.get(normalise(ingredient.original_text))?.shift();
+    return category ? { ...ingredient, category } : ingredient;
+  });
+}
+
 function flattenIngredients(value: unknown, category = ""): ExtractedIngredient[] {
   if (typeof value === "string") {
     const ingredient = parseIngredientLine(value, category);
@@ -248,7 +324,7 @@ function flattenIngredients(value: unknown, category = ""): ExtractedIngredient[
   if (!isObject(value)) return [];
 
   if (hasType(value["@type"], "HowToSection")) {
-    const section = cleanText(value.name) || category;
+    const section = cleanText(value.name).replace(/:$/, "").trim() || category;
     return flattenIngredients(value.itemListElement ?? value.ingredients, section);
   }
 
@@ -266,7 +342,7 @@ function flattenSteps(value: unknown, category = ""): Omit<ExtractedStep, "order
   if (!isObject(value)) return [];
 
   if (hasType(value["@type"], "HowToSection")) {
-    const section = cleanText(value.name) || category;
+    const section = cleanText(value.name).replace(/:$/, "").trim() || category;
     return flattenSteps(value.itemListElement ?? value.steps, section);
   }
 
@@ -348,7 +424,10 @@ export function extractSchemaRecipe(html: string, sourceUrl: string): SchemaReci
   const node = extractRecipeNode(html);
   if (!node) return null;
 
-  const ingredients = flattenIngredients(node.recipeIngredient ?? node.ingredients);
+  const ingredients = applyHtmlIngredientGroups(
+    flattenIngredients(node.recipeIngredient ?? node.ingredients),
+    html,
+  );
   const steps = flattenSteps(node.recipeInstructions ?? node.instructions)
     .map((step, index) => ({ ...step, order: index + 1 }));
   const videoUrl = normaliseVideoUrl(node.video) ?? extractVideoUrlsFromHtml(html)[0] ?? null;
@@ -405,7 +484,9 @@ export function mergeIngredientEnrichment(
       item: item || ingredient.item,
       quantity: quantity || ingredient.quantity,
       unit: unit || ingredient.unit,
-      category: cleanText(candidate.category) || ingredient.category,
+      // Deterministic categories (JSON-LD sections / WPRM page groups) beat
+      // the AI's guess; the AI only fills categories the page didn't provide.
+      category: ingredient.category || cleanText(candidate.category),
     };
   });
 }

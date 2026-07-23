@@ -29,6 +29,35 @@ interface RecipeData {
   tags: Tag[];
 }
 
+// Lowercase roman numeral for editorial group labels (i, ii, iii …).
+function toRoman(n: number): string {
+  const map: [number, string][] = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  let out = '';
+  for (const [v, s] of map) {
+    while (n >= v) {
+      out += s;
+      n -= v;
+    }
+  }
+  return out;
+}
+
+// Group ingredients/steps by their category, preserving order and each item's
+// original index (check-off state stays keyed by that index). Items without a
+// category all land in a single '' group, mirroring the web app.
+function groupByCategory<T extends { category?: string | null }>(
+  items: T[],
+): { category: string; items: { value: T; index: number }[] }[] {
+  const groups: { category: string; items: { value: T; index: number }[] }[] = [];
+  items.forEach((value, index) => {
+    const category = value.category || '';
+    const existing = groups.find((g) => g.category === category);
+    if (existing) existing.items.push({ value, index });
+    else groups.push({ category, items: [{ value, index }] });
+  });
+  return groups;
+}
+
 async function fetchRecipe(id: string): Promise<RecipeData> {
   const [recipeRes, tagsRes] = await Promise.all([
     supabase.from('recipes').select('*').eq('id', id).single(),
@@ -564,98 +593,129 @@ export default function RecipeDetailScreen() {
             }}
           >
             {tab === 'ingredients'
-              ? recipe.ingredients.map((ing, i) => {
-                  const key = `${i}`;
-                  const used = usedIngredients.has(key);
-                  const name = ing.item || ing.original_text || '';
-                  const qty =
-                    ing.quantity || ing.unit
-                      ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
-                      : '';
-                  return (
-                    <Pressable
-                      key={i}
-                      onPress={() => {
-                        haptics.select();
-                        setUsedIngredients((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(key)) next.delete(key);
-                          else next.add(key);
-                          return next;
-                        });
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                        paddingVertical: 12,
-                        borderBottomWidth: i < recipe.ingredients.length - 1 ? 1 : 0,
-                        borderBottomColor: t.ruleHair,
-                      }}
-                    >
-                      <CheckSquare checked={used} />
-                      <IngredientIcon item={ing.item || ''} />
-                      <Serif
-                        size={16}
-                        color={used ? t.muted : t.text}
-                        style={{ flex: 1, textDecorationLine: used ? 'line-through' : 'none' }}
-                      >
-                        {name}
-                      </Serif>
-                      {qty ? <Mono size={11}>{qty}</Mono> : null}
-                    </Pressable>
-                  );
-                })
-              : steps.map((step, i) => {
-                  const done = completedSteps.has(step.order);
-                  return (
-                    <Pressable
-                      key={step.order}
-                      onPress={() => {
-                        haptics.select();
-                        setCompletedSteps((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(step.order)) next.delete(step.order);
-                          else next.add(step.order);
-                          return next;
-                        });
-                      }}
-                      style={{ flexDirection: 'row', gap: 12, paddingBottom: 20 }}
-                    >
-                      <View style={{ alignItems: 'center' }}>
-                        <View
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 15,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: done ? t.muted : t.green,
-                          }}
-                        >
-                          <Body size={13} weight="bold" color={t.onGreen}>
-                            {done ? '✓' : i + 1}
-                          </Body>
-                        </View>
-                        {i < steps.length - 1 && (
-                          <View style={{ flex: 1, width: 2, backgroundColor: t.greenLight, marginTop: 2 }} />
-                        )}
-                      </View>
-                      <Body
-                        size={15}
-                        color={done ? t.muted : t.text}
+              ? groupByCategory(recipe.ingredients).map((group, gi) => (
+                  <View key={group.category || `group-${gi}`} style={{ marginTop: gi > 0 ? 20 : 0 }}>
+                    {group.category ? (
+                      <View
                         style={{
-                          flex: 1,
-                          lineHeight: 22,
-                          paddingTop: 4,
-                          textDecorationLine: done ? 'line-through' : 'none',
+                          flexDirection: 'row',
+                          alignItems: 'baseline',
+                          gap: 10,
+                          paddingBottom: 8,
+                          marginBottom: 4,
+                          borderBottomWidth: 1,
+                          borderBottomColor: t.border,
                         }}
                       >
-                        {step.instruction}
-                      </Body>
-                    </Pressable>
-                  );
-                })}
+                        <Serif size={13} italic color={t.green}>
+                          {toRoman(gi + 1)}.
+                        </Serif>
+                        <Serif size={18} style={{ flex: 1 }}>
+                          {group.category}
+                        </Serif>
+                      </View>
+                    ) : null}
+                    {group.items.map(({ value: ing, index }, i) => {
+                      const key = `${index}`;
+                      const used = usedIngredients.has(key);
+                      const name = ing.item || ing.original_text || '';
+                      const qty =
+                        ing.quantity || ing.unit
+                          ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
+                          : '';
+                      return (
+                        <Pressable
+                          key={index}
+                          onPress={() => {
+                            haptics.select();
+                            setUsedIngredients((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key);
+                              else next.add(key);
+                              return next;
+                            });
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 12,
+                            paddingVertical: 12,
+                            borderBottomWidth: i < group.items.length - 1 ? 1 : 0,
+                            borderBottomColor: t.ruleHair,
+                          }}
+                        >
+                          <CheckSquare checked={used} />
+                          <IngredientIcon item={ing.item || ''} />
+                          <Serif
+                            size={16}
+                            color={used ? t.muted : t.text}
+                            style={{ flex: 1, textDecorationLine: used ? 'line-through' : 'none' }}
+                          >
+                            {name}
+                          </Serif>
+                          {qty ? <Mono size={11}>{qty}</Mono> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))
+              : groupByCategory(steps).map((group, gi) => (
+                  <View key={group.category || `group-${gi}`} style={{ marginTop: gi > 0 ? 8 : 0 }}>
+                    {group.category ? (
+                      <Eyebrow style={{ marginBottom: 12 }}>{group.category}</Eyebrow>
+                    ) : null}
+                    {group.items.map(({ value: step }, i) => {
+                      const done = completedSteps.has(step.order);
+                      return (
+                        <Pressable
+                          key={step.order}
+                          onPress={() => {
+                            haptics.select();
+                            setCompletedSteps((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(step.order)) next.delete(step.order);
+                              else next.add(step.order);
+                              return next;
+                            });
+                          }}
+                          style={{ flexDirection: 'row', gap: 12, paddingBottom: 20 }}
+                        >
+                          <View style={{ alignItems: 'center' }}>
+                            <View
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 15,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: done ? t.muted : t.green,
+                              }}
+                            >
+                              <Body size={13} weight="bold" color={t.onGreen}>
+                                {done ? '✓' : i + 1}
+                              </Body>
+                            </View>
+                            {i < group.items.length - 1 && (
+                              <View style={{ flex: 1, width: 2, backgroundColor: t.greenLight, marginTop: 2 }} />
+                            )}
+                          </View>
+                          <Body
+                            size={15}
+                            color={done ? t.muted : t.text}
+                            style={{
+                              flex: 1,
+                              lineHeight: 22,
+                              paddingTop: 4,
+                              textDecorationLine: done ? 'line-through' : 'none',
+                            }}
+                          >
+                            {step.instruction}
+                          </Body>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
           </View>
 
           {videoId && (

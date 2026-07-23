@@ -84,6 +84,7 @@ Rules:
 - Copy original_text exactly. Do not alter punctuation, fractions, conversions, notes, or qualifiers.
 - Parse the leading amount into quantity, the unit into unit, and the remaining ingredient into item.
 - For dual measurements separated by "/", use only the first quantity and unit; original_text retains both.
+- Categories: if the input includes an "[Ingredient group headings from page]" block, assign each ingredient's "category" from those headings — the headings appear in the same order as the ingredient list, so decide which heading each ingredient falls under. Strip trailing colons from category names. If an input ingredient already has a category, keep it. If no headings block is provided, return the category unchanged.
 - Suggest 3–5 useful lowercase tags limited to cuisine, main protein, meal type, or dietary restriction.
 - Never add ingredients that were not in the input.`;
 
@@ -797,6 +798,14 @@ Deno.serve(async (req) => {
     const schemaComplete = schemaRecipe !== null &&
       validateRecipeCompleteness(schemaRecipe).length === 0;
     const htmlExtractedNotes = extractRecipeNotes(html);
+    // When the schema path couldn't derive ingredient categories (non-WPRM
+    // sites list ingredients flat), hand the page's group headings to the
+    // enrichment model so it can assign them — the pre-schema pipeline did
+    // this via full-page extraction.
+    const enrichmentHeadings =
+      schemaComplete && !schemaRecipe.ingredients.some((i) => i.category)
+        ? extractIngredientSections(html)
+        : null;
     const content = schemaComplete
       ? JSON.stringify({
         title: schemaRecipe.title,
@@ -805,7 +814,9 @@ Deno.serve(async (req) => {
           original_text: ingredient.original_text,
           category: ingredient.category,
         })),
-      })
+      }) + (enrichmentHeadings
+        ? `\n\n[Ingredient group headings from page]:\n${enrichmentHeadings}`
+        : "")
       : buildLlmPayload(html, url);
 
     if (!schemaComplete && content.length < 100) {

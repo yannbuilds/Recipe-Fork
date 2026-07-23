@@ -109,6 +109,57 @@ assert.deepEqual(recipe.steps, [
 ]);
 assert.deepEqual(validateRecipeCompleteness(recipe), []);
 
+// WPRM sites (e.g. RecipeTin Eats) list recipeIngredient FLAT in JSON-LD;
+// the group headings live only in the page HTML. The extractor must lift
+// them from the wprm-recipe-ingredient-group markup.
+const wprmSchema = {
+  '@type': 'Recipe',
+  name: 'Test Pho',
+  recipeIngredient: [
+    '2  large onions (, halved)',
+    '10  star anise',
+    '1.5 kg / 3 lb  brisket',
+  ],
+  recipeInstructions: [{ '@type': 'HowToStep', text: 'Simmer everything.' }],
+};
+const wprmHtml = `<!doctype html>
+<html><head>
+<script type="application/ld+json">${JSON.stringify(wprmSchema)}</script>
+</head><body>
+<div class="wprm-recipe-ingredient-group"><h4 class="wprm-recipe-group-name wprm-recipe-ingredient-group-name">Aromatics:</h4><ul class="wprm-recipe-ingredients"><li class="wprm-recipe-ingredient"><span class="wprm-checkbox-container"><input type="checkbox" aria-label="x"><label><span class="sr-only">&#9634; </span></label></span><span class="wprm-recipe-ingredient-amount">2</span> <span class="wprm-recipe-ingredient-name">large onions</span> <span class="wprm-recipe-ingredient-notes">, halved</span></li></ul></div>
+<div class="wprm-recipe-ingredient-group"><h4 class="wprm-recipe-group-name wprm-recipe-ingredient-group-name">Spices</h4><ul class="wprm-recipe-ingredients"><li class="wprm-recipe-ingredient"><span class="wprm-recipe-ingredient-amount">10</span> <span class="wprm-recipe-ingredient-name">star anise</span></li></ul></div>
+<div class="wprm-recipe-ingredient-group"><h4 class="wprm-recipe-group-name wprm-recipe-ingredient-group-name">Beef:</h4><ul class="wprm-recipe-ingredients"><li class="wprm-recipe-ingredient"><span class="wprm-recipe-ingredient-amount">1.5</span> <span class="wprm-recipe-ingredient-unit">kg</span> <span class="wprm-recipe-ingredient-name">brisket</span></li></ul></div>
+</body></html>`;
+const wprmRecipe = extractSchemaRecipe(wprmHtml, 'https://example.com/pho');
+assert.ok(wprmRecipe, 'extracts the WPRM recipe');
+assert.deepEqual(
+  wprmRecipe.ingredients.map((i) => i.category),
+  ['Aromatics', 'Spices', 'Beef'],
+  'lifts ingredient group headings from WPRM HTML onto flat JSON-LD ingredients',
+);
+assert.equal(
+  wprmRecipe.ingredients[0].original_text,
+  '2 large onions (, halved)',
+  'original_text still comes from JSON-LD, not the HTML groups',
+);
+
+// A deterministic page-derived category must survive AI enrichment.
+const wprmEnriched = mergeIngredientEnrichment(wprmRecipe.ingredients, [
+  {
+    original_text: '2 large onions (, halved)',
+    item: 'large onions, halved',
+    quantity: '2',
+    unit: '',
+    category: 'Wrong AI Guess',
+  },
+]);
+assert.equal(
+  wprmEnriched[0].category,
+  'Aromatics',
+  'schema/page category beats the AI category',
+);
+assert.equal(wprmEnriched[0].item, 'large onions, halved', 'AI still enriches item');
+
 const enriched = mergeIngredientEnrichment(recipe.ingredients, [
   {
     original_text: '2½ cups chicken stock',
