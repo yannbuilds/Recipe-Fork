@@ -340,22 +340,57 @@ function liftInlineHeadingCategories(
   return result.length > 0 ? result : ingredients;
 }
 
-function flattenIngredients(value: unknown, category = ""): ExtractedIngredient[] {
+function flattenIngredients(
+  value: unknown,
+  category = "",
+  blankSeparatedHeadings = false,
+): ExtractedIngredient[] {
   if (typeof value === "string") {
     const ingredient = parseIngredientLine(value, category);
     return ingredient.original_text ? [ingredient] : [];
   }
   if (Array.isArray(value)) {
-    return value.flatMap((item) => flattenIngredients(item, category));
+    if (!blankSeparatedHeadings) {
+      return value.flatMap((item) => flattenIngredients(item, category));
+    }
+
+    // Marion's Kitchen represents ingredient groups as:
+    //   "&nbsp;", "Quick pickled vegetables", "200g carrots", ...
+    // The heading has no colon, so retain the blank-row boundary while
+    // flattening and use the following line as the active category.
+    const ingredients: ExtractedIngredient[] = [];
+    let activeCategory = category;
+    let afterBlankSeparator = false;
+    for (const item of value) {
+      if (typeof item === "string" && !cleanText(item)) {
+        afterBlankSeparator = true;
+        continue;
+      }
+      if (afterBlankSeparator && typeof item === "string") {
+        const heading = cleanText(item).replace(/:$/, "").trim();
+        if (heading) {
+          activeCategory = heading;
+          afterBlankSeparator = false;
+          continue;
+        }
+      }
+      ingredients.push(...flattenIngredients(item, activeCategory, true));
+      afterBlankSeparator = false;
+    }
+    return ingredients;
   }
   if (!isObject(value)) return [];
 
   if (hasType(value["@type"], "HowToSection")) {
     const section = cleanText(value.name).replace(/:$/, "").trim() || category;
-    return flattenIngredients(value.itemListElement ?? value.ingredients, section);
+    return flattenIngredients(
+      value.itemListElement ?? value.ingredients,
+      section,
+      blankSeparatedHeadings,
+    );
   }
 
-  return flattenIngredients(value.text ?? value.name, category);
+  return flattenIngredients(value.text ?? value.name, category, blankSeparatedHeadings);
 }
 
 function flattenSteps(value: unknown, category = ""): Omit<ExtractedStep, "order">[] {
@@ -451,9 +486,23 @@ export function extractSchemaRecipe(html: string, sourceUrl: string): SchemaReci
   const node = extractRecipeNode(html);
   if (!node) return null;
 
+  let isMarionsKitchen = false;
+  try {
+    const hostname = new URL(sourceUrl).hostname.toLowerCase();
+    isMarionsKitchen =
+      hostname === "marionskitchen.com" || hostname.endsWith(".marionskitchen.com");
+  } catch {
+    // Invalid source URLs are handled by the caller; they should not enable
+    // site-specific parsing heuristics.
+  }
+
   const ingredients = applyHtmlIngredientGroups(
     liftInlineHeadingCategories(
-      flattenIngredients(node.recipeIngredient ?? node.ingredients),
+      flattenIngredients(
+        node.recipeIngredient ?? node.ingredients,
+        "",
+        isMarionsKitchen,
+      ),
     ),
     html,
   );

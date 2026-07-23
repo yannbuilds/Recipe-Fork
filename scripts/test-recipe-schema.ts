@@ -143,36 +143,69 @@ assert.equal(
   'original_text still comes from JSON-LD, not the HTML groups',
 );
 
-// Some sites (marionskitchen.com) embed group headings as pseudo-ingredient
-// lines ("Dressing:") in the flat recipeIngredient list. They must be lifted
-// into categories, not saved as ingredients.
+// Marion's Kitchen embeds group headings as colonless pseudo-ingredient lines
+// after "&nbsp;" separators in its flat recipeIngredient list. They must be
+// lifted into categories, not saved as ingredients.
 const inlineHeadingSchema = {
   '@type': 'Recipe',
-  name: 'Test Sesame Noodles',
+  name: 'Char Siu Pork Noodle Salad Bowl',
   recipeIngredient: [
     '2 cups bean shoots',
     'chilli oil, to serve (optional)',
     '&nbsp;',
-    'Dressing:',
-    '2 cloves garlic, coarsely chopped',
-    '2 tbsp sesame oil',
+    'Quick pickled vegetables',
+    '200g (7 oz) pre-cut shredded or julienned carrots (or do your own)',
+    '1 cucumber, sliced into thin rounds',
+    '&nbsp;',
+    'Nuoc cham dressing',
+    '½ cup fish sauce',
+    '3 tbsp white vinegar',
   ],
   recipeInstructions: [{ '@type': 'HowToStep', text: 'Toss it all together.' }],
 };
 const inlineHeadingHtml = `<html><head><script type="application/ld+json">${
   JSON.stringify(inlineHeadingSchema)
 }</script></head><body></body></html>`;
-const inlineHeadingRecipe = extractSchemaRecipe(inlineHeadingHtml, 'https://example.com/noodles');
+const inlineHeadingRecipe = extractSchemaRecipe(
+  inlineHeadingHtml,
+  'https://www.marionskitchen.com/char-siu-pork-noodle-salad-bowl/',
+);
 assert.ok(inlineHeadingRecipe, 'extracts the inline-heading recipe');
 assert.deepEqual(
   inlineHeadingRecipe.ingredients.map((i) => [i.original_text, i.category]),
   [
     ['2 cups bean shoots', ''],
     ['chilli oil, to serve (optional)', ''],
-    ['2 cloves garlic, coarsely chopped', 'Dressing'],
+    [
+      '200g (7 oz) pre-cut shredded or julienned carrots (or do your own)',
+      'Quick pickled vegetables',
+    ],
+    ['1 cucumber, sliced into thin rounds', 'Quick pickled vegetables'],
+    ['½ cup fish sauce', 'Nuoc cham dressing'],
+    ['3 tbsp white vinegar', 'Nuoc cham dressing'],
+  ],
+  'Marion headings become categories and blank lines are dropped',
+);
+
+// Colon-suffixed pseudo-ingredient headings remain supported generically.
+const colonHeadingSchema = {
+  '@type': 'Recipe',
+  name: 'Test Sesame Noodles',
+  recipeIngredient: ['2 cups bean shoots', 'Dressing:', '2 tbsp sesame oil'],
+  recipeInstructions: [{ '@type': 'HowToStep', text: 'Toss it all together.' }],
+};
+const colonHeadingHtml = `<html><head><script type="application/ld+json">${
+  JSON.stringify(colonHeadingSchema)
+}</script></head><body></body></html>`;
+const colonHeadingRecipe = extractSchemaRecipe(colonHeadingHtml, 'https://example.com/noodles');
+assert.ok(colonHeadingRecipe, 'extracts the colon-heading recipe');
+assert.deepEqual(
+  colonHeadingRecipe.ingredients.map((i) => [i.original_text, i.category]),
+  [
+    ['2 cups bean shoots', ''],
     ['2 tbsp sesame oil', 'Dressing'],
   ],
-  'heading lines become categories and blank lines are dropped',
+  'colon-suffixed headings still become categories for other sites',
 );
 
 // A deterministic page-derived category must survive AI enrichment.
