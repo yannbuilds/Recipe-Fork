@@ -143,6 +143,38 @@ assert.equal(
   'original_text still comes from JSON-LD, not the HTML groups',
 );
 
+// Some sites (marionskitchen.com) embed group headings as pseudo-ingredient
+// lines ("Dressing:") in the flat recipeIngredient list. They must be lifted
+// into categories, not saved as ingredients.
+const inlineHeadingSchema = {
+  '@type': 'Recipe',
+  name: 'Test Sesame Noodles',
+  recipeIngredient: [
+    '2 cups bean shoots',
+    'chilli oil, to serve (optional)',
+    '&nbsp;',
+    'Dressing:',
+    '2 cloves garlic, coarsely chopped',
+    '2 tbsp sesame oil',
+  ],
+  recipeInstructions: [{ '@type': 'HowToStep', text: 'Toss it all together.' }],
+};
+const inlineHeadingHtml = `<html><head><script type="application/ld+json">${
+  JSON.stringify(inlineHeadingSchema)
+}</script></head><body></body></html>`;
+const inlineHeadingRecipe = extractSchemaRecipe(inlineHeadingHtml, 'https://example.com/noodles');
+assert.ok(inlineHeadingRecipe, 'extracts the inline-heading recipe');
+assert.deepEqual(
+  inlineHeadingRecipe.ingredients.map((i) => [i.original_text, i.category]),
+  [
+    ['2 cups bean shoots', ''],
+    ['chilli oil, to serve (optional)', ''],
+    ['2 cloves garlic, coarsely chopped', 'Dressing'],
+    ['2 tbsp sesame oil', 'Dressing'],
+  ],
+  'heading lines become categories and blank lines are dropped',
+);
+
 // A deterministic page-derived category must survive AI enrichment.
 const wprmEnriched = mergeIngredientEnrichment(wprmRecipe.ingredients, [
   {

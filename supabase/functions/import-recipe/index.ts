@@ -635,7 +635,7 @@ async function fetchPageHtml(
  */
 async function rehostImage(imageUrl: string, sourcePageUrl: string): Promise<string> {
   try {
-    const imgRes = await fetch(imageUrl, {
+    let imgRes = await fetch(imageUrl, {
       headers: {
         "User-Agent": BROWSER_HEADERS["User-Agent"],
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -643,7 +643,19 @@ async function rehostImage(imageUrl: string, sourcePageUrl: string): Promise<str
       },
     });
     if (!imgRes.ok) {
-      console.warn(`[import-recipe] Image download ${imgRes.status} for ${imageUrl}`);
+      // Cloudflare-protected CDNs (e.g. marionskitchen.com) 403 requests
+      // from datacenter IPs regardless of headers. images.weserv.nl fetches
+      // the image from its own infrastructure and re-serves it; we still
+      // store the bytes in our own bucket, so the proxy is import-time only.
+      console.warn(
+        `[import-recipe] Image download ${imgRes.status} for ${imageUrl} — trying proxy`,
+      );
+      imgRes = await fetch(
+        `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}`,
+      );
+    }
+    if (!imgRes.ok) {
+      console.warn(`[import-recipe] Image proxy download ${imgRes.status} for ${imageUrl}`);
       return imageUrl;
     }
 

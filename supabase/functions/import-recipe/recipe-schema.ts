@@ -313,6 +313,33 @@ function applyHtmlIngredientGroups(
   });
 }
 
+/**
+ * Sites like marionskitchen.com embed group headings as pseudo-ingredient
+ * lines ("Dressing:") inside the flat recipeIngredient list. Lift them out:
+ * the heading line is removed and becomes the category of the lines that
+ * follow it, until the next heading.
+ */
+function liftInlineHeadingCategories(
+  ingredients: ExtractedIngredient[],
+): ExtractedIngredient[] {
+  const isHeading = (ing: ExtractedIngredient) =>
+    !ing.quantity && !ing.unit && /^[^\d]{1,50}:$/.test(ing.original_text.trim());
+  if (!ingredients.some(isHeading)) return ingredients;
+
+  const result: ExtractedIngredient[] = [];
+  let category = "";
+  for (const ingredient of ingredients) {
+    if (isHeading(ingredient)) {
+      category = ingredient.original_text.trim().replace(/:$/, "").trim();
+      continue;
+    }
+    result.push(
+      category && !ingredient.category ? { ...ingredient, category } : ingredient,
+    );
+  }
+  return result.length > 0 ? result : ingredients;
+}
+
 function flattenIngredients(value: unknown, category = ""): ExtractedIngredient[] {
   if (typeof value === "string") {
     const ingredient = parseIngredientLine(value, category);
@@ -425,7 +452,9 @@ export function extractSchemaRecipe(html: string, sourceUrl: string): SchemaReci
   if (!node) return null;
 
   const ingredients = applyHtmlIngredientGroups(
-    flattenIngredients(node.recipeIngredient ?? node.ingredients),
+    liftInlineHeadingCategories(
+      flattenIngredients(node.recipeIngredient ?? node.ingredients),
+    ),
     html,
   );
   const steps = flattenSteps(node.recipeInstructions ?? node.instructions)
