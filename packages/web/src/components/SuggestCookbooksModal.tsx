@@ -144,31 +144,42 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         onClick={editing ? undefined : onClose}
-        style={{ animation: 'fadeIn 0.15s ease both' }}
+        style={{
+          animation: 'fadeIn 0.15s ease both',
+          padding: 12,
+          // Keep the whole dialog above the fixed bottom nav so the action row
+          // is never hidden behind it, no matter how many suggestions there are.
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+        }}
       >
         <div
-          className="rf-card max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          style={{ padding: 24 }}
+          className="rf-card max-w-2xl w-full max-h-full flex flex-col overflow-hidden"
+          style={{ padding: 0 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between mb-1">
-            <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
-              ✨ Suggested cookbooks
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-2xl leading-none px-2"
-              style={{ color: 'var(--muted)' }}
-              aria-label="Close"
-            >
-              ×
-            </button>
+          <div className="shrink-0" style={{ padding: '24px 24px 0' }}>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
+                ✨ Suggested cookbooks
+              </h2>
+              <button
+                onClick={onClose}
+                className="text-2xl leading-none px-2"
+                style={{ color: 'var(--muted)' }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              Themed groupings based on the recipes in your library.
+            </p>
           </div>
-          <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
-            Themed groupings based on the recipes in your library.
-          </p>
+
+          {/* Scrollable body — only the suggestions scroll; the footer stays pinned. */}
+          <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '16px 24px' }}>
 
           {status === 'loading' && (
             <div className="space-y-3">
@@ -349,7 +360,13 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
             </>
           )}
 
-          <div className="flex justify-end gap-3 pt-5 mt-4" style={{ borderTop: '1px solid var(--border)' }}>
+          </div>
+
+          {/* Pinned footer — always visible regardless of list length. */}
+          <div
+            className="shrink-0 flex justify-end gap-3"
+            style={{ borderTop: '1px solid var(--border)', padding: '16px 24px' }}
+          >
             <button onClick={onClose} className="rf-btn rf-btn-secondary">
               Close
             </button>
