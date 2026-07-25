@@ -7,6 +7,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
 import DayOptionsSheet from '@/components/DayOptionsSheet';
+import { DragFloater, DragGrip, useDragToDay } from '@/components/DragToDay';
 import IngredientIcon from '@/components/IngredientIcon';
 import PlanWeekSheet, { type PlanPick, type PlanPrefs } from '@/components/PlanWeekSheet';
 import RateCookSheet from '@/components/RateCookSheet';
@@ -68,6 +69,13 @@ export default function MealPlanScreen() {
   const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorised = useRef('');
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  // Drag a meal onto any day — or onto "not on a day yet" to unschedule it.
+  const drag = useDragToDay({
+    scrollRef,
+    onDrop: (entryId, key) => moveEntry(entryId, key === 'none' ? null : key, true),
+  });
 
   // Plan-mode answers live on the profile, not in context — only this screen
   // needs them, and only when the user opens plan mode.
@@ -289,8 +297,9 @@ export default function MealPlanScreen() {
     setDaySheet(null);
   }
 
-  async function moveEntry(entryId: string, dayIndex: number | null) {
-    haptics.select();
+  /** `quiet` skips the tick — a drag has already buzzed on landing. */
+  async function moveEntry(entryId: string, dayIndex: number | null, quiet = false) {
+    if (!quiet) haptics.select();
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, day_index: dayIndex } : e)));
     setMoving(null);
     await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
@@ -408,9 +417,32 @@ export default function MealPlanScreen() {
     ? 'Loading your week…'
     : mealEntries.length === 0
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
-      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
+      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked. Drag a meal to any day.`;
 
   const existingIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+
+  // ── Cooking ─────────────────────────────────────────
+  /**
+   * A real cook that hasn't happened yet. Leftovers ('batch') nights reheat the
+   * same pot and eating out isn't cooking, so neither offers to start a cook.
+   */
+  function canCook(entry: MealPlanEntry): boolean {
+    return entry.entry_type === 'cook' && !entry.is_cooked && !!entry.recipe_id;
+  }
+
+  /**
+   * Cook mode on the recipe screen: keeps the screen awake, ticks off
+   * ingredients and steps, then "Mark as cooked" flips this plan row, logs the
+   * cook in the recipe's history and asks how it went.
+   */
+  function startCooking(entry: MealPlanEntry) {
+    if (!entry.recipe_id) return;
+    haptics.medium();
+    router.push({
+      pathname: '/recipe/[id]',
+      params: { id: entry.recipe_id, cook: '1', entry: entry.id },
+    });
+  }
 
   // ── Row rendering ───────────────────────────────────
   function renderEntry(entry: MealPlanEntry, isToday: boolean) {
@@ -498,29 +530,47 @@ export default function MealPlanScreen() {
           )}
         </Pressable>
 
-        {/* Today gets the only primary button on the screen. */}
-        {isToday && !cooked && entry.recipe_id ? (
+        {/* Any night can be cooked right now — the pot doesn't care what the
+            calendar says. Today gets the labelled primary button; the rest get
+            a quiet flame so the hierarchy still reads. Leftovers nights get
+            nothing: there's nothing to cook, only to reheat. */}
+        {canCook(entry) ? (
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/recipe/[id]',
-                params: { id: entry.recipe_id as string, cook: '1', entry: entry.id },
-              })
+            onPress={() => startCooking(entry)}
+            hitSlop={6}
+            style={
+              isToday
+                ? {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 13,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: t.greenSolid,
+                  }
+                : {
+                    width: 32,
+                    height: 32,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: t.border,
+                    backgroundColor: t.card,
+                  }
             }
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 5,
-              paddingHorizontal: 13,
-              paddingVertical: 6,
-              borderRadius: 999,
-              backgroundColor: t.greenSolid,
-            }}
           >
-            <Ionicons name="flame" size={12} color={t.onGreen} />
-            <Body size={12.5} weight="medium" color={t.onGreen}>
-              Cook
-            </Body>
+            <Ionicons
+              name={isToday ? 'flame' : 'flame-outline'}
+              size={isToday ? 12 : 15}
+              color={isToday ? t.onGreen : t.green}
+            />
+            {isToday ? (
+              <Body size={12.5} weight="medium" color={t.onGreen}>
+                Cook
+              </Body>
+            ) : null}
           </Pressable>
         ) : null}
 
@@ -548,6 +598,27 @@ export default function MealPlanScreen() {
 
   const menuActions = entryMenu
     ? ([
+        canCook(entryMenu)
+          ? {
+              label: 'Cook now',
+              primary: true,
+              run: () => {
+                const e = entryMenu;
+                setEntryMenu(null);
+                startCooking(e);
+              },
+            }
+          : null,
+        entryMenu.recipe_id
+          ? {
+              label: 'View recipe',
+              run: () => {
+                const id = entryMenu.recipe_id as string;
+                setEntryMenu(null);
+                router.push({ pathname: '/recipe/[id]', params: { id } });
+              },
+            }
+          : null,
         !entryMenu.is_cooked && entryMenu.entry_type !== 'out'
           ? {
               label: entryMenu.entry_type === 'batch' ? 'Mark eaten' : 'Mark cooked',
@@ -593,12 +664,28 @@ export default function MealPlanScreen() {
             }
           : null,
         { label: 'Remove from the week', run: () => removeEntry(entryMenu.id), danger: true },
-      ].filter(Boolean) as { label: string; run: () => void; danger?: boolean }[])
+      ].filter(Boolean) as {
+        label: string;
+        run: () => void;
+        danger?: boolean;
+        primary?: boolean;
+      }[])
     : [];
 
+  const draggedEntry = entries.find((e) => e.id === drag.activeId) ?? null;
+  const unplacedOver = drag.dragging && drag.hover === 'none';
+
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }} ref={drag.rootRef}>
+      <ScrollView
+        ref={scrollRef}
+        // Frozen mid-drag: the grip owns the gesture, and the list scrolls
+        // itself when the finger nears an edge.
+        scrollEnabled={!drag.dragging}
+        scrollEventThrottle={16}
+        onScroll={(e) => drag.handleScroll(e.nativeEvent.contentOffset.y)}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 }}
+      >
         {/* ── Masthead: one line, plus the week control ── */}
         <View
           style={{
@@ -757,21 +844,25 @@ export default function MealPlanScreen() {
               const dayEntries = entriesForDay(entries, d);
               const isToday = today === d;
               const date = dayDate(weekStart, d);
+              const isOver = drag.dragging && drag.hover === d;
+              const lit = isToday || isOver;
               return (
                 <View
                   key={d}
+                  ref={drag.zoneRef(d)}
                   style={{
                     flexDirection: 'row',
                     gap: 12,
                     alignItems: dayEntries.length > 0 ? 'flex-start' : 'center',
-                    paddingHorizontal: isToday ? 9 : 0,
+                    paddingHorizontal: lit ? 9 : 0,
                     paddingVertical: 9,
-                    marginHorizontal: isToday ? -9 : 0,
+                    marginHorizontal: lit ? -9 : 0,
                     marginVertical: isToday ? 4 : 0,
-                    borderRadius: isToday ? 4 : 0,
-                    backgroundColor: isToday ? t.card : 'transparent',
-                    borderLeftWidth: isToday ? 2 : 0,
+                    borderRadius: lit ? 4 : 0,
+                    backgroundColor: isOver ? t.greenLight : isToday ? t.card : 'transparent',
+                    borderLeftWidth: lit ? 2 : 0,
                     borderLeftColor: t.green,
+                    // Height must not change mid-drag or the measured zones drift.
                     borderBottomWidth: isToday ? 0 : 1,
                     borderBottomColor: t.ruleHair,
                   }}
@@ -780,7 +871,7 @@ export default function MealPlanScreen() {
                     onPress={() => (moving ? moveEntry(moving, d) : setDaySheet(d))}
                     style={{ width: 34, marginTop: dayEntries.length > 0 ? 10 : 0 }}
                   >
-                    <Mono size={9} color={isToday ? t.green : t.muted} style={{ letterSpacing: 0.6, lineHeight: 12 }}>
+                    <Mono size={9} color={lit ? t.green : t.muted} style={{ letterSpacing: 0.6, lineHeight: 12 }}>
                       {DAY_SHORT[d].toUpperCase()}
                       {'\n'}
                       {date.getDate()}
@@ -796,7 +887,7 @@ export default function MealPlanScreen() {
                           alignItems: 'center',
                           gap: 8,
                           paddingVertical: 5,
-                          opacity: moving ? 1 : 0.6,
+                          opacity: moving || drag.dragging ? 1 : 0.6,
                         }}
                       >
                         <View
@@ -805,15 +896,23 @@ export default function MealPlanScreen() {
                             height: 18,
                             borderRadius: 9,
                             borderWidth: 1,
-                            borderColor: moving ? t.green : t.border,
+                            borderColor: moving || drag.dragging ? t.green : t.border,
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                         >
-                          <Ionicons name="add" size={11} color={moving ? t.green : t.muted} />
+                          <Ionicons
+                            name="add"
+                            size={11}
+                            color={moving || drag.dragging ? t.green : t.muted}
+                          />
                         </View>
-                        <Mono size={9} color={moving ? t.green : t.muted} style={{ letterSpacing: 1.2 }}>
-                          {moving ? 'MOVE HERE' : 'NOTHING YET'}
+                        <Mono
+                          size={9}
+                          color={moving || drag.dragging ? t.green : t.muted}
+                          style={{ letterSpacing: 1.2 }}
+                        >
+                          {isOver ? 'DROP HERE' : moving ? 'MOVE HERE' : drag.dragging ? 'FREE' : 'NOTHING YET'}
                         </Mono>
                       </Pressable>
                     ) : (
@@ -828,8 +927,15 @@ export default function MealPlanScreen() {
                             marginTop: i === 0 ? 0 : 8,
                             borderTopWidth: i === 0 ? 0 : 1,
                             borderTopColor: t.ruleHair,
+                            opacity: drag.activeId === entry.id ? 0.28 : 1,
                           }}
                         >
+                          <DragGrip
+                            makeResponder={drag.makeResponder}
+                            entryId={entry.id}
+                            from={d}
+                            active={drag.activeId === entry.id}
+                          />
                           {renderEntry(entry, isToday)}
                           <Pressable
                             onPress={() => {
@@ -848,9 +954,21 @@ export default function MealPlanScreen() {
               );
             })}
 
-            {/* Meals in the week without a day. A real place, not a to-do list. */}
-            {unplaced.length > 0 && (
-              <View style={{ marginTop: 22 }}>
+            {/* Meals in the week without a day. A real place, not a to-do list —
+                and while a meal is in the air it's also where you drop it to
+                take it back off the calendar. */}
+            {(unplaced.length > 0 || drag.dragging) && (
+              <View
+                ref={drag.zoneRef('none')}
+                style={{
+                  marginTop: 22,
+                  paddingHorizontal: unplacedOver ? 9 : 0,
+                  marginHorizontal: unplacedOver ? -9 : 0,
+                  paddingVertical: unplacedOver ? 6 : 0,
+                  borderRadius: unplacedOver ? 4 : 0,
+                  backgroundColor: unplacedOver ? t.greenLight : 'transparent',
+                }}
+              >
                 <View
                   style={{
                     flexDirection: 'row',
@@ -861,35 +979,72 @@ export default function MealPlanScreen() {
                     marginBottom: 4,
                   }}
                 >
-                  <Mono size={9} style={{ letterSpacing: 1.5 }}>
+                  <Mono size={9} color={unplacedOver ? t.green : t.muted} style={{ letterSpacing: 1.5 }}>
                     NOT ON A DAY YET
                   </Mono>
                   <Mono size={10}>{unplaced.length}</Mono>
                 </View>
-                {unplaced.map((entry) => (
+
+                {unplaced.length === 0 ? (
                   <View
-                    key={entry.id}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 6,
-                      paddingVertical: 9,
-                      borderBottomWidth: 1,
-                      borderBottomColor: t.ruleHair,
+                      gap: 8,
+                      paddingVertical: 10,
                     }}
                   >
-                    {renderEntry(entry, false)}
-                    <Pressable
-                      onPress={() => {
-                        haptics.select();
-                        setEntryMenu(entry);
+                    <View
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        borderWidth: 1,
+                        borderStyle: 'dashed',
+                        borderColor: unplacedOver ? t.green : t.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                      hitSlop={8}
                     >
-                      <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
-                    </Pressable>
+                      <Ionicons name="close" size={11} color={unplacedOver ? t.green : t.muted} />
+                    </View>
+                    <Mono size={9} color={unplacedOver ? t.green : t.muted} style={{ letterSpacing: 1.2 }}>
+                      {unplacedOver ? 'DROP TO TAKE OFF THE DAY' : 'DROP HERE FOR NO DAY'}
+                    </Mono>
                   </View>
-                ))}
+                ) : (
+                  unplaced.map((entry) => (
+                    <View
+                      key={entry.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingVertical: 9,
+                        borderBottomWidth: 1,
+                        borderBottomColor: t.ruleHair,
+                        opacity: drag.activeId === entry.id ? 0.28 : 1,
+                      }}
+                    >
+                      <DragGrip
+                        makeResponder={drag.makeResponder}
+                        entryId={entry.id}
+                        from="none"
+                        active={drag.activeId === entry.id}
+                      />
+                      {renderEntry(entry, false)}
+                      <Pressable
+                        onPress={() => {
+                          haptics.select();
+                          setEntryMenu(entry);
+                        }}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
+                      </Pressable>
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
@@ -1037,6 +1192,44 @@ export default function MealPlanScreen() {
         )}
       </ScrollView>
 
+      {/* The meal in the air. Springs onto the day it lands on, then dissolves. */}
+      <DragFloater drag={drag}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', backgroundColor: t.paper3 }}>
+            {draggedEntry?.recipe?.image_url ? (
+              <Image
+                source={{ uri: draggedEntry.recipe.image_url }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={draggedEntry.recipe.id}
+              />
+            ) : (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons
+                  name={draggedEntry?.entry_type === 'out' ? 'storefront-outline' : 'restaurant-outline'}
+                  size={16}
+                  color={t.muted}
+                />
+              </View>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Serif size={15} numberOfLines={1}>
+              {draggedEntry?.entry_type === 'out' ? 'Eating out' : draggedEntry?.recipe?.title}
+            </Serif>
+            <Mono size={8.5} color={t.green} style={{ marginTop: 3, letterSpacing: 0.8 }}>
+              {drag.hover === 'none'
+                ? 'NO DAY'
+                : typeof drag.hover === 'number'
+                  ? DAY_SHORT[drag.hover].toUpperCase()
+                  : 'DRAG TO A DAY'}
+            </Mono>
+          </View>
+          <Ionicons name="reorder-two-outline" size={17} color={t.green} />
+        </View>
+      </DragFloater>
+
       {/* ── Week switcher ────────────────────────────── */}
       <BottomSheet open={weekMenu} onClose={() => setWeekMenu(false)}>
         <View style={{ paddingHorizontal: 20 }}>
@@ -1096,9 +1289,17 @@ export default function MealPlanScreen() {
               <Pressable
                 key={a.label}
                 onPress={a.run}
-                style={{ paddingVertical: 13, borderTopWidth: 1, borderTopColor: t.ruleHair }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 7,
+                  paddingVertical: 13,
+                  borderTopWidth: 1,
+                  borderTopColor: t.ruleHair,
+                }}
               >
-                <Serif size={16} color={a.danger ? t.red : t.text}>
+                {a.primary ? <Ionicons name="flame" size={14} color={t.green} /> : null}
+                <Serif size={16} italic={a.primary} color={a.danger ? t.red : a.primary ? t.green : t.text}>
                   {a.label}
                 </Serif>
               </Pressable>

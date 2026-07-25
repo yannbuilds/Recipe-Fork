@@ -14,6 +14,17 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +32,7 @@ import AddRecipeModal from '../components/AddRecipeModal';
 import RateCookModal from '../components/RateCookModal';
 import DayOptionsModal from '../components/DayOptionsModal';
 import PlanWeekModal, { type PlanPrefs, type PlanPick } from '../components/PlanWeekModal';
+import { DraggableMealRow, MealDropZone, dayFromDropId, dropId } from '../components/MealPlanDnd';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { scaleIngredientsForServings } from '../utils/scaleQuantity';
@@ -78,6 +90,8 @@ export default function MealPlan() {
   const [daySheet, setDaySheet] = useState<number | null>(null);
   const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  // The meal currently being dragged onto a day.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
@@ -457,9 +471,61 @@ export default function MealPlan() {
     ? 'Loading your week…'
     : mealEntries.length === 0
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
-      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
+      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+
+  // ── Cooking ─────────────────────────────────────────
+  /**
+   * A real cook that hasn't happened yet. Leftovers ('batch') nights reheat the
+   * same pot and eating out isn't cooking, so neither offers to start a cook.
+   */
+  function canCook(entry: MealPlanEntry): boolean {
+    return entry.entry_type === 'cook' && !entry.is_cooked && !!entry.recipe_id;
+  }
+
+  /**
+   * Cook mode on the recipe screen: keeps the screen awake, ticks off
+   * ingredients and steps, then "Mark as cooked" flips this plan row, logs the
+   * cook in the recipe's history and asks how it went.
+   */
+  function startCooking(entry: MealPlanEntry) {
+    if (!entry.recipe_id) return;
+    navigate(`/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`);
+  }
+
+  // ── Drag a meal onto a day ──────────────────────────
+  // Same @dnd-kit setup as the cookbook reorder: a small drag distance on
+  // desktop, and on touch the grip owns the gesture (touch-action: none) so a
+  // few pixels of movement starts the drag without fighting the page scroll.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const draggedEntry = entries.find((e) => e.id === draggingId) ?? null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setDraggingId(String(event.active.id));
+    // The tap-to-move banner and a live drag would be two answers to the same
+    // question — the drag wins.
+    setMoving(null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setDraggingId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const entry = entries.find((e) => e.id === active.id);
+    if (!entry) return;
+
+    const target = dayFromDropId(String(over.id));
+    const from = entry.day_index ?? null;
+    if (from === target) return;
+
+    moveEntry(entry.id, target);
+  }
 
   // ── Row rendering ───────────────────────────────────
   function renderEntryRow(entry: MealPlanEntry, isToday: boolean) {
@@ -547,15 +613,24 @@ export default function MealPlan() {
           )}
         </div>
 
-        {/* Today gets the only primary button on the screen. */}
-        {isToday && !cooked && entry.recipe_id && (
+        {/* Any night can be cooked right now — the pot doesn't care what the
+            calendar says. Today gets the labelled primary button; the rest get
+            a quiet flame so the hierarchy still reads. Leftovers nights get
+            nothing: there's nothing to cook, only to reheat. */}
+        {canCook(entry) && (
           <button
-            onClick={() => navigate(`/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`)}
-            className="inline-flex items-center gap-1.5"
-            style={{ padding: '6px 13px', borderRadius: 999, border: '1px solid var(--green-solid)', background: 'var(--green-solid)', color: '#fff', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', flexShrink: 0 }}
+            onClick={() => startCooking(entry)}
+            aria-label={isToday ? undefined : `Cook ${entry.recipe?.title} now`}
+            title={isToday ? undefined : 'Cook now'}
+            className="inline-flex items-center justify-center gap-1.5"
+            style={
+              isToday
+                ? { padding: '6px 13px', borderRadius: 999, border: '1px solid var(--green-solid)', background: 'var(--green-solid)', color: '#fff', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', flexShrink: 0 }
+                : { width: 30, height: 30, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--green)', cursor: 'pointer', flexShrink: 0, padding: 0 }
+            }
           >
-            <Flame size={12} strokeWidth={2} />
-            Cook
+            <Flame size={isToday ? 12 : 13} strokeWidth={isToday ? 2 : 1.8} />
+            {isToday && 'Cook'}
           </button>
         )}
         {cooked && (
@@ -574,7 +649,12 @@ export default function MealPlan() {
   return (
     <div>
       {/* ── Masthead: one line, plus the week control ────── */}
-      <div className="flex items-start justify-between gap-3 mb-1" style={{ animation: 'fadeUp 0.4s ease both' }}>
+      {/* The fadeUp animation gives every block its own stacking context, so the
+          masthead has to be lifted or the week menu opens behind the banner. */}
+      <div
+        className="flex items-start justify-between gap-3 mb-1"
+        style={{ animation: 'fadeUp 0.4s ease both', position: 'relative', zIndex: 20 }}
+      >
         <div>
           <Eyebrow>The plan</Eyebrow>
           <h1
@@ -668,8 +748,9 @@ export default function MealPlan() {
         {subtitle}
       </p>
 
-      {/* Fri–Sun the app pre-selects next week. Say so, and offer the way back. */}
-      {isPlanningMode() && isNextWeek && (
+      {/* Fri–Sun is when the week ahead usually gets planned. Offer the jump
+          rather than making it — you always land on this week. */}
+      {isPlanningMode() && isCurrentWeek && (
         <div
           className="flex items-center gap-2 flex-wrap"
           style={{
@@ -684,13 +765,13 @@ export default function MealPlan() {
         >
           <CalendarDays size={14} strokeWidth={1.6} color="var(--green)" />
           <span style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--text-soft)' }}>
-            It's the weekend, so you're planning <strong style={{ color: 'var(--text)' }}>next</strong> week.
+            It's the weekend — good time to sort the week ahead.
           </span>
           <button
-            onClick={() => setWeekStart(getMonday(new Date()))}
+            onClick={() => setWeekStart(shiftWeek(getMonday(new Date()), 1))}
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, color: 'var(--green)' }}
           >
-            Back to this week →
+            Plan next week →
           </button>
         </div>
       )}
@@ -737,6 +818,13 @@ export default function MealPlan() {
 
       {/* ── Meals tab: the week grid ─────────────────────── */}
       {!loading && tab === 'meals' && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDraggingId(null)}
+        >
         <div style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}>
           {moving && (
             <div
@@ -758,18 +846,24 @@ export default function MealPlan() {
             const isToday = today === d;
             const date = dayDate(weekStart, d);
             return (
+              <MealDropZone key={d} id={dropId(d)}>
+                {({ isOver, dragging }) => (
               <div
-                key={d}
                 style={{
                   display: 'flex',
                   gap: 12,
                   alignItems: dayEntries.length > 0 ? 'flex-start' : 'center',
-                  padding: isToday ? '10px 10px' : '9px 0',
-                  margin: isToday ? '4px -10px' : 0,
-                  borderRadius: isToday ? 4 : 0,
-                  background: isToday ? 'var(--card)' : 'transparent',
-                  boxShadow: isToday ? 'inset 2px 0 0 var(--green)' : 'none',
-                  borderBottom: isToday ? 'none' : '1px solid var(--rule-hair)',
+                  padding: isToday || isOver ? '10px 10px' : '9px 0',
+                  margin: isToday || isOver ? '4px -10px' : 0,
+                  borderRadius: isToday || isOver ? 4 : 0,
+                  background: isOver ? 'var(--green-light)' : isToday ? 'var(--card)' : 'transparent',
+                  boxShadow: isOver
+                    ? 'inset 0 0 0 1px var(--green)'
+                    : isToday
+                      ? 'inset 2px 0 0 var(--green)'
+                      : 'none',
+                  borderBottom: isToday || isOver ? 'none' : '1px solid var(--rule-hair)',
+                  transition: 'background 0.15s ease, box-shadow 0.15s ease',
                 }}
               >
                 <button
@@ -787,7 +881,7 @@ export default function MealPlan() {
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                     lineHeight: 1.3,
-                    color: isToday ? 'var(--green)' : 'var(--muted)',
+                    color: isToday || isOver ? 'var(--green)' : 'var(--muted)',
                     fontWeight: isToday ? 600 : 400,
                     marginTop: dayEntries.length > 0 ? 11 : 0,
                   }}
@@ -807,26 +901,26 @@ export default function MealPlan() {
                         border: 'none',
                         padding: '5px 0',
                         cursor: 'pointer',
-                        opacity: moving ? 1 : 0.6,
+                        opacity: moving || dragging ? 1 : 0.6,
                         fontFamily: fMono,
                         fontSize: 9,
                         letterSpacing: '0.12em',
                         textTransform: 'uppercase',
-                        color: moving ? 'var(--green)' : 'var(--muted)',
+                        color: moving || dragging ? 'var(--green)' : 'var(--muted)',
                       }}
                     >
                       <span
-                        style={{ width: 18, height: 18, borderRadius: '50%', border: `1px solid ${moving ? 'var(--green)' : 'var(--border)'}`, display: 'grid', placeItems: 'center' }}
+                        style={{ width: 18, height: 18, borderRadius: '50%', border: `1px solid ${moving || dragging ? 'var(--green)' : 'var(--border)'}`, display: 'grid', placeItems: 'center' }}
                       >
                         <Plus size={11} strokeWidth={2} />
                       </span>
-                      {moving ? 'Move here' : 'Nothing yet'}
+                      {isOver ? 'Drop here' : moving ? 'Move here' : dragging ? 'Free' : 'Nothing yet'}
                     </button>
                   ) : (
                     dayEntries.map((entry, i) => (
-                      <div
+                      <DraggableMealRow
                         key={entry.id}
-                        className="flex items-center gap-2"
+                        id={entry.id}
                         style={{ paddingTop: i === 0 ? 0 : 8, marginTop: i === 0 ? 0 : 8, borderTop: i === 0 ? 'none' : '1px solid var(--rule-hair)' }}
                       >
                         {renderEntryRow(entry, isToday)}
@@ -837,40 +931,73 @@ export default function MealPlan() {
                         >
                           <MoreHorizontal size={16} strokeWidth={1.8} />
                         </button>
-                      </div>
+                      </DraggableMealRow>
                     ))
                   )}
                 </div>
               </div>
+                )}
+              </MealDropZone>
             );
           })}
 
-          {/* Meals in the week without a day. A real place, not a to-do list. */}
-          {unplaced.length > 0 && (
-            <div style={{ marginTop: 22 }}>
-              <div
-                className="flex items-baseline justify-between"
-                style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}
-              >
-                <span style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                  Not on a day yet
-                </span>
-                <span style={{ fontFamily: fMono, fontSize: 10, color: 'var(--muted)' }}>{unplaced.length}</span>
-              </div>
-              {unplaced.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2" style={{ padding: '9px 0', borderBottom: '1px solid var(--rule-hair)' }}>
-                  {renderEntryRow(entry, false)}
-                  <button
-                    onClick={() => setEntryMenu(entry)}
-                    aria-label="Meal options"
-                    style={{ background: 'none', border: 'none', padding: 4, margin: -4, cursor: 'pointer', color: 'var(--muted)', lineHeight: 0, flexShrink: 0 }}
+          {/* Meals in the week without a day. A real place, not a to-do list —
+              and while a meal is in the air it's also where you drop it to take
+              it back off the calendar. */}
+          <MealDropZone id={dropId(null)}>
+            {({ isOver, dragging }) =>
+              unplaced.length === 0 && !dragging ? (
+                <div />
+              ) : (
+                <div
+                  style={{
+                    marginTop: 22,
+                    padding: isOver ? '8px 10px' : 0,
+                    margin: isOver ? '14px -10px 0' : '22px 0 0',
+                    borderRadius: isOver ? 4 : 0,
+                    background: isOver ? 'var(--green-light)' : 'transparent',
+                    boxShadow: isOver ? 'inset 0 0 0 1px var(--green)' : 'none',
+                    transition: 'background 0.15s ease, box-shadow 0.15s ease',
+                  }}
+                >
+                  <div
+                    className="flex items-baseline justify-between"
+                    style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}
                   >
-                    <MoreHorizontal size={16} strokeWidth={1.8} />
-                  </button>
+                    <span style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: isOver ? 'var(--green)' : 'var(--muted)' }}>
+                      Not on a day yet
+                    </span>
+                    <span style={{ fontFamily: fMono, fontSize: 10, color: 'var(--muted)' }}>{unplaced.length}</span>
+                  </div>
+
+                  {unplaced.length === 0 ? (
+                    <div
+                      className="flex items-center gap-2"
+                      style={{ padding: '10px 0', fontFamily: fMono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: isOver ? 'var(--green)' : 'var(--muted)' }}
+                    >
+                      <span style={{ width: 18, height: 18, borderRadius: '50%', border: `1px dashed ${isOver ? 'var(--green)' : 'var(--border)'}`, display: 'grid', placeItems: 'center' }}>
+                        <X size={10} strokeWidth={2} />
+                      </span>
+                      {isOver ? 'Drop to take off the day' : 'Drop here for no day'}
+                    </div>
+                  ) : (
+                    unplaced.map((entry) => (
+                      <DraggableMealRow key={entry.id} id={entry.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--rule-hair)' }}>
+                        {renderEntryRow(entry, false)}
+                        <button
+                          onClick={() => setEntryMenu(entry)}
+                          aria-label="Meal options"
+                          style={{ background: 'none', border: 'none', padding: 4, margin: -4, cursor: 'pointer', color: 'var(--muted)', lineHeight: 0, flexShrink: 0 }}
+                        >
+                          <MoreHorizontal size={16} strokeWidth={1.8} />
+                        </button>
+                      </DraggableMealRow>
+                    ))
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              )
+            }
+          </MealDropZone>
 
           {/* Plan mode + a plain add, side by side. */}
           <div className="flex flex-col sm:flex-row gap-2" style={{ marginTop: 22 }}>
@@ -915,6 +1042,28 @@ export default function MealPlan() {
             </button>
           </div>
         </div>
+
+        {/* The meal in the air. dnd-kit springs this back into the row's new
+            slot on drop, which is what makes the move read as a snap. */}
+        <DragOverlay dropAnimation={{ duration: 240, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.15)' }}>
+          {draggedEntry ? (
+            <div
+              className="flex items-center gap-2"
+              style={{
+                padding: '9px 12px',
+                borderRadius: 4,
+                background: 'var(--card)',
+                border: '1px solid var(--green)',
+                boxShadow: '0 18px 40px rgba(31,27,22,0.22)',
+                cursor: 'grabbing',
+                transform: 'rotate(-0.6deg)',
+              }}
+            >
+              {renderEntryRow(draggedEntry, false)}
+            </div>
+          ) : null}
+        </DragOverlay>
+        </DndContext>
       )}
 
       {/* ── Shopping list tab ────────────────────────────── */}
@@ -1096,6 +1245,12 @@ export default function MealPlan() {
             </p>
 
             {[
+              canCook(entryMenu)
+                ? { label: 'Cook now', run: () => { setEntryMenu(null); startCooking(entryMenu); }, primary: true }
+                : null,
+              entryMenu.recipe_id
+                ? { label: 'View recipe', run: () => { setEntryMenu(null); navigate(`/recipe/${entryMenu.recipe_id}`); } }
+                : null,
               !entryMenu.is_cooked && entryMenu.entry_type !== 'out'
                 ? { label: entryMenu.entry_type === 'batch' ? 'Mark eaten' : 'Mark cooked', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
                 : null,
@@ -1113,7 +1268,7 @@ export default function MealPlan() {
             ]
               .filter(Boolean)
               .map((action) => {
-                const a = action as { label: string; run: () => void; danger?: boolean };
+                const a = action as { label: string; run: () => void; danger?: boolean; primary?: boolean };
                 return (
                   <button
                     key={a.label}
@@ -1129,9 +1284,11 @@ export default function MealPlan() {
                       cursor: 'pointer',
                       fontFamily: fSerif,
                       fontSize: 16,
-                      color: a.danger ? 'var(--red)' : 'var(--text)',
+                      fontStyle: a.primary ? 'italic' : 'normal',
+                      color: a.danger ? 'var(--red)' : a.primary ? 'var(--green)' : 'var(--text)',
                     }}
                   >
+                    {a.primary && <Flame size={13} strokeWidth={2} style={{ display: 'inline', marginRight: 7, verticalAlign: -1 }} />}
                     {a.label}
                   </button>
                 );
