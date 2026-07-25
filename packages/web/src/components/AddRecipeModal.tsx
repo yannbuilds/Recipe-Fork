@@ -185,21 +185,20 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
             <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>No recipes found.</p>
           )}
           {sortedRecipes.map((recipe) => {
+            // A recipe already in the week is only a hint, never a block — you
+            // may well want to cook the same thing twice, or on purpose plan a
+            // second batch of it.
             const alreadyAdded = existingRecipeIds.has(recipe.id);
             return (
               <button
                 key={recipe.id}
-                disabled={alreadyAdded}
                 onClick={() => onAdd(recipe)}
-                className={`w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-colors ${
-                  alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-                style={!alreadyAdded ? {} : undefined}
+                className="w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-colors cursor-pointer"
                 onMouseEnter={(e) => {
-                  if (!alreadyAdded) (e.currentTarget as HTMLElement).style.background = 'var(--warm)';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--warm)';
                 }}
                 onMouseLeave={(e) => {
-                  if (!alreadyAdded) (e.currentTarget as HTMLElement).style.background = '';
+                  (e.currentTarget as HTMLElement).style.background = '';
                 }}
               >
                 {recipe.image_url ? (
@@ -225,7 +224,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
                   </p>
                 </div>
                 {alreadyAdded && (
-                  <span className="ml-auto text-xs shrink-0" style={{ color: 'var(--green)' }}>Added</span>
+                  <span className="ml-auto text-xs shrink-0" style={{ color: 'var(--green)' }}>In the week</span>
                 )}
               </button>
             );

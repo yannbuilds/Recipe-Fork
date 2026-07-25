@@ -43,10 +43,12 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
     })();
   }, [open]);
 
+  // A recipe already in the week is only a hint, never a block — you may well
+  // want a second batch of it, or to cook the same thing twice.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return recipes.filter((r) => !existingIds.has(r.id) && !added.has(r.id) && (!q || r.title.toLowerCase().includes(q)));
-  }, [recipes, search, existingIds, added]);
+    return recipes.filter((r) => !added.has(r.id) && (!q || r.title.toLowerCase().includes(q)));
+  }, [recipes, search, added]);
 
   return (
     <BottomSheet open={open} onClose={onClose}>
@@ -115,8 +117,9 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
                     <Serif size={16} numberOfLines={1}>
                       {r.title}
                     </Serif>
-                    {(meta > 0 || r.servings != null) && (
-                      <Mono size={10} style={{ marginTop: 2 }}>
+                    {(meta > 0 || r.servings != null || existingIds.has(r.id)) && (
+                      <Mono size={10} style={{ marginTop: 2 }} color={existingIds.has(r.id) ? t.green : undefined}>
+                        {existingIds.has(r.id) ? 'IN THE WEEK  ·  ' : ''}
                         {meta > 0 ? `${meta} MIN` : ''}
                         {meta > 0 && r.servings != null ? '  ·  ' : ''}
                         {r.servings != null ? `${r.servings} SERVES` : ''}

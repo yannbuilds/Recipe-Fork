@@ -59,16 +59,35 @@ export interface MealPlan {
   created_at: string;
 }
 
+// What a day in the plan actually is.
+//  'cook'  – the night you cook it. Its `servings` covers the whole batch, so a
+//            household of 2 eating the same thing twice shops for 4.
+//  'batch' – another night off that same cook (meal prep). Adds nothing to the
+//            shopping list, but ticks off on its own.
+//  'out'   – eating out. No recipe, no shopping, just a filled day.
+export type MealEntryType = 'cook' | 'batch' | 'out';
+
 export interface MealPlanRecipe {
   id: string;
   meal_plan_id: string;
-  recipe_id: string;
+  // Null only for 'out' entries.
+  recipe_id: string | null;
   is_cooked: boolean;
   added_at: string;
+  // 0 = Monday … 6 = Sunday. Null means "in the week, not on a day yet" —
+  // placing a meal on a day is always optional.
+  day_index: number | null;
+  entry_type: MealEntryType;
+  // 'batch' rows point at the 'cook' row they were portioned from.
+  parent_id: string | null;
+  // Servings for this plan only; falls back to the recipe's own value.
+  servings: number | null;
+  // Free text for 'out' entries ("Thai place").
+  note: string | null;
 }
 
 export interface MealPlanEntry extends MealPlanRecipe {
-  recipe: Recipe;
+  recipe: Recipe | null;
 }
 
 // One row per cook of a recipe. Ratings (1–5) are collected right after

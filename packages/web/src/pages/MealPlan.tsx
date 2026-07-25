@@ -1,15 +1,17 @@
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  CalendarDays,
   ShoppingCart,
   Plus,
   Check,
   X,
   Utensils,
   Flame,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
+  Store,
+  Repeat,
+  MoreHorizontal,
+  Sparkles,
+  CalendarDays,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@recipe-aggregator/shared';
@@ -17,10 +19,25 @@ import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-ag
 import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
 import RateCookModal from '../components/RateCookModal';
+import DayOptionsModal from '../components/DayOptionsModal';
+import PlanWeekModal, { type PlanPrefs, type PlanPick } from '../components/PlanWeekModal';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { scaleIngredientsForServings } from '../utils/scaleQuantity';
 import { getMonday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
+import {
+  DAY_SHORT,
+  DAY_INDEXES,
+  dayDate,
+  todayIndex,
+  entriesForDay,
+  unplacedEntries,
+  shoppingSourceEntries,
+  entryServings,
+  batchPosition,
+  batchSiblings,
+  formatMins,
+} from '../utils/mealPlanDays';
 import IngredientIcon from '../components/IngredientIcon';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
@@ -40,14 +57,6 @@ function toRoman(n: number): string {
   return out;
 }
 
-// Formats total minutes as a compact label (e.g. 90 → "1h 30m").
-function formatMins(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
 export default function MealPlan() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -61,7 +70,17 @@ export default function MealPlan() {
   useEffect(() => {
     setTab(searchParams.get('tab') === 'shopping' ? 'shopping' : 'meals');
   }, [searchParams]);
+
+  // Adding a recipe: `addTarget` remembers which day the picker was opened for
+  // (null = straight into the week with no day).
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addTarget, setAddTarget] = useState<number | null>(null);
+  const [daySheet, setDaySheet] = useState<number | null>(null);
+  const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
+  const [weekMenuOpen, setWeekMenuOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
@@ -69,10 +88,34 @@ export default function MealPlan() {
   const [categorising, setCategorising] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-  // Debounce timer for persisting checked items
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track plan ID for categorisation effect
   const lastCategorisedRef = useRef<string>('');
+  const weekMenuRef = useRef<HTMLDivElement>(null);
+
+  // Plan-mode answers live on the profile, not in context — only this screen
+  // needs them, and only when the user opens plan mode.
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('plan_meals_per_week, plan_default_servings')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.plan_meals_per_week && data?.plan_default_servings) {
+          setPrefs({ meals: data.plan_meals_per_week, servings: data.plan_default_servings });
+        }
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!weekMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (weekMenuRef.current && !weekMenuRef.current.contains(e.target as Node)) setWeekMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [weekMenuOpen]);
 
   const loadPlan = useCallback(async () => {
     if (!user) return;
@@ -107,7 +150,6 @@ export default function MealPlan() {
     setCheckedItems(new Set(planData.checked_items || []));
     setCategoryMap(planData.shopping_categories || {});
 
-    // Fetch recipes in this plan
     const { data: mprData } = await supabase
       .from('meal_plan_recipes')
       .select('*, recipe:recipes(*)')
@@ -121,53 +163,17 @@ export default function MealPlan() {
     loadPlan();
   }, [loadPlan]);
 
-  // FLIP animation refs
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
+  // ── Derived ─────────────────────────────────────────
+  const today = todayIndex(weekStart);
 
-  // Sorted entries: uncooked first, cooked last
-  const sortedEntries = useMemo(() => {
-    return [...entries].sort((a, b) => {
-      if (a.is_cooked === b.is_cooked) return 0;
-      return a.is_cooked ? 1 : -1;
-    });
-  }, [entries]);
-
-  // FLIP animation after reorder
-  useLayoutEffect(() => {
-    if (prevRectsRef.current.size === 0) return;
-    const prevRects = prevRectsRef.current;
-
-    cardRefs.current.forEach((el, id) => {
-      const prevRect = prevRects.get(id);
-      if (!prevRect) return;
-      const currRect = el.getBoundingClientRect();
-      const deltaX = prevRect.left - currRect.left;
-      const deltaY = prevRect.top - currRect.top;
-      if (deltaX === 0 && deltaY === 0) return;
-
-      el.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-      el.style.transition = 'none';
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          el.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
-          el.style.transform = '';
-        });
-      });
-    });
-
-    prevRectsRef.current = new Map();
-  }, [sortedEntries]);
-
-  // Derived data
-  const uncookedEntries = entries.filter((e) => !e.is_cooked);
-  // Shop for the servings the user actually saved on the recipe, not the source recipe's yield.
-  const allIngredients: IngredientWithRecipe[] = uncookedEntries.flatMap((e) =>
+  // Only cooks buy ingredients — a meal-prep night eats from the same pot and
+  // an "eating out" night buys nothing at all.
+  const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
+  const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
     scaleIngredientsForServings(
       e.recipe?.ingredients || [],
       e.recipe?.servings,
-      e.recipe?.custom_servings ?? e.recipe?.servings,
+      entryServings(e),
     ).map((ing) => ({
       ...ing,
       _recipeTitle: e.recipe?.title || 'Unknown',
@@ -175,8 +181,14 @@ export default function MealPlan() {
     }))
   );
   const combined = combineIngredients(allIngredients);
-  const cookedCount = entries.filter((e) => e.is_cooked).length;
-  const cookedPercentage = entries.length > 0 ? Math.round((cookedCount / entries.length) * 100) : 0;
+
+  const mealEntries = entries.filter((e) => e.entry_type !== 'out');
+  const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
+  const unplaced = unplacedEntries(entries);
+  const takenDays = useMemo(
+    () => new Set(entries.filter((e) => e.day_index != null).map((e) => e.day_index as number)),
+    [entries],
+  );
 
   // Run categorisation when ingredients change
   useEffect(() => {
@@ -215,13 +227,11 @@ export default function MealPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.id, combined.length, entries.length]);
 
-  // Apply categories to combined ingredients
   const categorisedIngredients = combined.map((ing) => ({
     ...ing,
     shoppingCategory: categoryMap[ing.item.toLowerCase().trim()] || 'Other',
   }));
 
-  // Group by category in fixed aisle order
   const groupedByCategory = CATEGORY_ORDER
     .map((cat) => ({
       category: cat,
@@ -253,41 +263,116 @@ export default function MealPlan() {
     });
   }
 
-  async function handleAddRecipe(recipe: Recipe) {
+  // ── Entry mutations ─────────────────────────────────
+  async function addCook(recipe: Recipe, dayIndex: number | null, servings?: number) {
     if (!plan) return;
     const { data, error } = await supabase
       .from('meal_plan_recipes')
-      .insert({ meal_plan_id: plan.id, recipe_id: recipe.id })
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: recipe.id,
+        day_index: dayIndex,
+        entry_type: 'cook',
+        servings: servings ?? null,
+      })
       .select('*, recipe:recipes(*)')
       .single();
 
-    if (!error && data) {
-      setEntries((prev) => [...prev, data as MealPlanEntry]);
+    if (!error && data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+  }
+
+  /**
+   * Another night off an existing cook. Buys nothing extra, but bumps the cook's
+   * servings so the shopping list covers the additional night.
+   */
+  async function addBatchNight(cookEntryId: string, dayIndex: number | null) {
+    if (!plan) return;
+    const cook = entries.find((e) => e.id === cookEntryId);
+    if (!cook || !cook.recipe_id) return;
+
+    // Only scale up once we know the household size. Until then the recipe's
+    // own yield is assumed to already stretch — which is the whole point of
+    // eating the same cook twice.
+    const perNight = prefs?.servings ?? null;
+    const nights = batchSiblings(cook, entries).length + 1;
+    const nextServings = perNight ? perNight * nights : cook.servings;
+
+    const { data, error } = await supabase
+      .from('meal_plan_recipes')
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: cook.recipe_id,
+        day_index: dayIndex,
+        entry_type: 'batch',
+        parent_id: cook.id,
+      })
+      .select('*, recipe:recipes(*)')
+      .single();
+
+    if (error || !data) {
+      console.error('Failed to add another night:', JSON.stringify(error));
+      return;
     }
+
+    if (nextServings && nextServings !== cook.servings) {
+      await supabase.from('meal_plan_recipes').update({ servings: nextServings }).eq('id', cook.id);
+    }
+
+    setEntries((prev) => [
+      ...prev.map((e) => (e.id === cook.id && nextServings ? { ...e, servings: nextServings } : e)),
+      data as MealPlanEntry,
+    ]);
+  }
+
+  async function addEatingOut(dayIndex: number, note: string) {
+    if (!plan) return;
+    const { data, error } = await supabase
+      .from('meal_plan_recipes')
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: null,
+        day_index: dayIndex,
+        entry_type: 'out',
+        note: note || null,
+      })
+      .select('*, recipe:recipes(*)')
+      .single();
+
+    if (!error && data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+    setDaySheet(null);
+  }
+
+  async function moveEntry(entryId: string, dayIndex: number | null) {
+    setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, day_index: dayIndex } : e)));
+    setMoving(null);
+    await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
   }
 
   async function handleRemove(entryId: string) {
+    const entry = entries.find((e) => e.id === entryId);
+    // Removing a cook takes its extra nights with it — the DB cascades, so the
+    // local state has to as well.
+    const alsoGone = entry?.entry_type === 'cook'
+      ? entries.filter((e) => e.parent_id === entryId).map((e) => e.id)
+      : [];
+    setEntries((prev) => prev.filter((e) => e.id !== entryId && !alsoGone.includes(e.id)));
+    setEntryMenu(null);
     await supabase.from('meal_plan_recipes').delete().eq('id', entryId);
-    setEntries((prev) => prev.filter((e) => e.id !== entryId));
   }
 
   async function handleToggleCooked(entryId: string) {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
 
-    // FLIP: capture "First" positions before state change
-    const prevRects = new Map<string, DOMRect>();
-    cardRefs.current.forEach((el, id) => {
-      prevRects.set(id, el.getBoundingClientRect());
-    });
-    prevRectsRef.current = prevRects;
-
     const next = !entry.is_cooked;
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
 
+    // Only a real cook goes in the recipe's history. A meal-prep night is the
+    // same pot reheated, and eating out isn't cooking at all.
+    if (entry.entry_type !== 'cook' || !entry.recipe_id) return;
+
     if (next && user) {
-      // Log the cook in the recipe's history, then ask how it went.
       const { data: cook } = await supabase
         .from('recipe_cooks')
         .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
@@ -295,153 +380,327 @@ export default function MealPlan() {
         .single();
       if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
     } else if (!next) {
-      // Un-marking means "I didn't actually cook this" — clear the logged cook.
       await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
     }
   }
 
-  const existingRecipeIds = new Set(entries.map((e) => e.recipe_id));
+  async function savePrefs(next: PlanPrefs) {
+    setPrefs(next);
+    if (!user) return;
+    await supabase
+      .from('profiles')
+      .update({ plan_meals_per_week: next.meals, plan_default_servings: next.servings })
+      .eq('id', user.id);
+  }
+
+  /** Turn a finished plan-mode session into rows: one cook per pick, one batch row per extra night. */
+  async function commitPlan(
+    picks: PlanPick[],
+    slots: { recipeId: string; nightIndex: number; day: number | null }[],
+    servingsPerNight: number,
+  ) {
+    if (!plan) return;
+    const created: MealPlanEntry[] = [];
+
+    for (const pick of picks) {
+      const mine = slots.filter((s) => s.recipeId === pick.recipe.id).sort((a, b) => a.nightIndex - b.nightIndex);
+      const first = mine[0];
+
+      const { data: cook } = await supabase
+        .from('meal_plan_recipes')
+        .insert({
+          meal_plan_id: plan.id,
+          recipe_id: pick.recipe.id,
+          day_index: first?.day ?? null,
+          entry_type: 'cook',
+          servings: servingsPerNight * pick.nights,
+        })
+        .select('*, recipe:recipes(*)')
+        .single();
+
+      if (!cook) continue;
+      created.push(cook as MealPlanEntry);
+
+      for (const slot of mine.slice(1)) {
+        const { data: extra } = await supabase
+          .from('meal_plan_recipes')
+          .insert({
+            meal_plan_id: plan.id,
+            recipe_id: pick.recipe.id,
+            day_index: slot.day,
+            entry_type: 'batch',
+            parent_id: (cook as MealPlanEntry).id,
+          })
+          .select('*, recipe:recipes(*)')
+          .single();
+        if (extra) created.push(extra as MealPlanEntry);
+      }
+    }
+
+    setEntries((prev) => [...prev, ...created]);
+  }
+
+  // ── Week label ──────────────────────────────────────
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
   const isNextWeek = formatWeekStart(shiftWeek(getMonday(new Date()), 1)) === formatWeekStart(weekStart);
   const isLastWeek = formatWeekStart(shiftWeek(getMonday(new Date()), -1)) === formatWeekStart(weekStart);
-  const showPlanningLabel = isPlanningMode() && isNextWeek;
 
-  // Editorial week status chip (mono). Tone drives colour.
-  const weekStatus: { label: string; tone: 'green' | 'muted' } | null = isLastWeek
-    ? { label: 'Last week', tone: 'muted' }
-    : showPlanningLabel
-      ? { label: 'Planning next week', tone: 'green' }
-      : isCurrentWeek
-        ? { label: 'This week', tone: 'green' }
-        : isNextWeek
-          ? { label: 'Next week', tone: 'green' }
-          : null;
+  const weekLabel = isCurrentWeek
+    ? 'This week'
+    : isNextWeek
+      ? 'Next week'
+      : isLastWeek
+        ? 'Last week'
+        : `Week of ${formatWeekLabel(weekStart)}`;
 
-  // Masthead subtitle — mirrors the copy voice of the other editorial pages.
   const subtitle = loading
     ? 'Loading your week…'
-    : entries.length === 0
-      ? 'Nothing planned yet — add recipes to build your week.'
-      : `${entries.length} meal${entries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
+    : mealEntries.length === 0
+      ? 'Nothing planned yet — plan the week, or add meals as you go.'
+      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
 
-  // Shared editorial circular nav button (prev / next week).
-  const weekNavButton = (dir: -1 | 1) => (
-    <button
-      onClick={() => setWeekStart((prev) => shiftWeek(prev, dir))}
-      aria-label={dir === -1 ? 'Previous week' : 'Next week'}
-      className="flex items-center justify-center rounded-full transition-colors shrink-0"
-      style={{ width: 38, height: 38, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--muted)' }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.color = 'var(--green)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)'; }}
-    >
-      {dir === -1 ? <ChevronLeft size={17} strokeWidth={1.8} /> : <ChevronRight size={17} strokeWidth={1.8} />}
-    </button>
-  );
+  const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
-  return (
-    <div>
-      {/* ── Masthead ─────────────────────────────────────── */}
-      <div className="mb-5" style={{ animation: 'fadeUp 0.4s ease both' }}>
-        <Eyebrow>The plan</Eyebrow>
-        <h1
-          style={{
-            margin: '12px 0 0',
-            fontFamily: fSerif,
-            fontWeight: 400,
-            fontSize: 'clamp(30px, 8vw, 38px)',
-            lineHeight: 1.02,
-            letterSpacing: '-0.026em',
-            color: 'var(--text)',
-          }}
-        >
-          Meal <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>Plan</em>
-        </h1>
-        <p
-          style={{
-            margin: '12px 0 0',
-            fontFamily: fSans,
-            fontSize: 14.5,
-            lineHeight: 1.45,
-            color: 'var(--text-soft)',
-            minHeight: '1.25rem',
-          }}
-        >
-          {subtitle}
-        </p>
-      </div>
+  // ── Row rendering ───────────────────────────────────
+  function renderEntryRow(entry: MealPlanEntry, isToday: boolean) {
+    const cooked = entry.is_cooked;
+    const batch = batchPosition(entry, entries);
+    const isExtraNight = entry.entry_type === 'batch';
 
-      {/* ── Week switcher rail ───────────────────────────── */}
-      <div
-        style={{
-          border: '1px solid var(--border)',
-          borderRadius: 4,
-          background: 'var(--card)',
-          padding: '14px 16px',
-          marginBottom: 20,
-          animation: 'fadeUp 0.4s ease 0.05s both',
-        }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          {weekNavButton(-1)}
-
-          <div className="text-center" style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontFamily: fSerif,
-                fontSize: 19,
-                letterSpacing: '-0.015em',
-                color: 'var(--text)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Week of {formatWeekLabel(weekStart)}
-            </div>
-            {weekStatus && (
-              <div
-                style={{
-                  marginTop: 5,
-                  fontFamily: fMono,
-                  fontSize: 9.5,
-                  fontWeight: 500,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: weekStatus.tone === 'green' ? 'var(--green)' : 'var(--muted)',
-                }}
-              >
-                {weekStatus.label}
+    if (entry.entry_type === 'out') {
+      return (
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div
+            style={{ width: 38, height: 38, borderRadius: 3, border: '1px dashed var(--border)', background: 'var(--card)', display: 'grid', placeItems: 'center', flexShrink: 0, color: 'var(--muted)' }}
+          >
+            <Store size={16} strokeWidth={1.5} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 15, color: 'var(--text-soft)' }}>Eating out</div>
+            {entry.note && (
+              <div style={{ fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>
+                {entry.note}
               </div>
             )}
           </div>
+        </div>
+      );
+    }
 
-          {weekNavButton(1)}
+    const meta: string[] = [];
+    const mins = (entry.recipe?.prep_time ?? 0) + (entry.recipe?.cook_time ?? 0);
+    if (mins > 0) meta.push(formatMins(mins));
+    if (batch) meta.push(`Meal prep ${batch.index}/${batch.total}`);
+    else if (entryServings(entry) != null) meta.push(`Serves ${entryServings(entry)}`);
+
+    return (
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <button
+          onClick={() => entry.recipe_id && navigate(`/recipe/${entry.recipe_id}`)}
+          style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', background: 'var(--paper3)', flexShrink: 0, border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          {entry.recipe?.image_url ? (
+            <img
+              src={entry.recipe.image_url}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: cooked ? 'grayscale(100%)' : 'none', opacity: isExtraNight ? 0.85 : 1 }}
+            />
+          ) : (
+            <span style={{ display: 'grid', placeItems: 'center', height: '100%', color: 'var(--muted)' }}>
+              <Utensils size={16} strokeWidth={1.3} />
+            </span>
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <button
+            onClick={() => entry.recipe_id && navigate(`/recipe/${entry.recipe_id}`)}
+            style={{
+              display: 'block',
+              maxWidth: '100%',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: fSerif,
+              fontSize: 15,
+              letterSpacing: '-0.01em',
+              lineHeight: 1.2,
+              color: cooked ? 'var(--muted)' : 'var(--text)',
+              textDecoration: cooked ? 'line-through' : 'none',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {entry.recipe?.title}
+          </button>
+          {meta.length > 0 && (
+            <div
+              className="flex items-center gap-1.5"
+              style={{ fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: batch ? 'var(--green)' : 'var(--muted)', marginTop: 3 }}
+            >
+              {batch && <Repeat size={9} strokeWidth={2} />}
+              {meta.join(' · ')}
+            </div>
+          )}
         </div>
 
-        {/* Progress bar */}
-        {entries.length > 0 && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--rule-hair)' }}>
-            <div
-              className="flex justify-between"
-              style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}
-            >
-              <span>{cookedCount} of {entries.length} cooked</span>
-              <span>{cookedPercentage}%</span>
-            </div>
-            <div className="overflow-hidden" style={{ height: 4, borderRadius: 9999, background: 'var(--warm)' }}>
-              <div
-                className="rf-progress-fill"
-                style={{ height: '100%', borderRadius: 9999, background: 'var(--green)', width: `${cookedPercentage}%` }}
-              />
-            </div>
-          </div>
+        {/* Today gets the only primary button on the screen. */}
+        {isToday && !cooked && entry.recipe_id && (
+          <button
+            onClick={() => navigate(`/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`)}
+            className="inline-flex items-center gap-1.5"
+            style={{ padding: '6px 13px', borderRadius: 999, border: '1px solid var(--green-solid)', background: 'var(--green-solid)', color: '#fff', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', flexShrink: 0 }}
+          >
+            <Flame size={12} strokeWidth={2} />
+            Cook
+          </button>
+        )}
+        {cooked && (
+          <span
+            className="inline-flex items-center gap-1"
+            style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--green-light)', color: 'var(--green)', fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.1em', textTransform: 'uppercase', flexShrink: 0 }}
+          >
+            <Check size={10} strokeWidth={3} />
+            {entry.entry_type === 'batch' ? 'Ate' : 'Cooked'}
+          </span>
         )}
       </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* ── Masthead: one line, plus the week control ────── */}
+      <div className="flex items-start justify-between gap-3 mb-1" style={{ animation: 'fadeUp 0.4s ease both' }}>
+        <div>
+          <Eyebrow>The plan</Eyebrow>
+          <h1
+            style={{
+              margin: '8px 0 0',
+              fontFamily: fSerif,
+              fontWeight: 400,
+              fontSize: 'clamp(24px, 6vw, 28px)',
+              lineHeight: 1.05,
+              letterSpacing: '-0.024em',
+              color: 'var(--text)',
+            }}
+          >
+            The <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>week</em>
+          </h1>
+        </div>
+
+        {/* Week pill — says where you are and is also how you move. */}
+        <div className="relative shrink-0" ref={weekMenuRef} style={{ marginTop: 4 }}>
+          <button
+            onClick={() => setWeekMenuOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5"
+            style={{
+              padding: '7px 13px',
+              borderRadius: 999,
+              border: `1px solid ${isCurrentWeek || isNextWeek ? 'var(--green)' : 'var(--border)'}`,
+              background: isCurrentWeek || isNextWeek ? 'var(--green-light)' : 'var(--card)',
+              color: isCurrentWeek || isNextWeek ? 'var(--green)' : 'var(--text)',
+              fontFamily: fMono,
+              fontSize: 9.5,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {weekLabel}
+            <ChevronDown size={12} strokeWidth={2} />
+          </button>
+
+          {weekMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 'calc(100% + 6px)',
+                zIndex: 30,
+                minWidth: 210,
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                background: 'var(--card)',
+                boxShadow: '0 12px 32px rgba(31,27,22,0.14)',
+                padding: 6,
+              }}
+            >
+              {[-1, 0, 1, 2, 3].map((offset) => {
+                const target = shiftWeek(getMonday(new Date()), offset);
+                const active = formatWeekStart(target) === formatWeekStart(weekStart);
+                const name = offset === -1 ? 'Last week' : offset === 0 ? 'This week' : offset === 1 ? 'Next week' : `In ${offset} weeks`;
+                return (
+                  <button
+                    key={offset}
+                    onClick={() => {
+                      setWeekStart(target);
+                      setWeekMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full"
+                    style={{
+                      padding: '9px 10px',
+                      borderRadius: 3,
+                      border: 'none',
+                      background: active ? 'var(--green-light)' : 'none',
+                      color: active ? 'var(--green)' : 'var(--text)',
+                      fontFamily: fSans,
+                      fontSize: 13.5,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span>{name}</span>
+                    <span style={{ fontFamily: fMono, fontSize: 9.5, color: 'var(--muted)' }}>{formatWeekLabel(target)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p style={{ margin: '10px 0 18px', fontFamily: fSans, fontSize: 14, lineHeight: 1.45, color: 'var(--text-soft)', minHeight: '1.25rem' }}>
+        {subtitle}
+      </p>
+
+      {/* Fri–Sun the app pre-selects next week. Say so, and offer the way back. */}
+      {isPlanningMode() && isNextWeek && (
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          style={{
+            padding: '10px 13px',
+            marginBottom: 18,
+            border: '1px solid var(--border)',
+            borderLeft: '2px solid var(--green)',
+            borderRadius: '0 3px 3px 0',
+            background: 'var(--green-light)',
+            animation: 'fadeUp 0.4s ease 0.05s both',
+          }}
+        >
+          <CalendarDays size={14} strokeWidth={1.6} color="var(--green)" />
+          <span style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--text-soft)' }}>
+            It's the weekend, so you're planning <strong style={{ color: 'var(--text)' }}>next</strong> week.
+          </span>
+          <button
+            onClick={() => setWeekStart(getMonday(new Date()))}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, color: 'var(--green)' }}
+          >
+            Back to this week →
+          </button>
+        </div>
+      )}
 
       {/* ── Editorial tabs ───────────────────────────────── */}
       <div
-        style={{ display: 'flex', gap: 28, borderBottom: '1px solid var(--border)', marginBottom: 22, animation: 'fadeUp 0.4s ease 0.1s both' }}
+        style={{ display: 'flex', gap: 28, borderBottom: '1px solid var(--border)', marginBottom: 20, animation: 'fadeUp 0.4s ease 0.1s both' }}
       >
         {([
-          ['meals', 'Meals', entries.length],
+          ['meals', 'Meals', mealEntries.length],
           ['shopping', 'Groceries', combined.length],
         ] as const).map(([key, label, count]) => {
           const active = tab === key;
@@ -471,287 +730,216 @@ export default function MealPlan() {
       </div>
 
       {loading && (
-        <p
-          className="text-center py-8"
-          style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 15, color: 'var(--muted)' }}
-        >
+        <p className="text-center py-8" style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 15, color: 'var(--muted)' }}>
           Loading…
         </p>
       )}
 
-      {/* ── Meals tab ────────────────────────────────────── */}
+      {/* ── Meals tab: the week grid ─────────────────────── */}
       {!loading && tab === 'meals' && (
-        <div>
-          {entries.length === 0 && (
+        <div style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}>
+          {moving && (
             <div
-              className="text-center py-14"
-              style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
+              className="flex items-center justify-between gap-3"
+              style={{ padding: '10px 13px', marginBottom: 12, borderRadius: 3, background: 'var(--green-light)', border: '1px solid var(--green)' }}
             >
-              <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
-                <CalendarDays size={40} strokeWidth={1.2} />
-              </div>
-              <p
-                className="mt-4"
-                style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}
+              <span style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--green)' }}>Tap a day to move it there.</span>
+              <button
+                onClick={() => setMoving(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}
               >
-                Nothing planned yet
-              </p>
-              <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
-                Add some recipes to build your week.
-              </p>
+                Cancel
+              </button>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-8">
-            {sortedEntries.map((entry, index) => {
-              const cooked = entry.is_cooked;
-              const meta: string[] = [];
-              if (entry.recipe?.prep_time != null) meta.push(`Prep ${formatMins(entry.recipe.prep_time)}`);
-              if (entry.recipe?.cook_time != null) meta.push(`Cook ${formatMins(entry.recipe.cook_time)}`);
-              const plannedServings = entry.recipe?.custom_servings ?? entry.recipe?.servings;
-              if (plannedServings != null) meta.push(`Serves ${plannedServings}`);
-              return (
-                <div
-                  key={entry.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(entry.id, el);
-                    else cardRefs.current.delete(entry.id);
-                  }}
+          {DAY_INDEXES.map((d) => {
+            const dayEntries = entriesForDay(entries, d);
+            const isToday = today === d;
+            const date = dayDate(weekStart, d);
+            return (
+              <div
+                key={d}
+                style={{
+                  display: 'flex',
+                  gap: 12,
+                  alignItems: dayEntries.length > 0 ? 'flex-start' : 'center',
+                  padding: isToday ? '10px 10px' : '9px 0',
+                  margin: isToday ? '4px -10px' : 0,
+                  borderRadius: isToday ? 4 : 0,
+                  background: isToday ? 'var(--card)' : 'transparent',
+                  boxShadow: isToday ? 'inset 2px 0 0 var(--green)' : 'none',
+                  borderBottom: isToday ? 'none' : '1px solid var(--rule-hair)',
+                }}
+              >
+                <button
+                  onClick={() => (moving ? moveEntry(moving, d) : setDaySheet(d))}
                   style={{
-                    opacity: cooked ? 0.72 : 1,
-                    transition: 'opacity 0.3s, filter 0.4s',
-                    animation: 'fadeUp 0.4s ease both',
-                    animationDelay: `${Math.min(0.15 + index * 0.05, 0.4)}s`,
+                    width: 38,
+                    flexShrink: 0,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: fMono,
+                    fontSize: 9,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    lineHeight: 1.3,
+                    color: isToday ? 'var(--green)' : 'var(--muted)',
+                    fontWeight: isToday ? 600 : 400,
+                    marginTop: dayEntries.length > 0 ? 11 : 0,
                   }}
                 >
-                  {/* Photo — tapping it just views the recipe (no cook mode) */}
-                  <div
-                    onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
-                    style={{
-                      position: 'relative',
-                      aspectRatio: '4 / 3',
-                      borderRadius: 4,
-                      overflow: 'hidden',
-                      background: 'var(--paper3)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {entry.recipe?.image_url ? (
-                      <img
-                        src={entry.recipe.image_url}
-                        alt={entry.recipe?.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{
-                          filter: cooked ? 'grayscale(100%)' : 'saturate(0.92) contrast(1.02)',
-                          transition: 'filter 0.4s ease',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        className="absolute inset-0 flex items-center justify-center"
-                        style={{ color: 'var(--muted)', filter: cooked ? 'grayscale(100%)' : 'none' }}
-                      >
-                        <Utensils size={34} strokeWidth={1.2} />
-                      </div>
-                    )}
+                  {DAY_SHORT[d]}
+                  <br />
+                  {date.getDate()}
+                </button>
 
-                    {/* Hairline border */}
-                    <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)', pointerEvents: 'none' }} />
-
-                    {/* Remove button */}
+                <div className="flex-1 min-w-0">
+                  {dayEntries.length === 0 ? (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // don't open the recipe underneath
-                        handleRemove(entry.id);
-                      }}
-                      className="absolute flex items-center justify-center rounded-full rf-glass-dark text-white transition-colors"
-                      style={{ top: 10, right: 10, width: 28, height: 28 }}
-                      title="Remove from meal plan"
-                    >
-                      <X size={15} strokeWidth={2} />
-                    </button>
-
-                    {/* Cooked chip */}
-                    {cooked && (
-                      <div
-                        className="absolute flex items-center gap-1.5"
-                        style={{
-                          top: 10,
-                          left: 10,
-                          padding: '4px 8px',
-                          background: 'rgba(251,248,241,0.92)',
-                          backdropFilter: 'blur(6px)',
-                          WebkitBackdropFilter: 'blur(6px)',
-                          fontFamily: fMono,
-                          fontSize: 9,
-                          letterSpacing: '0.1em',
-                          textTransform: 'uppercase',
-                          color: 'var(--green-deep)',
-                        }}
-                      >
-                        <Check size={11} strokeWidth={3} />
-                        Cooked
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Caption */}
-                  <div style={{ marginTop: 12 }}>
-                    <h3
-                      onClick={() => navigate(`/recipe/${entry.recipe_id}`)}
+                      onClick={() => (moving ? moveEntry(moving, d) : setDaySheet(d))}
+                      className="flex items-center gap-2 w-full"
                       style={{
-                        margin: 0,
-                        fontFamily: fSerif,
-                        fontWeight: 400,
-                        fontSize: 19,
-                        lineHeight: 1.15,
-                        letterSpacing: '-0.015em',
-                        color: 'var(--text)',
-                        textDecoration: cooked ? 'line-through' : 'none',
+                        background: 'none',
+                        border: 'none',
+                        padding: '5px 0',
                         cursor: 'pointer',
+                        opacity: moving ? 1 : 0.6,
+                        fontFamily: fMono,
+                        fontSize: 9,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: moving ? 'var(--green)' : 'var(--muted)',
                       }}
                     >
-                      {entry.recipe?.title}
-                    </h3>
-                    {meta.length > 0 && (
+                      <span
+                        style={{ width: 18, height: 18, borderRadius: '50%', border: `1px solid ${moving ? 'var(--green)' : 'var(--border)'}`, display: 'grid', placeItems: 'center' }}
+                      >
+                        <Plus size={11} strokeWidth={2} />
+                      </span>
+                      {moving ? 'Move here' : 'Nothing yet'}
+                    </button>
+                  ) : (
+                    dayEntries.map((entry, i) => (
                       <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 10,
-                          marginTop: 6,
-                          fontFamily: fMono,
-                          fontSize: 10,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          color: 'var(--muted)',
-                        }}
+                        key={entry.id}
+                        className="flex items-center gap-2"
+                        style={{ paddingTop: i === 0 ? 0 : 8, marginTop: i === 0 ? 0 : 8, borderTop: i === 0 ? 'none' : '1px solid var(--rule-hair)' }}
                       >
-                        {meta.map((m) => (
-                          <span key={m}>{m}</span>
-                        ))}
+                        {renderEntryRow(entry, isToday)}
+                        <button
+                          onClick={() => setEntryMenu(entry)}
+                          aria-label="Meal options"
+                          style={{ background: 'none', border: 'none', padding: 4, margin: -4, cursor: 'pointer', color: 'var(--muted)', lineHeight: 0, flexShrink: 0 }}
+                        >
+                          <MoreHorizontal size={16} strokeWidth={1.8} />
+                        </button>
                       </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2" style={{ marginTop: 12 }}>
-                      <button
-                        onClick={() => handleToggleCooked(entry.id)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 transition-colors"
-                        style={{
-                          padding: '9px 0',
-                          borderRadius: 999,
-                          fontFamily: fSans,
-                          fontSize: 13,
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          border: cooked ? '1px solid var(--green)' : '1px solid var(--border)',
-                          background: cooked ? 'var(--green-light)' : 'var(--card)',
-                          color: cooked ? 'var(--green)' : 'var(--text)',
-                        }}
-                      >
-                        {cooked && <Check size={14} strokeWidth={2.5} />}
-                        {cooked ? 'Cooked' : 'Mark cooked'}
-                      </button>
-                      <button
-                        onClick={() =>
-                          navigate(
-                            cooked
-                              ? `/recipe/${entry.recipe_id}`
-                              : `/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`,
-                          )
-                        }
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 transition-colors"
-                        style={{
-                          padding: '9px 0',
-                          borderRadius: 999,
-                          fontFamily: fSans,
-                          fontSize: 13,
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          border: cooked ? '1px solid var(--border)' : '1px solid var(--green)',
-                          background: cooked ? 'var(--card)' : 'var(--green)',
-                          color: cooked ? 'var(--text)' : '#fff',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(0.95)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = 'none'; }}
-                      >
-                        {cooked ? 'View recipe' : (
-                          <>
-                            <Flame size={14} strokeWidth={2} />
-                            Cook recipe
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                    ))
+                  )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
 
-          {/* Add recipe — dashed editorial row */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              marginTop: entries.length > 0 ? 24 : 0,
-              padding: '16px 18px',
-              border: '1px dashed var(--green)',
-              borderRadius: 4,
-              background: 'transparent',
-              color: 'var(--green)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              cursor: 'pointer',
-              animation: 'fadeUp 0.4s ease both',
-              animationDelay: `${Math.min(0.15 + entries.length * 0.05 + 0.05, 0.45)}s`,
-            }}
-          >
-            <Plus size={18} strokeWidth={1.6} />
-            <span style={{ fontFamily: fSerif, fontSize: 16, fontStyle: 'italic' }}>Add a recipe</span>
-          </button>
+          {/* Meals in the week without a day. A real place, not a to-do list. */}
+          {unplaced.length > 0 && (
+            <div style={{ marginTop: 22 }}>
+              <div
+                className="flex items-baseline justify-between"
+                style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}
+              >
+                <span style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                  Not on a day yet
+                </span>
+                <span style={{ fontFamily: fMono, fontSize: 10, color: 'var(--muted)' }}>{unplaced.length}</span>
+              </div>
+              {unplaced.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-2" style={{ padding: '9px 0', borderBottom: '1px solid var(--rule-hair)' }}>
+                  {renderEntryRow(entry, false)}
+                  <button
+                    onClick={() => setEntryMenu(entry)}
+                    aria-label="Meal options"
+                    style={{ background: 'none', border: 'none', padding: 4, margin: -4, cursor: 'pointer', color: 'var(--muted)', lineHeight: 0, flexShrink: 0 }}
+                  >
+                    <MoreHorizontal size={16} strokeWidth={1.8} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Plan mode + a plain add, side by side. */}
+          <div className="flex flex-col sm:flex-row gap-2" style={{ marginTop: 22 }}>
+            <button
+              onClick={() => setPlanOpen(true)}
+              className="flex items-center justify-center gap-2 flex-1"
+              style={{
+                padding: '14px 18px',
+                border: '1px solid var(--green-solid)',
+                borderRadius: 4,
+                background: 'var(--green-solid)',
+                color: '#fff',
+                cursor: 'pointer',
+                fontFamily: fSerif,
+                fontSize: 16,
+                fontStyle: 'italic',
+              }}
+            >
+              <Sparkles size={16} strokeWidth={1.6} />
+              Plan the week
+            </button>
+            <button
+              onClick={() => {
+                setAddTarget(null);
+                setShowAddModal(true);
+              }}
+              className="flex items-center justify-center gap-2 flex-1"
+              style={{
+                padding: '14px 18px',
+                border: '1px dashed var(--green)',
+                borderRadius: 4,
+                background: 'transparent',
+                color: 'var(--green)',
+                cursor: 'pointer',
+                fontFamily: fSerif,
+                fontSize: 16,
+                fontStyle: 'italic',
+              }}
+            >
+              <Plus size={16} strokeWidth={1.6} />
+              Add one meal
+            </button>
+          </div>
         </div>
       )}
 
       {/* ── Shopping list tab ────────────────────────────── */}
       {!loading && tab === 'shopping' && (
         <div>
-          {/* Empty state */}
           {combined.length === 0 && (
-            <div
-              className="text-center py-14"
-              style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}
-            >
+            <div className="text-center py-14" style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}>
               <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
                 <ShoppingCart size={40} strokeWidth={1.2} />
               </div>
-              <p
-                className="mt-4"
-                style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}
-              >
-                {entries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
+              <p className="mt-4" style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}>
+                {mealEntries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
               </p>
               <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
-                {entries.length === 0
+                {mealEntries.length === 0
                   ? 'Add some meals to generate a shopping list.'
                   : 'All meals are marked as cooked — nothing to shop for.'}
               </p>
             </div>
           )}
 
-          {/* Progress summary */}
           {combined.length > 0 && (
             <div
               className="flex items-baseline justify-between"
-              style={{
-                paddingBottom: 14,
-                marginBottom: 22,
-                borderBottom: '1px solid var(--border)',
-                animation: 'fadeUp 0.4s ease 0.15s both',
-              }}
+              style={{ paddingBottom: 14, marginBottom: 22, borderBottom: '1px solid var(--border)', animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
               <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
                 Shopping list
@@ -763,57 +951,28 @@ export default function MealPlan() {
           )}
 
           {categorising && combined.length > 0 && (
-            <p
-              className="text-center py-2 mb-2"
-              style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}
-            >
+            <p className="text-center py-2 mb-2" style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}>
               Categorising ingredients…
             </p>
           )}
 
-          {/* Category groups */}
           {groupedByCategory.map((group, groupIndex) => (
             <div
               key={group.category}
-              style={{
-                marginBottom: 26,
-                animation: 'fadeUp 0.4s ease both',
-                animationDelay: `${Math.min(0.2 + groupIndex * 0.05, 0.45)}s`,
-              }}
+              style={{ marginBottom: 26, animation: 'fadeUp 0.4s ease both', animationDelay: `${Math.min(0.2 + groupIndex * 0.05, 0.45)}s` }}
             >
-              {/* Editorial category header: roman numeral + serif name + mono count */}
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'baseline',
-                  gap: 10,
-                  paddingBottom: 8,
-                  borderBottom: '1px solid var(--border)',
-                  marginBottom: 2,
-                }}
+                style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 2 }}
               >
                 <span style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--green)', fontSize: 13 }}>
                   {toRoman(groupIndex + 1)}.
                 </span>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontFamily: fSerif,
-                    fontSize: 18,
-                    fontWeight: 400,
-                    letterSpacing: '-0.015em',
-                    color: 'var(--text)',
-                    flex: 1,
-                  }}
-                >
+                <h3 style={{ margin: 0, fontFamily: fSerif, fontSize: 18, fontWeight: 400, letterSpacing: '-0.015em', color: 'var(--text)', flex: 1 }}>
                   {group.category}
                 </h3>
-                <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>
-                  {group.items.length}
-                </span>
+                <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>{group.items.length}</span>
               </div>
 
-              {/* Items — hairline-divided rows on the paper */}
               {group.items.map((ing, i) => {
                 const key = `${ing.item}-${ing.unit}`;
                 const checked = checkedItems.has(key);
@@ -833,7 +992,6 @@ export default function MealPlan() {
                       style={{ padding: '12px 0', cursor: 'pointer' }}
                       onClick={() => toggleShoppingItem(key)}
                     >
-                      {/* Square editorial checkbox */}
                       <span
                         className="shrink-0"
                         style={{
@@ -852,7 +1010,6 @@ export default function MealPlan() {
 
                       <IngredientIcon item={ing.item} />
 
-                      {/* Item name (serif) */}
                       <span
                         className="flex-1"
                         style={{
@@ -866,7 +1023,6 @@ export default function MealPlan() {
                         {ing.item}
                       </span>
 
-                      {/* Quantity (mono) */}
                       {qty && (
                         <span
                           style={{
@@ -882,7 +1038,6 @@ export default function MealPlan() {
                         </span>
                       )}
 
-                      {/* Chevron — tap to expand, does not tick */}
                       <button
                         style={{ padding: 4, margin: -4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}
                         aria-label="Show recipes"
@@ -895,23 +1050,15 @@ export default function MealPlan() {
                           size={15}
                           strokeWidth={2}
                           color="var(--muted)"
-                          style={{
-                            transition: 'transform 0.2s ease',
-                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                            display: 'block',
-                          }}
+                          style={{ transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'block' }}
                         />
                       </button>
                     </div>
 
-                    {/* Expanded recipe sources */}
                     {isExpanded && (
                       <div style={{ padding: '2px 0 12px 59px' }}>
                         {ing.sources.map((src, si) => (
-                          <div
-                            key={`${src.recipeId}-${si}`}
-                            className="flex items-center justify-between py-1.5"
-                          >
+                          <div key={`${src.recipeId}-${si}`} className="flex items-center justify-between py-1.5">
                             <span
                               className="cursor-pointer"
                               style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}
@@ -937,11 +1084,97 @@ export default function MealPlan() {
         </div>
       )}
 
+      {/* ── Per-meal menu ────────────────────────────────── */}
+      {entryMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEntryMenu(null)}>
+          <div className="rf-card w-full max-w-[380px] mx-3" style={{ padding: '20px 22px 22px' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 2px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+              {entryMenu.entry_type === 'out' ? 'Eating out' : entryMenu.recipe?.title}
+            </h2>
+            <p style={{ margin: '0 0 8px', fontFamily: fMono, fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+              {entryMenu.day_index != null ? DAY_SHORT[entryMenu.day_index] : 'No day yet'}
+            </p>
+
+            {[
+              !entryMenu.is_cooked && entryMenu.entry_type !== 'out'
+                ? { label: entryMenu.entry_type === 'batch' ? 'Mark eaten' : 'Mark cooked', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
+                : null,
+              entryMenu.is_cooked
+                ? { label: entryMenu.entry_type === 'batch' ? 'Not eaten after all' : 'Not cooked after all', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
+                : null,
+              entryMenu.entry_type === 'cook'
+                ? { label: 'Add another night', run: () => { addBatchNight(entryMenu.id, null); setEntryMenu(null); } }
+                : null,
+              { label: 'Move to another day', run: () => { setMoving(entryMenu.id); setEntryMenu(null); setTab('meals'); } },
+              entryMenu.day_index != null
+                ? { label: 'Take off the day', run: () => { moveEntry(entryMenu.id, null); setEntryMenu(null); } }
+                : null,
+              { label: 'Remove from the week', run: () => handleRemove(entryMenu.id), danger: true },
+            ]
+              .filter(Boolean)
+              .map((action) => {
+                const a = action as { label: string; run: () => void; danger?: boolean };
+                return (
+                  <button
+                    key={a.label}
+                    onClick={a.run}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '13px 4px',
+                      background: 'none',
+                      border: 'none',
+                      borderTop: '1px solid var(--rule-hair)',
+                      cursor: 'pointer',
+                      fontFamily: fSerif,
+                      fontSize: 16,
+                      color: a.danger ? 'var(--red)' : 'var(--text)',
+                    }}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      <DayOptionsModal
+        open={daySheet !== null}
+        dayIndex={daySheet}
+        weekStart={weekStart}
+        entries={entries}
+        onCook={() => {
+          setAddTarget(daySheet);
+          setDaySheet(null);
+          setShowAddModal(true);
+        }}
+        onAnotherNight={(cookId) => {
+          addBatchNight(cookId, daySheet);
+          setDaySheet(null);
+        }}
+        onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
+        onClose={() => setDaySheet(null)}
+      />
+
+      <PlanWeekModal
+        open={planOpen}
+        weekStart={weekStart}
+        takenDays={takenDays}
+        prefs={prefs}
+        onSavePrefs={savePrefs}
+        onCommit={commitPlan}
+        onClose={() => setPlanOpen(false)}
+      />
+
       <AddRecipeModal
         open={showAddModal}
         existingRecipeIds={existingRecipeIds}
+        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
         onAdd={(recipe) => {
-          handleAddRecipe(recipe);
+          addCook(recipe, addTarget, prefs?.servings);
+          setShowAddModal(false);
         }}
         onClose={() => setShowAddModal(false)}
       />

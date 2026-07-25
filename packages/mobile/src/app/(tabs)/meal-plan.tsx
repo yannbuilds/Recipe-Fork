@@ -5,14 +5,30 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BottomSheet from '@/components/BottomSheet';
+import DayOptionsSheet from '@/components/DayOptionsSheet';
 import IngredientIcon from '@/components/IngredientIcon';
+import PlanWeekSheet, { type PlanPick, type PlanPrefs } from '@/components/PlanWeekSheet';
 import RateCookSheet from '@/components/RateCookSheet';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
-import { Body, Button, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
+import { Body, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { categoriseIngredients, CATEGORY_ORDER } from '@/lib/categoriseIngredients';
 import { combineIngredients, type IngredientWithRecipe } from '@/lib/combineIngredients';
 import { haptics } from '@/lib/haptics';
+import {
+  batchPosition,
+  batchSiblings,
+  DAY_INDEXES,
+  DAY_SHORT,
+  dayDate,
+  entriesForDay,
+  entryServings,
+  formatMins,
+  shoppingSourceEntries,
+  todayIndex,
+  unplacedEntries,
+} from '@/lib/mealPlanDays';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import {
@@ -27,13 +43,6 @@ import { scaleIngredientsForServings, toRoman } from '@/lib/recipeFormat';
 
 type Tab = 'meals' | 'shopping';
 
-function formatMins(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
 export default function MealPlanScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -47,10 +56,34 @@ export default function MealPlanScreen() {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [showAdd, setShowAdd] = useState(false);
+  // Which day the picker was opened for (null = into the week with no day).
+  const [addTarget, setAddTarget] = useState<number | null>(null);
+  const [daySheet, setDaySheet] = useState<number | null>(null);
+  const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
+  const [weekMenu, setWeekMenu] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorised = useRef('');
+
+  // Plan-mode answers live on the profile, not in context — only this screen
+  // needs them, and only when the user opens plan mode.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('plan_meals_per_week, plan_default_servings')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (data?.plan_meals_per_week && data?.plan_default_servings) {
+        setPrefs({ meals: data.plan_meals_per_week, servings: data.plan_default_servings });
+      }
+    })();
+  }, [user]);
 
   const loadPlan = useCallback(async () => {
     if (!user) return;
@@ -110,27 +143,28 @@ export default function MealPlanScreen() {
     }, [planId]),
   );
 
-  const sortedEntries = useMemo(
-    () => [...entries].sort((a, b) => (a.is_cooked === b.is_cooked ? 0 : a.is_cooked ? 1 : -1)),
-    [entries],
-  );
+  // ── Derived ─────────────────────────────────────────
+  const today = todayIndex(weekStart);
 
-  const uncooked = entries.filter((e) => !e.is_cooked);
-  // Shop for the servings the user actually saved on the recipe, not the source recipe's yield.
-  const allIngredients: IngredientWithRecipe[] = uncooked.flatMap((e) =>
-    scaleIngredientsForServings(
-      e.recipe?.ingredients || [],
-      e.recipe?.servings,
-      e.recipe?.custom_servings ?? e.recipe?.servings,
-    ).map((ing) => ({
+  // Only cooks buy ingredients — a meal-prep night eats from the same pot and
+  // an "eating out" night buys nothing at all.
+  const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
+  const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
+    scaleIngredientsForServings(e.recipe?.ingredients || [], e.recipe?.servings, entryServings(e)).map((ing) => ({
       ...ing,
       _recipeTitle: e.recipe?.title || 'Unknown',
       _recipeId: e.recipe?.id || '',
     })),
   );
   const combined = useMemo(() => combineIngredients(allIngredients), [JSON.stringify(allIngredients)]);
-  const cookedCount = entries.filter((e) => e.is_cooked).length;
-  const cookedPct = entries.length > 0 ? Math.round((cookedCount / entries.length) * 100) : 0;
+
+  const mealEntries = entries.filter((e) => e.entry_type !== 'out');
+  const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
+  const unplaced = unplacedEntries(entries);
+  const takenDays = useMemo(
+    () => new Set(entries.filter((e) => e.day_index != null).map((e) => e.day_index as number)),
+    [entries],
+  );
 
   // Categorise ingredients when they change
   useEffect(() => {
@@ -181,20 +215,97 @@ export default function MealPlanScreen() {
     });
   }
 
-  async function addRecipe(recipe: Pick<Recipe, 'id'>) {
+  // ── Entry mutations ─────────────────────────────────
+  async function addCook(recipe: Pick<Recipe, 'id'>, dayIndex: number | null) {
     if (!plan) return;
     const { data } = await supabase
       .from('meal_plan_recipes')
-      .insert({ meal_plan_id: plan.id, recipe_id: recipe.id })
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: recipe.id,
+        day_index: dayIndex,
+        entry_type: 'cook',
+        servings: prefs?.servings ?? null,
+      })
       .select('*, recipe:recipes(*)')
       .single();
     if (data) setEntries((prev) => [...prev, data as MealPlanEntry]);
   }
 
+  /**
+   * Another night off an existing cook. Buys nothing extra, but bumps the cook's
+   * servings so the shopping list covers the additional night.
+   */
+  async function addBatchNight(cookEntryId: string, dayIndex: number | null) {
+    if (!plan) return;
+    const cook = entries.find((e) => e.id === cookEntryId);
+    if (!cook || !cook.recipe_id) return;
+
+    // Only scale up once we know the household size. Until then the recipe's
+    // own yield is assumed to already stretch — which is the whole point of
+    // eating the same cook twice.
+    const perNight = prefs?.servings ?? null;
+    const nights = batchSiblings(cook, entries).length + 1;
+    const nextServings = perNight ? perNight * nights : cook.servings;
+
+    const { data } = await supabase
+      .from('meal_plan_recipes')
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: cook.recipe_id,
+        day_index: dayIndex,
+        entry_type: 'batch',
+        parent_id: cook.id,
+      })
+      .select('*, recipe:recipes(*)')
+      .single();
+    if (!data) return;
+
+    if (nextServings && nextServings !== cook.servings) {
+      await supabase.from('meal_plan_recipes').update({ servings: nextServings }).eq('id', cook.id);
+    }
+
+    haptics.success();
+    setEntries((prev) => [
+      ...prev.map((e) => (e.id === cook.id && nextServings ? { ...e, servings: nextServings } : e)),
+      data as MealPlanEntry,
+    ]);
+  }
+
+  async function addEatingOut(dayIndex: number, note: string) {
+    if (!plan) return;
+    const { data } = await supabase
+      .from('meal_plan_recipes')
+      .insert({
+        meal_plan_id: plan.id,
+        recipe_id: null,
+        day_index: dayIndex,
+        entry_type: 'out',
+        note: note || null,
+      })
+      .select('*, recipe:recipes(*)')
+      .single();
+    if (data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+    setDaySheet(null);
+  }
+
+  async function moveEntry(entryId: string, dayIndex: number | null) {
+    haptics.select();
+    setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, day_index: dayIndex } : e)));
+    setMoving(null);
+    await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
+  }
+
   async function removeEntry(entryId: string) {
     haptics.light();
+    const entry = entries.find((e) => e.id === entryId);
+    // Removing a cook takes its extra nights with it — the DB cascades, so the
+    // local state has to as well.
+    const alsoGone =
+      entry?.entry_type === 'cook' ? entries.filter((e) => e.parent_id === entryId).map((e) => e.id) : [];
+    setEntries((prev) => prev.filter((e) => e.id !== entryId && !alsoGone.includes(e.id)));
+    setEntryMenu(null);
     await supabase.from('meal_plan_recipes').delete().eq('id', entryId);
-    setEntries((prev) => prev.filter((e) => e.id !== entryId));
   }
 
   async function toggleCooked(entryId: string) {
@@ -207,8 +318,11 @@ export default function MealPlanScreen() {
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
 
+    // Only a real cook goes in the recipe's history. A meal-prep night is the
+    // same pot reheated, and eating out isn't cooking at all.
+    if (entry.entry_type !== 'cook' || !entry.recipe_id) return;
+
     if (next && user) {
-      // Log the cook in the recipe's history, then ask how it went.
       const { data: cook } = await supabase
         .from('recipe_cooks')
         .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
@@ -216,100 +330,372 @@ export default function MealPlanScreen() {
         .single();
       if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
     } else if (!next) {
-      // Un-marking means "I didn't actually cook this" — clear the logged cook.
       await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
     }
   }
 
+  async function savePrefs(next: PlanPrefs) {
+    setPrefs(next);
+    if (!user) return;
+    await supabase
+      .from('profiles')
+      .update({ plan_meals_per_week: next.meals, plan_default_servings: next.servings })
+      .eq('id', user.id);
+  }
+
+  /** Turn a finished plan-mode session into rows: one cook per pick, one batch row per extra night. */
+  async function commitPlan(
+    picks: PlanPick[],
+    slots: { recipeId: string; nightIndex: number; day: number | null }[],
+    servingsPerNight: number,
+  ) {
+    if (!plan) return;
+    const created: MealPlanEntry[] = [];
+
+    for (const pick of picks) {
+      const mine = slots
+        .filter((s) => s.recipeId === pick.recipe.id)
+        .sort((a, b) => a.nightIndex - b.nightIndex);
+      const first = mine[0];
+
+      const { data: cook } = await supabase
+        .from('meal_plan_recipes')
+        .insert({
+          meal_plan_id: plan.id,
+          recipe_id: pick.recipe.id,
+          day_index: first?.day ?? null,
+          entry_type: 'cook',
+          servings: servingsPerNight * pick.nights,
+        })
+        .select('*, recipe:recipes(*)')
+        .single();
+      if (!cook) continue;
+      created.push(cook as MealPlanEntry);
+
+      for (const slot of mine.slice(1)) {
+        const { data: extra } = await supabase
+          .from('meal_plan_recipes')
+          .insert({
+            meal_plan_id: plan.id,
+            recipe_id: pick.recipe.id,
+            day_index: slot.day,
+            entry_type: 'batch',
+            parent_id: (cook as MealPlanEntry).id,
+          })
+          .select('*, recipe:recipes(*)')
+          .single();
+        if (extra) created.push(extra as MealPlanEntry);
+      }
+    }
+
+    setEntries((prev) => [...prev, ...created]);
+  }
+
+  // ── Week label ──────────────────────────────────────
   const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
   const isNextWeek = formatWeekStart(shiftWeek(getMonday(new Date()), 1)) === formatWeekStart(weekStart);
   const isLastWeek = formatWeekStart(shiftWeek(getMonday(new Date()), -1)) === formatWeekStart(weekStart);
-  const weekStatus = isLastWeek
-    ? { label: 'LAST WEEK', tone: 'muted' as const }
-    : isPlanningMode() && isNextWeek
-      ? { label: 'PLANNING NEXT WEEK', tone: 'green' as const }
-      : isCurrentWeek
-        ? { label: 'THIS WEEK', tone: 'green' as const }
-        : isNextWeek
-          ? { label: 'NEXT WEEK', tone: 'green' as const }
-          : null;
+
+  const weekLabel = isCurrentWeek
+    ? 'THIS WEEK'
+    : isNextWeek
+      ? 'NEXT WEEK'
+      : isLastWeek
+        ? 'LAST WEEK'
+        : formatWeekLabel(weekStart).toUpperCase();
 
   const subtitle = loading
     ? 'Loading your week…'
-    : entries.length === 0
-      ? 'Nothing planned yet — add recipes to build your week.'
-      : `${entries.length} meal${entries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
+    : mealEntries.length === 0
+      ? 'Nothing planned yet — plan the week, or add meals as you go.'
+      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked.`;
 
-  const existingIds = new Set(entries.map((e) => e.recipe_id));
+  const existingIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+
+  // ── Row rendering ───────────────────────────────────
+  function renderEntry(entry: MealPlanEntry, isToday: boolean) {
+    const cooked = entry.is_cooked;
+
+    if (entry.entry_type === 'out') {
+      return (
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 3,
+              borderWidth: 1,
+              borderStyle: 'dashed',
+              borderColor: t.border,
+              backgroundColor: t.card,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="storefront-outline" size={16} color={t.muted} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Serif size={15} italic color={t.textSoft}>
+              Eating out
+            </Serif>
+            {entry.note ? (
+              <Mono size={8.5} style={{ marginTop: 3, letterSpacing: 0.8 }}>
+                {entry.note.toUpperCase()}
+              </Mono>
+            ) : null}
+          </View>
+        </View>
+      );
+    }
+
+    const batch = batchPosition(entry, entries);
+    const meta: string[] = [];
+    const mins = (entry.recipe?.prep_time ?? 0) + (entry.recipe?.cook_time ?? 0);
+    if (mins > 0) meta.push(formatMins(mins));
+    if (batch) meta.push(`Meal prep ${batch.index}/${batch.total}`);
+    else if (entryServings(entry) != null) meta.push(`Serves ${entryServings(entry)}`);
+
+    const openRecipe = () => {
+      if (entry.recipe_id) router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } });
+    };
+
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Pressable onPress={openRecipe}>
+          <View style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', backgroundColor: t.paper3 }}>
+            {entry.recipe?.image_url ? (
+              <Image
+                source={{ uri: entry.recipe.image_url }}
+                style={{ width: '100%', height: '100%', opacity: cooked ? 0.5 : 1 }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={entry.recipe.id}
+              />
+            ) : (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="restaurant-outline" size={16} color={t.muted} />
+              </View>
+            )}
+          </View>
+        </Pressable>
+
+        <Pressable onPress={openRecipe} style={{ flex: 1 }}>
+          <Serif
+            size={15}
+            numberOfLines={1}
+            color={cooked ? t.muted : t.text}
+            style={{ textDecorationLine: cooked ? 'line-through' : 'none' }}
+          >
+            {entry.recipe?.title}
+          </Serif>
+          {meta.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+              {batch && <Ionicons name="repeat-outline" size={10} color={t.green} />}
+              <Mono size={8.5} color={batch ? t.green : t.muted} style={{ letterSpacing: 0.8 }}>
+                {meta.join(' · ').toUpperCase()}
+              </Mono>
+            </View>
+          )}
+        </Pressable>
+
+        {/* Today gets the only primary button on the screen. */}
+        {isToday && !cooked && entry.recipe_id ? (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/recipe/[id]',
+                params: { id: entry.recipe_id as string, cook: '1', entry: entry.id },
+              })
+            }
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              paddingHorizontal: 13,
+              paddingVertical: 6,
+              borderRadius: 999,
+              backgroundColor: t.greenSolid,
+            }}
+          >
+            <Ionicons name="flame" size={12} color={t.onGreen} />
+            <Body size={12.5} weight="medium" color={t.onGreen}>
+              Cook
+            </Body>
+          </Pressable>
+        ) : null}
+
+        {cooked ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 3,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: t.greenLight,
+            }}
+          >
+            <Ionicons name="checkmark" size={10} color={t.green} />
+            <Mono size={8.5} color={t.green} style={{ letterSpacing: 1 }}>
+              {entry.entry_type === 'batch' ? 'ATE' : 'COOKED'}
+            </Mono>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  const menuActions = entryMenu
+    ? ([
+        !entryMenu.is_cooked && entryMenu.entry_type !== 'out'
+          ? {
+              label: entryMenu.entry_type === 'batch' ? 'Mark eaten' : 'Mark cooked',
+              run: () => {
+                toggleCooked(entryMenu.id);
+                setEntryMenu(null);
+              },
+            }
+          : null,
+        entryMenu.is_cooked
+          ? {
+              label: entryMenu.entry_type === 'batch' ? 'Not eaten after all' : 'Not cooked after all',
+              run: () => {
+                toggleCooked(entryMenu.id);
+                setEntryMenu(null);
+              },
+            }
+          : null,
+        entryMenu.entry_type === 'cook'
+          ? {
+              label: 'Add another night',
+              run: () => {
+                addBatchNight(entryMenu.id, null);
+                setEntryMenu(null);
+              },
+            }
+          : null,
+        {
+          label: 'Move to another day',
+          run: () => {
+            setMoving(entryMenu.id);
+            setEntryMenu(null);
+            setTab('meals');
+          },
+        },
+        entryMenu.day_index != null
+          ? {
+              label: 'Take off the day',
+              run: () => {
+                moveEntry(entryMenu.id, null);
+                setEntryMenu(null);
+              },
+            }
+          : null,
+        { label: 'Remove from the week', run: () => removeEntry(entryMenu.id), danger: true },
+      ].filter(Boolean) as { label: string; run: () => void; danger?: boolean }[])
+    : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 }}>
-        {/* Masthead */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-          <Eyebrow>The plan</Eyebrow>
-          <Serif size={34} style={{ marginTop: 10, lineHeight: 36 }}>
-            Meal <Serif size={34} italic color={t.green}>Plan</Serif>
-          </Serif>
-          <Body size={14.5} color={t.textSoft} style={{ marginTop: 10 }}>
-            {subtitle}
-          </Body>
-        </View>
-
-        {/* Week switcher */}
+        {/* ── Masthead: one line, plus the week control ── */}
         <View
           style={{
-            marginHorizontal: 16,
-            borderWidth: 1,
-            borderColor: t.border,
-            borderRadius: 4,
-            backgroundColor: t.card,
-            padding: 14,
-            marginBottom: 20,
+            paddingHorizontal: 16,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 10,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable
-              onPress={() => setWeekStart((p) => shiftWeek(p, -1))}
-              style={{ width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Ionicons name="chevron-back" size={17} color={t.muted} />
-            </Pressable>
-            <View style={{ alignItems: 'center' }}>
-              <Serif size={18}>Week of {formatWeekLabel(weekStart)}</Serif>
-              {weekStatus && (
-                <Mono size={9} color={weekStatus.tone === 'green' ? t.green : t.muted} style={{ marginTop: 4, letterSpacing: 1.2 }}>
-                  {weekStatus.label}
-                </Mono>
-              )}
-            </View>
-            <Pressable
-              onPress={() => setWeekStart((p) => shiftWeek(p, 1))}
-              style={{ width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Ionicons name="chevron-forward" size={17} color={t.muted} />
-            </Pressable>
+          <View style={{ flex: 1 }}>
+            <Eyebrow>The plan</Eyebrow>
+            <Serif size={28} style={{ marginTop: 8 }}>
+              The{' '}
+              <Serif size={28} italic color={t.green}>
+                week
+              </Serif>
+            </Serif>
           </View>
 
-          {entries.length > 0 && (
-            <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.ruleHair }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Mono size={10}>{cookedCount} OF {entries.length} COOKED</Mono>
-                <Mono size={10}>{cookedPct}%</Mono>
-              </View>
-              <View style={{ height: 4, borderRadius: 999, backgroundColor: t.warm, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${cookedPct}%`, backgroundColor: t.green, borderRadius: 999 }} />
-              </View>
-            </View>
-          )}
+          {/* Week pill — says where you are and is also how you move. */}
+          <Pressable
+            onPress={() => {
+              haptics.select();
+              setWeekMenu(true);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              paddingHorizontal: 13,
+              paddingVertical: 7,
+              borderRadius: 999,
+              marginTop: 4,
+              borderWidth: 1,
+              borderColor: isCurrentWeek || isNextWeek ? t.green : t.border,
+              backgroundColor: isCurrentWeek || isNextWeek ? t.greenLight : t.card,
+            }}
+          >
+            <Mono size={9.5} color={isCurrentWeek || isNextWeek ? t.green : t.text} style={{ letterSpacing: 1 }}>
+              {weekLabel}
+            </Mono>
+            <Ionicons name="chevron-down" size={12} color={isCurrentWeek || isNextWeek ? t.green : t.muted} />
+          </Pressable>
         </View>
 
+        <Body size={14} color={t.textSoft} style={{ paddingHorizontal: 16, marginTop: 10, marginBottom: 16 }}>
+          {subtitle}
+        </Body>
+
+        {/* Fri–Sun the app pre-selects next week. Say so, and offer the way back. */}
+        {isPlanningMode() && isNextWeek && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 16,
+              padding: 11,
+              borderWidth: 1,
+              borderLeftWidth: 2,
+              borderColor: t.border,
+              borderLeftColor: t.green,
+              borderRadius: 3,
+              backgroundColor: t.greenLight,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Ionicons name="calendar-outline" size={14} color={t.green} />
+            <Body size={12.5} color={t.textSoft} style={{ flex: 1 }}>
+              It's the weekend, so you're planning next week.
+            </Body>
+            <Pressable onPress={() => setWeekStart(getMonday(new Date()))}>
+              <Body size={12.5} weight="medium" color={t.green}>
+                This week →
+              </Body>
+            </Pressable>
+          </View>
+        )}
+
         {/* Tabs */}
-        <View style={{ flexDirection: 'row', gap: 28, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: t.border, marginBottom: 20 }}>
-          {([
-            ['meals', 'Meals', entries.length],
-            ['shopping', 'Groceries', combined.length],
-          ] as const).map(([key, label, count]) => {
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 28,
+            paddingHorizontal: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: t.border,
+            marginBottom: 18,
+          }}
+        >
+          {(
+            [
+              ['meals', 'Meals', mealEntries.length],
+              ['shopping', 'Groceries', combined.length],
+            ] as const
+          ).map(([key, label, count]) => {
             const active = tab === key;
             return (
               <Pressable
@@ -318,7 +704,12 @@ export default function MealPlanScreen() {
                   haptics.select();
                   setTab(key);
                 }}
-                style={{ paddingBottom: 12, marginBottom: -1, borderBottomWidth: 2, borderBottomColor: active ? t.green : 'transparent' }}
+                style={{
+                  paddingBottom: 12,
+                  marginBottom: -1,
+                  borderBottomWidth: 2,
+                  borderBottomColor: active ? t.green : 'transparent',
+                }}
               >
                 <Serif size={18} color={active ? t.text : t.muted}>
                   {label} <Mono size={11}>· {count}</Mono>
@@ -328,130 +719,218 @@ export default function MealPlanScreen() {
           })}
         </View>
 
-        {/* Meals tab */}
+        {/* ── Meals tab: the week grid ─────────────────── */}
         {tab === 'meals' && (
           <View style={{ paddingHorizontal: 16 }}>
-            {!loading && entries.length === 0 && (
-              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Ionicons name="calendar-outline" size={40} color={t.muted} />
-                <Serif size={21} style={{ marginTop: 14 }}>
-                  Nothing planned yet
-                </Serif>
-                <Body size={14} color={t.muted} style={{ marginTop: 4 }}>
-                  Add some recipes to build your week.
+            {moving && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 11,
+                  marginBottom: 12,
+                  borderRadius: 3,
+                  borderWidth: 1,
+                  borderColor: t.green,
+                  backgroundColor: t.greenLight,
+                }}
+              >
+                <Body size={12.5} color={t.green}>
+                  Tap a day to move it there.
                 </Body>
+                <Pressable onPress={() => setMoving(null)}>
+                  <Body size={12.5} color={t.muted}>
+                    Cancel
+                  </Body>
+                </Pressable>
               </View>
             )}
 
-            <View style={{ gap: 20 }}>
-              {sortedEntries.map((entry) => {
-                const cooked = entry.is_cooked;
-                const meta: string[] = [];
-                if (entry.recipe?.prep_time != null) meta.push(`Prep ${formatMins(entry.recipe.prep_time)}`);
-                if (entry.recipe?.cook_time != null) meta.push(`Cook ${formatMins(entry.recipe.cook_time)}`);
-                const plannedServings = entry.recipe?.custom_servings ?? entry.recipe?.servings;
-                if (plannedServings != null) meta.push(`Serves ${plannedServings}`);
-                return (
-                  <View key={entry.id} style={{ opacity: cooked ? 0.72 : 1 }}>
-                    {/* Photo — tapping it just views the recipe (no cook mode) */}
-                    <Pressable
-                      onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } })}
-                      style={{ position: 'relative', aspectRatio: 4 / 3, borderRadius: 4, overflow: 'hidden', backgroundColor: t.paper3 }}
-                    >
-                      {entry.recipe?.image_url ? (
-                        <Image source={{ uri: entry.recipe.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={entry.recipe.id} />
-                      ) : (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name="restaurant-outline" size={32} color={t.muted} />
-                        </View>
-                      )}
+            {DAY_INDEXES.map((d) => {
+              const dayEntries = entriesForDay(entries, d);
+              const isToday = today === d;
+              const date = dayDate(weekStart, d);
+              return (
+                <View
+                  key={d}
+                  style={{
+                    flexDirection: 'row',
+                    gap: 12,
+                    alignItems: dayEntries.length > 0 ? 'flex-start' : 'center',
+                    paddingHorizontal: isToday ? 9 : 0,
+                    paddingVertical: 9,
+                    marginHorizontal: isToday ? -9 : 0,
+                    marginVertical: isToday ? 4 : 0,
+                    borderRadius: isToday ? 4 : 0,
+                    backgroundColor: isToday ? t.card : 'transparent',
+                    borderLeftWidth: isToday ? 2 : 0,
+                    borderLeftColor: t.green,
+                    borderBottomWidth: isToday ? 0 : 1,
+                    borderBottomColor: t.ruleHair,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => (moving ? moveEntry(moving, d) : setDaySheet(d))}
+                    style={{ width: 34, marginTop: dayEntries.length > 0 ? 10 : 0 }}
+                  >
+                    <Mono size={9} color={isToday ? t.green : t.muted} style={{ letterSpacing: 0.6, lineHeight: 12 }}>
+                      {DAY_SHORT[d].toUpperCase()}
+                      {'\n'}
+                      {date.getDate()}
+                    </Mono>
+                  </Pressable>
+
+                  <View style={{ flex: 1 }}>
+                    {dayEntries.length === 0 ? (
                       <Pressable
-                        onPress={() => removeEntry(entry.id)}
-                        style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => (moving ? moveEntry(moving, d) : setDaySheet(d))}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          paddingVertical: 5,
+                          opacity: moving ? 1 : 0.6,
+                        }}
                       >
-                        <Ionicons name="close" size={16} color="#fff" />
-                      </Pressable>
-                      {cooked && (
-                        <View style={{ position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(251,248,241,0.92)' }}>
-                          <Ionicons name="checkmark" size={11} color={t.greenDeep} />
-                          <Mono size={9} color={t.greenDeep}>COOKED</Mono>
-                        </View>
-                      )}
-                    </Pressable>
-                    <View style={{ marginTop: 10 }}>
-                      {/* Title — also a plain "view recipe" tap target */}
-                      <Pressable onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } })}>
-                        <Serif size={19} style={{ textDecorationLine: cooked ? 'line-through' : 'none' }}>
-                          {entry.recipe?.title}
-                        </Serif>
-                      </Pressable>
-                      {meta.length > 0 && (
-                        <Mono size={10} style={{ marginTop: 5, letterSpacing: 0.6 }}>
-                          {meta.join('   ').toUpperCase()}
-                        </Mono>
-                      )}
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                        <Pressable
-                          onPress={() => toggleCooked(entry.id)}
-                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: cooked ? t.green : t.border, backgroundColor: cooked ? t.greenLight : t.card }}
-                        >
-                          {cooked && <Ionicons name="checkmark" size={14} color={t.green} />}
-                          <Body size={13} weight="medium" color={cooked ? t.green : t.text}>
-                            {cooked ? 'Cooked' : 'Mark cooked'}
-                          </Body>
-                        </Pressable>
-                        <Pressable
-                          onPress={() =>
-                            router.push({
-                              pathname: '/recipe/[id]',
-                              params: cooked
-                                ? { id: entry.recipe_id }
-                                : { id: entry.recipe_id, cook: '1', entry: entry.id },
-                            })
-                          }
+                        <View
                           style={{
-                            flex: 1,
-                            flexDirection: 'row',
+                            width: 18,
+                            height: 18,
+                            borderRadius: 9,
+                            borderWidth: 1,
+                            borderColor: moving ? t.green : t.border,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: 5,
-                            paddingVertical: 9,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: cooked ? t.border : t.greenSolid,
-                            backgroundColor: cooked ? t.card : t.greenSolid,
                           }}
                         >
-                          {!cooked && <Ionicons name="flame" size={13} color={t.onGreen} />}
-                          <Body size={13} weight="medium" color={cooked ? t.text : t.onGreen}>
-                            {cooked ? 'View recipe' : 'Cook recipe'}
-                          </Body>
-                        </Pressable>
-                      </View>
-                    </View>
+                          <Ionicons name="add" size={11} color={moving ? t.green : t.muted} />
+                        </View>
+                        <Mono size={9} color={moving ? t.green : t.muted} style={{ letterSpacing: 1.2 }}>
+                          {moving ? 'MOVE HERE' : 'NOTHING YET'}
+                        </Mono>
+                      </Pressable>
+                    ) : (
+                      dayEntries.map((entry, i) => (
+                        <View
+                          key={entry.id}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            paddingTop: i === 0 ? 0 : 8,
+                            marginTop: i === 0 ? 0 : 8,
+                            borderTopWidth: i === 0 ? 0 : 1,
+                            borderTopColor: t.ruleHair,
+                          }}
+                        >
+                          {renderEntry(entry, isToday)}
+                          <Pressable
+                            onPress={() => {
+                              haptics.select();
+                              setEntryMenu(entry);
+                            }}
+                            hitSlop={8}
+                          >
+                            <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
+                          </Pressable>
+                        </View>
+                      ))
+                    )}
                   </View>
-                );
-              })}
-            </View>
+                </View>
+              );
+            })}
 
+            {/* Meals in the week without a day. A real place, not a to-do list. */}
+            {unplaced.length > 0 && (
+              <View style={{ marginTop: 22 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    paddingBottom: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: t.border,
+                    marginBottom: 4,
+                  }}
+                >
+                  <Mono size={9} style={{ letterSpacing: 1.5 }}>
+                    NOT ON A DAY YET
+                  </Mono>
+                  <Mono size={10}>{unplaced.length}</Mono>
+                </View>
+                {unplaced.map((entry) => (
+                  <View
+                    key={entry.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      paddingVertical: 9,
+                      borderBottomWidth: 1,
+                      borderBottomColor: t.ruleHair,
+                    }}
+                  >
+                    {renderEntry(entry, false)}
+                    <Pressable
+                      onPress={() => {
+                        haptics.select();
+                        setEntryMenu(entry);
+                      }}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Plan mode + a plain add. */}
             <Pressable
-              onPress={() => setShowAdd(true)}
+              onPress={() => {
+                haptics.medium();
+                setPlanOpen(true);
+              }}
               style={{
-                marginTop: entries.length > 0 ? 20 : 0,
+                marginTop: 22,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 12,
-                paddingVertical: 16,
-                paddingHorizontal: 18,
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 14,
+                borderRadius: 4,
+                backgroundColor: t.greenSolid,
+              }}
+            >
+              <Ionicons name="sparkles-outline" size={16} color={t.onGreen} />
+              <Serif size={16} italic color={t.onGreen}>
+                Plan the week
+              </Serif>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setAddTarget(null);
+                setShowAdd(true);
+              }}
+              style={{
+                marginTop: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 14,
+                borderRadius: 4,
                 borderWidth: 1,
                 borderStyle: 'dashed',
                 borderColor: t.green,
-                borderRadius: 4,
               }}
             >
-              <Ionicons name="add" size={18} color={t.green} />
+              <Ionicons name="add" size={16} color={t.green} />
               <Serif size={16} italic color={t.green}>
-                Add a recipe
+                Add one meal
               </Serif>
             </Pressable>
           </View>
@@ -464,26 +943,55 @@ export default function MealPlanScreen() {
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="cart-outline" size={40} color={t.muted} />
                 <Serif size={21} style={{ marginTop: 14 }}>
-                  {entries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
+                  {mealEntries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
                 </Serif>
                 <Body size={14} color={t.muted} style={{ marginTop: 4, textAlign: 'center' }}>
-                  {entries.length === 0 ? 'Add some meals to generate a shopping list.' : 'Nothing left to shop for.'}
+                  {mealEntries.length === 0
+                    ? 'Add some meals to generate a shopping list.'
+                    : 'Nothing left to shop for.'}
                 </Body>
               </View>
             )}
 
             {combined.length > 0 && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 14, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: t.border }}>
-                <Mono size={10} style={{ letterSpacing: 1.4 }}>SHOPPING LIST</Mono>
-                <Mono size={11}>{checkedItems.size}/{combined.length} TICKED</Mono>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  paddingBottom: 14,
+                  marginBottom: 18,
+                  borderBottomWidth: 1,
+                  borderBottomColor: t.border,
+                }}
+              >
+                <Mono size={10} style={{ letterSpacing: 1.4 }}>
+                  SHOPPING LIST
+                </Mono>
+                <Mono size={11}>
+                  {checkedItems.size}/{combined.length} TICKED
+                </Mono>
               </View>
             )}
 
             {grouped.map((group, gi) => (
               <View key={group.category} style={{ marginBottom: 22 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.border, marginBottom: 2 }}>
-                  <Serif size={13} italic color={t.green}>{toRoman(gi + 1)}.</Serif>
-                  <Serif size={18} style={{ flex: 1 }}>{group.category}</Serif>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'baseline',
+                    gap: 10,
+                    paddingBottom: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: t.border,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Serif size={13} italic color={t.green}>
+                    {toRoman(gi + 1)}.
+                  </Serif>
+                  <Serif size={18} style={{ flex: 1 }}>
+                    {group.category}
+                  </Serif>
                   <Mono size={11}>{group.items.length}</Mono>
                 </View>
                 {group.items.map((ing, i) => {
@@ -506,7 +1014,11 @@ export default function MealPlanScreen() {
                     >
                       <CheckSquare checked={checked} />
                       <IngredientIcon item={ing.item} />
-                      <Serif size={16} style={{ flex: 1, textDecorationLine: checked ? 'line-through' : 'none' }} color={checked ? t.muted : t.text}>
+                      <Serif
+                        size={16}
+                        style={{ flex: 1, textDecorationLine: checked ? 'line-through' : 'none' }}
+                        color={checked ? t.muted : t.text}
+                      >
                         {ing.item}
                       </Serif>
                       {qty ? <Mono size={11}>{qty}</Mono> : null}
@@ -519,10 +1031,112 @@ export default function MealPlanScreen() {
         )}
       </ScrollView>
 
+      {/* ── Week switcher ────────────────────────────── */}
+      <BottomSheet open={weekMenu} onClose={() => setWeekMenu(false)}>
+        <View style={{ paddingHorizontal: 20 }}>
+          <Serif size={20}>Which week?</Serif>
+          <View style={{ marginTop: 12 }}>
+            {[-1, 0, 1, 2, 3].map((offset) => {
+              const target = shiftWeek(getMonday(new Date()), offset);
+              const active = formatWeekStart(target) === formatWeekStart(weekStart);
+              const name =
+                offset === -1
+                  ? 'Last week'
+                  : offset === 0
+                    ? 'This week'
+                    : offset === 1
+                      ? 'Next week'
+                      : `In ${offset} weeks`;
+              return (
+                <Pressable
+                  key={offset}
+                  onPress={() => {
+                    haptics.select();
+                    setWeekStart(target);
+                    setWeekMenu(false);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 13,
+                    paddingHorizontal: 12,
+                    borderRadius: 4,
+                    backgroundColor: active ? t.greenLight : 'transparent',
+                  }}
+                >
+                  <Serif size={16} color={active ? t.green : t.text}>
+                    {name}
+                  </Serif>
+                  <Mono size={9.5}>{formatWeekLabel(target).toUpperCase()}</Mono>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </BottomSheet>
+
+      {/* ── Per-meal menu ────────────────────────────── */}
+      <BottomSheet open={entryMenu !== null} onClose={() => setEntryMenu(null)}>
+        <View style={{ paddingHorizontal: 20 }}>
+          <Serif size={20} numberOfLines={1}>
+            {entryMenu?.entry_type === 'out' ? 'Eating out' : entryMenu?.recipe?.title}
+          </Serif>
+          <Mono size={9} style={{ marginTop: 3, letterSpacing: 1.4 }}>
+            {entryMenu?.day_index != null ? DAY_SHORT[entryMenu.day_index].toUpperCase() : 'NO DAY YET'}
+          </Mono>
+          <View style={{ marginTop: 10 }}>
+            {menuActions.map((a) => (
+              <Pressable
+                key={a.label}
+                onPress={a.run}
+                style={{ paddingVertical: 13, borderTopWidth: 1, borderTopColor: t.ruleHair }}
+              >
+                <Serif size={16} color={a.danger ? t.red : t.text}>
+                  {a.label}
+                </Serif>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </BottomSheet>
+
+      <DayOptionsSheet
+        open={daySheet !== null}
+        dayIndex={daySheet}
+        weekStart={weekStart}
+        entries={entries}
+        onCook={() => {
+          setAddTarget(daySheet);
+          setDaySheet(null);
+          setShowAdd(true);
+        }}
+        onAnotherNight={(cookId) => {
+          addBatchNight(cookId, daySheet);
+          setDaySheet(null);
+        }}
+        onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
+        onClose={() => setDaySheet(null)}
+      />
+
+      <PlanWeekSheet
+        open={planOpen}
+        weekStart={weekStart}
+        takenDays={takenDays}
+        prefs={prefs}
+        onSavePrefs={savePrefs}
+        onCommit={commitPlan}
+        onClose={() => setPlanOpen(false)}
+      />
+
       <RecipePickerSheet
         open={showAdd}
+        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
         existingIds={existingIds}
-        onPick={(r) => addRecipe(r)}
+        onPick={(r) => {
+          addCook(r, addTarget);
+          setShowAdd(false);
+        }}
         onClose={() => setShowAdd(false)}
       />
 
