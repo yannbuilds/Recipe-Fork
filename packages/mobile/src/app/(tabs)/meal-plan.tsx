@@ -649,8 +649,9 @@ export default function MealPlanScreen() {
           {subtitle}
         </Body>
 
-        {/* Fri–Sun the app pre-selects next week. Say so, and offer the way back. */}
-        {isPlanningMode() && isNextWeek && (
+        {/* Fri–Sun is when the week ahead usually gets planned. Offer the jump
+            rather than making it — you always land on this week. */}
+        {isPlanningMode() && isCurrentWeek && (
           <View
             style={{
               marginHorizontal: 16,
@@ -669,11 +670,16 @@ export default function MealPlanScreen() {
           >
             <Ionicons name="calendar-outline" size={14} color={t.green} />
             <Body size={12.5} color={t.textSoft} style={{ flex: 1 }}>
-              It's the weekend, so you're planning next week.
+              It's the weekend — good time to sort the week ahead.
             </Body>
-            <Pressable onPress={() => setWeekStart(getMonday(new Date()))}>
+            <Pressable
+              onPress={() => {
+                haptics.select();
+                setWeekStart(shiftWeek(getMonday(new Date()), 1));
+              }}
+            >
               <Body size={12.5} weight="medium" color={t.green}>
-                This week →
+                Next week →
               </Body>
             </Pressable>
           </View>

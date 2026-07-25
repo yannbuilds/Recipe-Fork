@@ -34,10 +34,14 @@ export function isPlanningMode(): boolean {
   return day === 0 || day === 5 || day === 6;
 }
 
-/** Like getMonday(), but auto-advances to next week on Fri/Sat/Sun. */
+/**
+ * The week the Plan screen opens on — always the current one. Jumping ahead on
+ * a weekend was disorienting: the meals you cooked on Monday vanished with no
+ * explanation. The weekend nudge is now an offer on the screen, not a decision
+ * made for you.
+ */
 export function getDefaultWeekStart(): Date {
-  const monday = getMonday(new Date());
-  return isPlanningMode() ? shiftWeek(monday, 1) : monday;
+  return getMonday(new Date());
 }
 
 export function getWeekOptions(count = 4): WeekOption[] {
