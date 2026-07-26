@@ -930,7 +930,12 @@ export default function RecipeDetailScreen() {
       <RateCookSheet
         open={rateCookId !== null}
         cookId={rateCookId}
+        recipeId={recipe.id}
         recipeTitle={recipe.title}
+        onAutoFavourite={() => {
+          setIsFav(true);
+          queryClient.invalidateQueries({ queryKey: ['recipes'] });
+        }}
         onClose={() => {
           setRateCookId(null);
           router.back();

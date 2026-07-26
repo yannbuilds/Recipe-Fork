@@ -96,7 +96,7 @@ export default function MealPlan() {
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
-  const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
+  const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [categorising, setCategorising] = useState(false);
@@ -392,7 +392,9 @@ export default function MealPlan() {
         .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
         .select('id')
         .single();
-      if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
+      if (cook) {
+        setRateCook({ cookId: cook.id, recipeId: entry.recipe_id, title: entry.recipe?.title });
+      }
     } else if (!next) {
       await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
     }
@@ -1339,7 +1341,19 @@ export default function MealPlan() {
       <RateCookModal
         open={rateCook !== null}
         cookId={rateCook?.cookId ?? null}
+        recipeId={rateCook?.recipeId ?? null}
         recipeTitle={rateCook?.title}
+        onAutoFavourite={() => {
+          const recipeId = rateCook?.recipeId;
+          if (!recipeId) return;
+          setEntries((prev) =>
+            prev.map((entry) =>
+              entry.recipe?.id === recipeId
+                ? { ...entry, recipe: { ...entry.recipe, is_favourite: true } }
+                : entry,
+            ),
+          );
+        }}
         onClose={() => setRateCook(null)}
       />
     </div>

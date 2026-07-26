@@ -66,7 +66,7 @@ export default function MealPlanScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
-  const [rateCook, setRateCook] = useState<{ cookId: string; title?: string } | null>(null);
+  const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorised = useRef('');
   const scrollRef = useRef<ScrollView | null>(null);
@@ -337,7 +337,9 @@ export default function MealPlanScreen() {
         .insert({ recipe_id: entry.recipe_id, user_id: user.id, meal_plan_recipe_id: entryId })
         .select('id')
         .single();
-      if (cook) setRateCook({ cookId: cook.id, title: entry.recipe?.title });
+      if (cook) {
+        setRateCook({ cookId: cook.id, recipeId: entry.recipe_id, title: entry.recipe?.title });
+      }
     } else if (!next) {
       await supabase.from('recipe_cooks').delete().eq('meal_plan_recipe_id', entryId);
     }
@@ -1350,7 +1352,19 @@ export default function MealPlanScreen() {
       <RateCookSheet
         open={rateCook !== null}
         cookId={rateCook?.cookId ?? null}
+        recipeId={rateCook?.recipeId ?? null}
         recipeTitle={rateCook?.title}
+        onAutoFavourite={() => {
+          const recipeId = rateCook?.recipeId;
+          if (!recipeId) return;
+          setEntries((prev) =>
+            prev.map((entry) =>
+              entry.recipe?.id === recipeId
+                ? { ...entry, recipe: { ...entry.recipe, is_favourite: true } }
+                : entry,
+            ),
+          );
+        }}
         onClose={() => setRateCook(null)}
       />
     </View>

@@ -1720,7 +1720,11 @@ export default function RecipeDetail() {
       <RateCookModal
         open={rateCookId !== null}
         cookId={rateCookId}
+        recipeId={recipe?.id ?? null}
         recipeTitle={recipe?.title}
+        onAutoFavourite={() => {
+          setRecipe((prev) => (prev ? { ...prev, is_favourite: true } : prev));
+        }}
         onClose={() => {
           setRateCookId(null);
           navigate('/meal-plan');

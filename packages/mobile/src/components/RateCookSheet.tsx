@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { Body, Button, Eyebrow, Mono, Serif } from '@/components/ui';
@@ -26,7 +26,10 @@ interface Props {
   open: boolean;
   /** id of the recipe_cooks row to attach ratings to */
   cookId: string | null;
+  /** Recipe to automatically favourite after a perfect score. */
+  recipeId: string | null;
   recipeTitle?: string;
+  onAutoFavourite?: () => void;
   /** Called after save or skip — the cook itself is already logged. */
   onClose: () => void;
 }
@@ -56,14 +59,37 @@ function StarRow({ value, onChange }: { value: number; onChange: (v: number) => 
   );
 }
 
-export default function RateCookSheet({ open, cookId, recipeTitle, onClose }: Props) {
+type SaveNotice = 'favourited' | 'rating-error' | 'favourite-error' | null;
+
+export default function RateCookSheet({
+  open,
+  cookId,
+  recipeId,
+  recipeTitle,
+  onAutoFavourite,
+  onClose,
+}: Props) {
   const t = useTheme();
   const [ratings, setRatings] = useState<Record<AspectKey, number>>({ taste: 0, ease: 0, value: 0 });
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<SaveNotice>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (open) setRatings({ taste: 0, ease: 0, value: 0 });
+    if (open) {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      setRatings({ taste: 0, ease: 0, value: 0 });
+      setNotice(null);
+      setSaving(false);
+    }
   }, [open]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
 
   const hasAny = ratings.taste > 0 || ratings.ease > 0 || ratings.value > 0;
 
@@ -73,7 +99,8 @@ export default function RateCookSheet({ open, cookId, recipeTitle, onClose }: Pr
       return;
     }
     setSaving(true);
-    await supabase
+    setNotice(null);
+    const { error: ratingError } = await supabase
       .from('recipe_cooks')
       .update({
         rating_taste: ratings.taste || null,
@@ -81,6 +108,36 @@ export default function RateCookSheet({ open, cookId, recipeTitle, onClose }: Pr
         rating_value: ratings.value || null,
       })
       .eq('id', cookId);
+
+    if (ratingError) {
+      setSaving(false);
+      setNotice('rating-error');
+      haptics.error();
+      return;
+    }
+
+    const isPerfectScore = ratings.taste === 5 && ratings.ease === 5 && ratings.value === 5;
+    if (isPerfectScore && recipeId) {
+      const { error: favouriteError } = await supabase
+        .from('recipes')
+        .update({ is_favourite: true })
+        .eq('id', recipeId);
+
+      if (favouriteError) {
+        setSaving(false);
+        setNotice('favourite-error');
+        haptics.error();
+        return;
+      }
+
+      onAutoFavourite?.();
+      setSaving(false);
+      setNotice('favourited');
+      haptics.success();
+      closeTimerRef.current = setTimeout(onClose, 1500);
+      return;
+    }
+
     setSaving(false);
     haptics.success();
     onClose();
@@ -115,26 +172,68 @@ export default function RateCookSheet({ open, cookId, recipeTitle, onClose }: Pr
               </View>
               <StarRow
                 value={ratings[a.key]}
-                onChange={(v) => setRatings((prev) => ({ ...prev, [a.key]: v }))}
+                onChange={(v) => {
+                  setNotice(null);
+                  setRatings((prev) => ({ ...prev, [a.key]: v }));
+                }}
               />
             </View>
           ))}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
-          <View style={{ flex: 1 }}>
-            <Button label="Skip" variant="secondary" full onPress={onClose} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button
-              label={saving ? 'Saving…' : 'Save rating'}
-              variant="filled"
-              full
-              disabled={!hasAny || saving}
-              onPress={handleSave}
+        {notice ? (
+          <View
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 24,
+              paddingHorizontal: 14,
+              paddingVertical: 11,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: notice === 'favourited' ? t.green : t.red,
+              backgroundColor: notice === 'favourited' ? t.greenLight : t.card,
+            }}
+          >
+            <Ionicons
+              name={notice === 'favourited' ? 'heart' : 'alert-circle'}
+              size={17}
+              color={notice === 'favourited' ? t.green : t.red}
             />
+            <Body
+              size={13}
+              weight="semi"
+              color={notice === 'favourited' ? t.green : t.red}
+              style={{ flex: 1 }}
+            >
+              {notice === 'favourited'
+                ? 'Perfect score — added to favourites'
+                : notice === 'rating-error'
+                  ? 'Couldn’t save your rating — try again'
+                  : 'Rating saved, but the favourite didn’t — try again'}
+            </Body>
           </View>
-        </View>
+        ) : null}
+
+        {notice !== 'favourited' ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
+            <View style={{ flex: 1 }}>
+              <Button label="Skip" variant="secondary" full onPress={onClose} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label={saving ? 'Saving…' : 'Save rating'}
+                variant="filled"
+                full
+                disabled={!hasAny || saving}
+                onPress={handleSave}
+              />
+            </View>
+          </View>
+        ) : null}
       </View>
     </BottomSheet>
   );

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Star } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertCircle, Heart, Star } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 
@@ -22,7 +22,10 @@ interface RateCookModalProps {
   open: boolean;
   /** id of the recipe_cooks row to attach ratings to */
   cookId: string | null;
+  /** Recipe to automatically favourite after a perfect score. */
+  recipeId: string | null;
   recipeTitle?: string;
+  onAutoFavourite?: () => void;
   /** Called after save or skip — the cook itself is already logged. */
   onClose: () => void;
 }
@@ -61,13 +64,36 @@ function StarRow({
   );
 }
 
-export default function RateCookModal({ open, cookId, recipeTitle, onClose }: RateCookModalProps) {
+type SaveNotice = 'favourited' | 'rating-error' | 'favourite-error' | null;
+
+export default function RateCookModal({
+  open,
+  cookId,
+  recipeId,
+  recipeTitle,
+  onAutoFavourite,
+  onClose,
+}: RateCookModalProps) {
   const [ratings, setRatings] = useState<Record<AspectKey, number>>({ taste: 0, ease: 0, value: 0 });
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<SaveNotice>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (open) setRatings({ taste: 0, ease: 0, value: 0 });
+    if (open) {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      setRatings({ taste: 0, ease: 0, value: 0 });
+      setNotice(null);
+      setSaving(false);
+    }
   }, [open]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +114,8 @@ export default function RateCookModal({ open, cookId, recipeTitle, onClose }: Ra
       return;
     }
     setSaving(true);
-    await supabase
+    setNotice(null);
+    const { error: ratingError } = await supabase
       .from('recipe_cooks')
       .update({
         rating_taste: ratings.taste || null,
@@ -96,6 +123,33 @@ export default function RateCookModal({ open, cookId, recipeTitle, onClose }: Ra
         rating_value: ratings.value || null,
       })
       .eq('id', cookId);
+
+    if (ratingError) {
+      setSaving(false);
+      setNotice('rating-error');
+      return;
+    }
+
+    const isPerfectScore = ratings.taste === 5 && ratings.ease === 5 && ratings.value === 5;
+    if (isPerfectScore && recipeId) {
+      const { error: favouriteError } = await supabase
+        .from('recipes')
+        .update({ is_favourite: true })
+        .eq('id', recipeId);
+
+      if (favouriteError) {
+        setSaving(false);
+        setNotice('favourite-error');
+        return;
+      }
+
+      onAutoFavourite?.();
+      setSaving(false);
+      setNotice('favourited');
+      closeTimerRef.current = window.setTimeout(onClose, 1500);
+      return;
+    }
+
     setSaving(false);
     onClose();
   }
@@ -158,50 +212,80 @@ export default function RateCookModal({ open, cookId, recipeTitle, onClose }: Ra
               </div>
               <StarRow
                 value={ratings[a.key]}
-                onChange={(v) => setRatings((prev) => ({ ...prev, [a.key]: v }))}
+                onChange={(v) => {
+                  setNotice(null);
+                  setRatings((prev) => ({ ...prev, [a.key]: v }));
+                }}
               />
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2 mt-6">
-          <button
-            onClick={onClose}
-            className="flex-1 transition-colors"
+        {notice && (
+          <div
+            className="flex items-center gap-2 mt-6"
             style={{
-              padding: '10px 0',
+              padding: '10px 14px',
               borderRadius: 999,
               fontFamily: fSans,
               fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-              border: '1px solid var(--border)',
-              background: 'var(--card)',
-              color: 'var(--muted)',
+              fontWeight: 600,
+              border: `1px solid ${notice === 'favourited' ? 'var(--green)' : 'var(--red)'}`,
+              background: notice === 'favourited' ? 'var(--green-light)' : 'var(--card)',
+              color: notice === 'favourited' ? 'var(--green)' : 'var(--red)',
             }}
+            role="status"
+            aria-live="polite"
           >
-            Skip
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!hasAny || saving}
-            className="flex-1 transition-colors"
-            style={{
-              padding: '10px 0',
-              borderRadius: 999,
-              fontFamily: fSans,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: hasAny ? 'pointer' : 'default',
-              border: '1px solid var(--green)',
-              background: hasAny ? 'var(--green)' : 'var(--green-light)',
-              color: hasAny ? '#fff' : 'var(--green)',
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            {saving ? 'Saving…' : 'Save rating'}
-          </button>
-        </div>
+            {notice === 'favourited' ? <Heart size={16} fill="currentColor" /> : <AlertCircle size={16} />}
+            {notice === 'favourited'
+              ? 'Perfect score — added to favourites'
+              : notice === 'rating-error'
+                ? 'Couldn’t save your rating — try again'
+                : 'Rating saved, but the favourite didn’t — try again'}
+          </div>
+        )}
+
+        {notice !== 'favourited' && (
+          <div className="flex gap-2 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 transition-colors"
+              style={{
+                padding: '10px 0',
+                borderRadius: 999,
+                fontFamily: fSans,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                border: '1px solid var(--border)',
+                background: 'var(--card)',
+                color: 'var(--muted)',
+              }}
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!hasAny || saving}
+              className="flex-1 transition-colors"
+              style={{
+                padding: '10px 0',
+                borderRadius: 999,
+                fontFamily: fSans,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: hasAny ? 'pointer' : 'default',
+                border: '1px solid var(--green)',
+                background: hasAny ? 'var(--green)' : 'var(--green-light)',
+                color: hasAny ? '#fff' : 'var(--green)',
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? 'Saving…' : 'Save rating'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
