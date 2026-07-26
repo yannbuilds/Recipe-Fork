@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { Recipe } from '@recipe-aggregator/shared';
+import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
@@ -42,7 +42,10 @@ interface Props {
   onClose: () => void;
 }
 
-type Filter = 'suggested' | 'favourites' | 'recent' | 'all';
+/** Where the picker is reading from. `cookbook:<id>` narrows to one cookbook. */
+type Filter = 'suggested' | 'favourites' | 'recent' | 'all' | `cookbook:${string}`;
+
+const COOKBOOK_PREFIX = 'cookbook:';
 
 /**
  * Plan mode. Asks the two setup questions once, remembers the answers, and from
@@ -65,6 +68,8 @@ export default function PlanWeekSheet({
   const [servings, setServings] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
+  const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
+  const [cookbookRecipes, setCookbookRecipes] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('suggested');
   const [search, setSearch] = useState('');
@@ -85,32 +90,59 @@ export default function PlanWeekSheet({
     setFilter('suggested');
     setLoading(true);
     (async () => {
-      const [{ data: recipeData }, { data: cookData }] = await Promise.all([
-        supabase.from('recipes').select('*').order('title'),
-        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
-      ]);
+      const [{ data: recipeData }, { data: cookData }, { data: cbData }, { data: cbRecipeData }] =
+        await Promise.all([
+          supabase.from('recipes').select('*').order('title'),
+          supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
+          supabase
+            .from('cookbooks')
+            .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: false }),
+          supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
+        ]);
       setRecipes((recipeData as Recipe[]) ?? []);
       const map: Record<string, string> = {};
       for (const r of (cookData as { recipe_id: string; cooked_at: string }[]) ?? []) {
         if (!map[r.recipe_id] || r.cooked_at > map[r.recipe_id]) map[r.recipe_id] = r.cooked_at;
       }
       setLastCooked(map);
+      setCookbooks((cbData as Cookbook[]) ?? []);
+      const members: Record<string, Set<string>> = {};
+      for (const row of (cbRecipeData as { cookbook_id: string; recipe_id: string }[]) ?? []) {
+        (members[row.cookbook_id] ??= new Set()).add(row.recipe_id);
+      }
+      setCookbookRecipes(members);
       setLoading(false);
     })();
   }, [open, prefs]);
+
+  // Cookbooks you can actually pick from — an empty one is just noise here.
+  const pickableCookbooks = useMemo(
+    () => cookbooks.filter((c) => (cookbookRecipes[c.id]?.size ?? 0) > 0),
+    [cookbooks, cookbookRecipes],
+  );
+
+  const activeCookbook = filter.startsWith(COOKBOOK_PREFIX)
+    ? cookbooks.find((c) => c.id === filter.slice(COOKBOOK_PREFIX.length))
+    : undefined;
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = recipes.filter((r) => !q || r.title.toLowerCase().includes(q));
     if (filter === 'favourites') list = list.filter((r) => r.is_favourite);
+    if (filter.startsWith(COOKBOOK_PREFIX)) {
+      const ids = cookbookRecipes[filter.slice(COOKBOOK_PREFIX.length)];
+      list = ids ? list.filter((r) => ids.has(r.id)) : [];
+    }
     if (filter === 'recent') {
       list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (filter === 'suggested') {
+    } else if (filter === 'suggested' || filter.startsWith(COOKBOOK_PREFIX)) {
       // Longest time since you last cooked it, never-cooked first.
       list = [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
     }
     return list.slice(0, 60);
-  }, [recipes, search, filter, lastCooked]);
+  }, [recipes, search, filter, lastCooked, cookbookRecipes]);
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
 
@@ -404,7 +436,14 @@ export default function PlanWeekSheet({
                 }}
               />
 
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  marginBottom: pickableCookbooks.length > 0 ? 14 : 16,
+                }}
+              >
                 {(
                   [
                     ['suggested', 'Not cooked lately'],
@@ -438,7 +477,85 @@ export default function PlanWeekSheet({
                 })}
               </View>
 
+              {/* Your shelves, right here — half the week is already decided in a
+                  cookbook, so make it pickable without leaving plan mode. */}
+              {pickableCookbooks.length > 0 && (
+                <View style={{ marginBottom: 14 }}>
+                  <Mono size={9} style={{ letterSpacing: 1.5, marginBottom: 8 }}>
+                    FROM A COOKBOOK
+                  </Mono>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginHorizontal: -20 }}
+                    contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}
+                  >
+                    {pickableCookbooks.map((cb) => {
+                      const key: Filter = `${COOKBOOK_PREFIX}${cb.id}`;
+                      const on = filter === key;
+                      const count = cookbookRecipes[cb.id]?.size ?? 0;
+                      return (
+                        <Pressable
+                          key={cb.id}
+                          onPress={() => {
+                            haptics.select();
+                            setFilter(on ? 'suggested' : key);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            maxWidth: 210,
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: on ? t.greenSolid : t.border,
+                            backgroundColor: on ? t.greenSolid : 'transparent',
+                          }}
+                        >
+                          <Body size={12}>{cb.emoji || '📗'}</Body>
+                          <Body size={12} numberOfLines={1} color={on ? t.onGreen : t.textSoft} style={{ flexShrink: 1 }}>
+                            {cb.name}
+                          </Body>
+                          <Mono size={9} color={on ? t.onGreen : t.muted}>
+                            {count}
+                          </Mono>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {activeCookbook && (
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}
+                >
+                  <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
+                    Showing {activeCookbook.name}, least recently cooked first.
+                  </Body>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => {
+                      haptics.select();
+                      setFilter('suggested');
+                    }}
+                  >
+                    <Body size={12.5} color={t.green}>
+                      Show everything
+                    </Body>
+                  </Pressable>
+                </View>
+              )}
+
               {loading && <ActivityIndicator color={t.green} style={{ marginVertical: 28 }} />}
+
+              {!loading && visible.length === 0 && (
+                <Body size={14} color={t.muted} style={{ paddingVertical: 24, textAlign: 'center' }}>
+                  {search.trim() ? 'No recipes match that search.' : 'Nothing to pick here yet.'}
+                </Body>
+              )}
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 11 }}>
                 {visible.map((recipe) => {

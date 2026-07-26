@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Minus, Plus, X as XIcon, Utensils, Wand2 } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe } from '@recipe-aggregator/shared';
+import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex } from '../utils/mealPlanDays';
 
@@ -34,7 +34,10 @@ interface Props {
   onClose: () => void;
 }
 
-type Filter = 'suggested' | 'favourites' | 'recent' | 'all';
+/** Where the picker is reading from. `cookbook:<id>` narrows to one cookbook. */
+type Filter = 'suggested' | 'favourites' | 'recent' | 'all' | `cookbook:${string}`;
+
+const COOKBOOK_PREFIX = 'cookbook:';
 
 /**
  * Plan mode. Asks the two setup questions once, remembers the answers, and from
@@ -55,6 +58,8 @@ export default function PlanWeekModal({
   const [servings, setServings] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
+  const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
+  const [cookbookRecipes, setCookbookRecipes] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('suggested');
   const [search, setSearch] = useState('');
@@ -75,16 +80,29 @@ export default function PlanWeekModal({
     setFilter('suggested');
     setLoading(true);
     (async () => {
-      const [{ data: recipeData }, { data: cookData }] = await Promise.all([
-        supabase.from('recipes').select('*').order('title'),
-        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
-      ]);
+      const [{ data: recipeData }, { data: cookData }, { data: cbData }, { data: cbRecipeData }] =
+        await Promise.all([
+          supabase.from('recipes').select('*').order('title'),
+          supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
+          supabase
+            .from('cookbooks')
+            .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: false }),
+          supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
+        ]);
       setRecipes((recipeData as Recipe[]) ?? []);
       const map: Record<string, string> = {};
       for (const row of (cookData as { recipe_id: string; cooked_at: string }[]) ?? []) {
         if (!map[row.recipe_id] || row.cooked_at > map[row.recipe_id]) map[row.recipe_id] = row.cooked_at;
       }
       setLastCooked(map);
+      setCookbooks((cbData as Cookbook[]) ?? []);
+      const members: Record<string, Set<string>> = {};
+      for (const row of (cbRecipeData as { cookbook_id: string; recipe_id: string }[]) ?? []) {
+        (members[row.cookbook_id] ??= new Set()).add(row.recipe_id);
+      }
+      setCookbookRecipes(members);
       setLoading(false);
     })();
   }, [open, prefs]);
@@ -98,18 +116,32 @@ export default function PlanWeekModal({
     return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
+  // Cookbooks you can actually pick from — an empty one is just noise here.
+  const pickableCookbooks = useMemo(
+    () => cookbooks.filter((c) => (cookbookRecipes[c.id]?.size ?? 0) > 0),
+    [cookbooks, cookbookRecipes],
+  );
+
+  const activeCookbook = filter.startsWith(COOKBOOK_PREFIX)
+    ? cookbooks.find((c) => c.id === filter.slice(COOKBOOK_PREFIX.length))
+    : undefined;
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = recipes.filter((r) => !q || r.title.toLowerCase().includes(q));
     if (filter === 'favourites') list = list.filter((r) => r.is_favourite);
+    if (filter.startsWith(COOKBOOK_PREFIX)) {
+      const ids = cookbookRecipes[filter.slice(COOKBOOK_PREFIX.length)];
+      list = ids ? list.filter((r) => ids.has(r.id)) : [];
+    }
     if (filter === 'recent') {
       list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (filter === 'suggested') {
+    } else if (filter === 'suggested' || filter.startsWith(COOKBOOK_PREFIX)) {
       // Longest time since you last cooked it, never-cooked first.
       list = [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
     }
     return list.slice(0, 60);
-  }, [recipes, search, filter, lastCooked]);
+  }, [recipes, search, filter, lastCooked, cookbookRecipes]);
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
 
@@ -318,7 +350,7 @@ export default function PlanWeekModal({
                 style={{ marginBottom: 12 }}
               />
 
-              <div className="flex gap-2" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="flex gap-2" style={{ marginBottom: pickableCookbooks.length > 0 ? 12 : 16, flexWrap: 'wrap' }}>
                 {([
                   ['suggested', 'Not cooked lately'],
                   ['favourites', 'Favourites'],
@@ -346,8 +378,70 @@ export default function PlanWeekModal({
                 ))}
               </div>
 
+              {/* Your shelves, right here — half the week is already decided in a
+                  cookbook, so make it pickable without leaving plan mode. */}
+              {pickableCookbooks.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+                    From a cookbook
+                  </div>
+                  {/* One scrolling rail rather than a wrapping block — a big shelf
+                      would otherwise push the recipes below the fold. */}
+                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ flexWrap: 'nowrap' }}>
+                    {pickableCookbooks.map((cb) => {
+                      const key: Filter = `${COOKBOOK_PREFIX}${cb.id}`;
+                      const on = filter === key;
+                      const count = cookbookRecipes[cb.id]?.size ?? 0;
+                      return (
+                        <button
+                          key={cb.id}
+                          onClick={() => setFilter(on ? 'suggested' : key)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontFamily: fSans,
+                            fontSize: 12,
+                            padding: '6px 12px',
+                            borderRadius: 999,
+                            cursor: 'pointer',
+                            border: `1px solid ${on ? 'var(--green-solid)' : 'var(--border)'}`,
+                            background: on ? 'var(--green-solid)' : 'transparent',
+                            color: on ? '#fff' : 'var(--text-soft)',
+                            flexShrink: 0,
+                            maxWidth: 220,
+                          }}
+                        >
+                          <span aria-hidden>{cb.emoji || '📗'}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cb.name}</span>
+                          <span style={{ fontFamily: fMono, fontSize: 9.5, opacity: on ? 0.85 : 0.6 }}>{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {activeCookbook && (
+                <p style={{ margin: '0 0 12px', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
+                  Showing <strong style={{ color: 'var(--text-soft)' }}>{activeCookbook.name}</strong>, least recently cooked first.{' '}
+                  <button
+                    onClick={() => setFilter('suggested')}
+                    style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Show everything
+                  </button>
+                </p>
+              )}
+
               {loading && (
                 <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>Loading…</p>
+              )}
+
+              {!loading && visible.length === 0 && (
+                <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>
+                  {search.trim() ? 'No recipes match that search.' : 'Nothing to pick here yet.'}
+                </p>
               )}
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
