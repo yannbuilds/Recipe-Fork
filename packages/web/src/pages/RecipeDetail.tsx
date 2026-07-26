@@ -1688,8 +1688,11 @@ export default function RecipeDetail() {
       {/* ── Cook mode: floating "Mark as cooked" ─────────────── */}
       {cookMode && !rateCookId && (
         <div
+          // The bottom nav is fixed on every viewport, not just mobile, so this
+          // has to clear it everywhere — at a desktop-only 28px the nav painted
+          // straight over the button (both sit at z-40, nav renders last).
           className="fixed left-0 right-0 z-40 flex justify-center pointer-events-none"
-          style={{ bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 84px)' : 28 }}
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}
         >
           <button
             onClick={handleMarkCooked}
