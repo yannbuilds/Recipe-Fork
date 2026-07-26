@@ -283,8 +283,7 @@ export default function PlanWeekModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="rf-card w-full max-w-[640px] mx-3 flex flex-col"
-        style={{ maxHeight: '86vh' }}
+        className="rf-card rf-modal-tall w-full max-w-[640px] mx-3 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

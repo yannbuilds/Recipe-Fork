@@ -290,6 +290,15 @@
   box-shadow: var(--shadow-md);
 }
 
+/* A modal that fills most of the screen. Measured in dvh so it fits the
+   *visible* viewport, not the taller one mobile Safari reports while its
+   toolbars are hidden — otherwise a footer pinned inside the card lands below
+   the fold where it can't be tapped. The vh line is the fallback. */
+.rf-modal-tall {
+  max-height: 86vh;
+  max-height: 86dvh;
+}
+
 /* ── Buttons ───────────────────────────────────── */
 .rf-btn {
   display: inline-flex;

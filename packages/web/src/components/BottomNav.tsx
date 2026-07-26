@@ -16,8 +16,11 @@ export default function BottomNav() {
   const { openModal } = useNewRecipeModal();
 
   return (
+    // z-40 sits below the z-50 modal overlays on purpose. The nav renders after
+    // <Routes> in App, so at an equal z-index it painted over whatever modal was
+    // open and swallowed the buttons pinned to the bottom of it.
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50"
+      className="fixed bottom-0 left-0 right-0 z-40"
       style={{
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(12px)',
