@@ -2,7 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Body, Button, Mono, Serif } from '@/components/ui';
 import { haptics } from '@/lib/haptics';
@@ -321,8 +330,22 @@ export default function PlanWeekSheet({
   );
 
   return (
-    <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: t.bg }}>
+    // Full screen, not `pageSheet`. A page sheet is laid out by UIKit at a
+    // height React Native doesn't reliably know about, so the pinned footer —
+    // the only way forward through the flow — ended up below the sheet's
+    // visible edge and untappable. Full screen means the flex layout here and
+    // the visible screen are the same box, so the footer is always reachable.
+    <Modal
+      visible={open}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: t.bg }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         {/* Header */}
         <View
           style={{
@@ -330,7 +353,7 @@ export default function PlanWeekSheet({
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             paddingHorizontal: 20,
-            paddingTop: 18,
+            paddingTop: insets.top + 12,
             paddingBottom: 14,
             borderBottomWidth: 1,
             borderBottomColor: t.border,
@@ -353,7 +376,11 @@ export default function PlanWeekSheet({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 30 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           {/* ── Step 1: the two questions ────────────── */}
           {step === 1 && (
             <View>
@@ -747,14 +774,14 @@ export default function PlanWeekSheet({
           )}
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer — always on screen, never behind the tab bar or the keyboard. */}
         <View
           style={{
             flexDirection: 'row',
             gap: 8,
             paddingHorizontal: 20,
             paddingTop: 14,
-            paddingBottom: insets.bottom + 14,
+            paddingBottom: Math.max(insets.bottom, 12) + 12,
             borderTopWidth: 1,
             borderTopColor: t.border,
             backgroundColor: t.card,
@@ -789,7 +816,7 @@ export default function PlanWeekSheet({
             </>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
