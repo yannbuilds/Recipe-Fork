@@ -7,7 +7,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
 import DayOptionsSheet from '@/components/DayOptionsSheet';
-import { DragFloater, DragGrip, useDragToDay } from '@/components/DragToDay';
+import { DragFloater, DragMealRow, useDragToDay } from '@/components/DragToDay';
 import IngredientIcon from '@/components/IngredientIcon';
 import PlanWeekSheet, { type PlanPick, type PlanPrefs } from '@/components/PlanWeekSheet';
 import RateCookSheet from '@/components/RateCookSheet';
@@ -681,8 +681,8 @@ export default function MealPlanScreen() {
     <View style={{ flex: 1, backgroundColor: t.bg }} ref={drag.rootRef}>
       <ScrollView
         ref={scrollRef}
-        // Frozen mid-drag: the grip owns the gesture, and the list scrolls
-        // itself when the finger nears an edge.
+        // Frozen mid-drag; the list scrolls itself when the finger nears an
+        // edge. Before the row's hold activates, normal scrolling still wins.
         scrollEnabled={!drag.dragging}
         scrollEventThrottle={16}
         onScroll={(e) => drag.handleScroll(e.nativeEvent.contentOffset.y)}
@@ -919,8 +919,12 @@ export default function MealPlanScreen() {
                       </Pressable>
                     ) : (
                       dayEntries.map((entry, i) => (
-                        <View
+                        <DragMealRow
                           key={entry.id}
+                          makeResponder={drag.makeResponder}
+                          entryId={entry.id}
+                          from={d}
+                          active={drag.activeId === entry.id}
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -932,12 +936,6 @@ export default function MealPlanScreen() {
                             opacity: drag.activeId === entry.id ? 0.28 : 1,
                           }}
                         >
-                          <DragGrip
-                            makeResponder={drag.makeResponder}
-                            entryId={entry.id}
-                            from={d}
-                            active={drag.activeId === entry.id}
-                          />
                           {renderEntry(entry, isToday)}
                           <Pressable
                             onPress={() => {
@@ -948,7 +946,7 @@ export default function MealPlanScreen() {
                           >
                             <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
                           </Pressable>
-                        </View>
+                        </DragMealRow>
                       ))
                     )}
                   </View>
@@ -1016,8 +1014,12 @@ export default function MealPlanScreen() {
                   </View>
                 ) : (
                   unplaced.map((entry) => (
-                    <View
+                    <DragMealRow
                       key={entry.id}
+                      makeResponder={drag.makeResponder}
+                      entryId={entry.id}
+                      from="none"
+                      active={drag.activeId === entry.id}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -1028,12 +1030,6 @@ export default function MealPlanScreen() {
                         opacity: drag.activeId === entry.id ? 0.28 : 1,
                       }}
                     >
-                      <DragGrip
-                        makeResponder={drag.makeResponder}
-                        entryId={entry.id}
-                        from="none"
-                        active={drag.activeId === entry.id}
-                      />
                       {renderEntry(entry, false)}
                       <Pressable
                         onPress={() => {
@@ -1044,7 +1040,7 @@ export default function MealPlanScreen() {
                       >
                         <Ionicons name="ellipsis-horizontal" size={16} color={t.muted} />
                       </Pressable>
-                    </View>
+                    </DragMealRow>
                   ))
                 )}
               </View>

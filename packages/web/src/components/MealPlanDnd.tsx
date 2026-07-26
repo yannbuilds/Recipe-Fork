@@ -2,8 +2,9 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 
-// Drag-and-drop pieces for the week grid: every meal row can be dragged by its
-// grip onto any day, or onto "Not on a day yet" to take it off the calendar.
+// Drag-and-drop pieces for the week grid: every meal row can be dragged from
+// anywhere on its surface onto any day, or onto "Not on a day yet" to take it
+// off the calendar.
 // Same @dnd-kit foundation as the cookbook reorder, but across containers
 // (7 days + the no-day bucket) rather than one sortable list.
 
@@ -42,9 +43,9 @@ export function MealDropZone({
 }
 
 /**
- * A meal row you can pick up. The whole row is the drag body (so the drop
- * animation snaps the row into its new slot) but only the grip starts a drag —
- * the photo, title, cook button and options menu stay instantly tappable.
+ * A meal row you can pick up from anywhere on its surface. Touch uses the
+ * DndContext's short hold before activation, so ordinary taps on the recipe,
+ * cook button and options menu remain instant.
  */
 export function DraggableMealRow({
   id,
@@ -55,24 +56,28 @@ export function DraggableMealRow({
   style?: CSSProperties;
   children: ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
 
   return (
     <div
       ref={setNodeRef}
       className="flex items-center gap-2"
+      onContextMenu={(e) => e.preventDefault()}
+      {...attributes}
+      {...listeners}
       style={{
         ...style,
         opacity: isDragging ? 0.3 : 1,
         transition: 'opacity 0.15s ease',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        touchAction: 'pan-y',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
       }}
     >
-      <button
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to another day"
-        onContextMenu={(e) => e.preventDefault()}
+      <div
+        aria-hidden
         style={{
           flexShrink: 0,
           display: 'grid',
@@ -85,16 +90,11 @@ export function DraggableMealRow({
           border: 'none',
           color: 'var(--muted)',
           opacity: isDragging ? 1 : 0.5,
-          cursor: isDragging ? 'grabbing' : 'grab',
-          // The handle owns the gesture: no page scroll, no long-press callout.
-          touchAction: 'none',
-          WebkitTouchCallout: 'none',
-          WebkitUserSelect: 'none',
-          userSelect: 'none',
+          pointerEvents: 'none',
         }}
       >
         <GripVertical size={13} strokeWidth={2} />
-      </button>
+      </div>
       {children}
     </div>
   );

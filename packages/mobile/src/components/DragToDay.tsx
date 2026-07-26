@@ -5,8 +5,10 @@ import {
   Dimensions,
   PanResponder,
   type GestureResponderHandlers,
+  type StyleProp,
   type ScrollView,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
@@ -19,9 +21,9 @@ import { useTheme } from '@/lib/theme';
 //   • Every drop target registers its View via `zoneRef` and gets measured in
 //     window coordinates the moment a drag starts, so the finger's pageY maps
 //     straight onto a day.
-//   • The grip owns the touch from the first pixel, so there's no long-press
-//     wait and no wrestling with the ScrollView (which is frozen mid-drag and
-//     auto-scrolled programmatically near the edges).
+//   • The whole meal row becomes draggable after a short hold. Normal taps
+//     still reach its controls, and moving before the hold lets the ScrollView
+//     take over as usual.
 //   • On release the floating card springs onto the target row and fades,
 //     while the move commits underneath it — that's the snap.
 
@@ -55,7 +57,7 @@ export interface DragToDay {
   zoneRef: (key: DropKey) => (node: View | null) => void;
   /** Wire to the ScrollView's onScroll so measured zones follow the content. */
   handleScroll: (y: number) => void;
-  /** Builds the grip's pan handlers. Stable, so rows keep one responder each. */
+  /** Builds a row's hold-then-drag handlers. */
   makeResponder: (entryId: string, from: DropKey) => GestureResponderHandlers;
   pan: Animated.ValueXY;
   lift: Animated.Value;
@@ -259,19 +261,29 @@ export function useDragToDay({
   }, [fade, pan, stopAuto]);
 
   const makeResponder = useCallback(
-    (entryId: string, from: DropKey) =>
-      PanResponder.create({
-        // The grip claims the touch immediately — no long-press guessing, and
-        // the ScrollView never gets a chance to take over.
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+    (entryId: string, from: DropKey) => {
+      let pressedAt = 0;
+      const heldLongEnough = () => pressedAt > 0 && Date.now() - pressedAt >= 300;
+
+      return PanResponder.create({
+        // Record the press in capture without claiming it. A tap therefore
+        // reaches the nested controls, and an early move remains scrolling.
+        onStartShouldSetPanResponderCapture: () => {
+          pressedAt = Date.now();
+          return false;
+        },
+        // After the hold, the first movement lifts the entire row.
+        onMoveShouldSetPanResponderCapture: heldLongEnough,
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: heldLongEnough,
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (e) => begin(entryId, from, e.nativeEvent.pageY),
         onPanResponderMove: (e) => move(e.nativeEvent.pageY),
         onPanResponderRelease: release,
         onPanResponderTerminate: release,
-      }).panHandlers,
+      }).panHandlers;
+    },
     [begin, move, release],
   );
 
@@ -292,28 +304,34 @@ export function useDragToDay({
   );
 }
 
-/** The grab handle on a meal row. */
-export function DragGrip({
+/** A meal row that can be lifted after holding anywhere on its surface. */
+export function DragMealRow({
   makeResponder,
   entryId,
   from,
   active,
+  style,
+  children,
 }: {
   makeResponder: DragToDay['makeResponder'];
   entryId: string;
   from: DropKey;
   active: boolean;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
 }) {
   const t = useTheme();
   const handlers = useMemo(() => makeResponder(entryId, from), [makeResponder, entryId, from]);
 
   return (
-    <View
-      {...handlers}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
-      style={{ paddingVertical: 8, paddingRight: 2, opacity: active ? 1 : 0.45 }}
-    >
-      <Ionicons name="reorder-two-outline" size={17} color={active ? t.green : t.muted} />
+    <View {...handlers} style={style}>
+      <View
+        pointerEvents="none"
+        style={{ paddingVertical: 8, paddingRight: 2, opacity: active ? 1 : 0.45 }}
+      >
+        <Ionicons name="reorder-two-outline" size={17} color={active ? t.green : t.muted} />
+      </View>
+      {children}
     </View>
   );
 }

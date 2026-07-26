@@ -497,17 +497,32 @@ export default function MealPlan() {
   }
 
   // ── Drag a meal onto a day ──────────────────────────
-  // Same @dnd-kit setup as the cookbook reorder: a small drag distance on
-  // desktop, and on touch the grip owns the gesture (touch-action: none) so a
-  // few pixels of movement starts the drag without fighting the page scroll.
+  // Same whole-row gesture as cookbook reorder: a small drag distance with a
+  // mouse, and a short hold on touch so normal taps and scrolling still win.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
   );
 
   const draggedEntry = entries.find((e) => e.id === draggingId) ?? null;
+  const suppressNextClickRef = useRef(false);
+
+  // A browser may synthesize a click after a touch drag. Swallow that one
+  // click so dropping a meal never opens the recipe or one of its row actions.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (!suppressNextClickRef.current) return;
+      suppressNextClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener('click', onClick, true);
+    return () => window.removeEventListener('click', onClick, true);
+  }, []);
 
   function handleDragStart(event: DragStartEvent) {
+    suppressNextClickRef.current = true;
     setDraggingId(String(event.active.id));
     // The tap-to-move banner and a live drag would be two answers to the same
     // question — the drag wins.
@@ -516,6 +531,9 @@ export default function MealPlan() {
 
   function handleDragEnd(event: DragEndEvent) {
     setDraggingId(null);
+    setTimeout(() => {
+      suppressNextClickRef.current = false;
+    }, 300);
     const { active, over } = event;
     if (!over) return;
 
@@ -527,6 +545,13 @@ export default function MealPlan() {
     if (from === target) return;
 
     moveEntry(entry.id, target);
+  }
+
+  function handleDragCancel() {
+    setDraggingId(null);
+    setTimeout(() => {
+      suppressNextClickRef.current = false;
+    }, 300);
   }
 
   // ── Row rendering ───────────────────────────────────
@@ -825,7 +850,7 @@ export default function MealPlan() {
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => setDraggingId(null)}
+          onDragCancel={handleDragCancel}
         >
         <div style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}>
           {moving && (
