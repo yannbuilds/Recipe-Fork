@@ -77,11 +77,12 @@ function Header() {
   return (
     <header
       className="sticky top-0 z-50"
+      // Opaque, no backdrop-filter — same reason as BottomNav (see --bar-bg in
+      // index.css). A blurred bar pinned over the scroller drops iOS onto
+      // main-thread scrolling, which is what un-pinned the bottom nav.
       style={{
         height: 56,
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'var(--bar-bg)',
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
         transform: hidden ? 'translateY(-100%)' : 'translateY(0)',

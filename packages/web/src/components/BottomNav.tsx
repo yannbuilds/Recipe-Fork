@@ -21,15 +21,16 @@ export default function BottomNav() {
     // open and swallowed the buttons pinned to the bottom of it.
     <nav
       className="fixed bottom-0 left-0 right-0 z-40"
+      // Opaque background, no backdrop-filter and no will-change/translateZ on
+      // purpose — see --bar-bg in index.css. Any of those three keeps iOS from
+      // scrolling this page on the compositor, and the nav then rides up the
+      // screen with the content while you scroll instead of staying pinned. At
+      // the 0.9 alpha it used to sit at, the blur was barely visible anyway.
       style={{
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'var(--bar-bg)',
         borderTop: '1px solid var(--border)',
         boxShadow: '0 -1px 3px rgba(0,0,0,0.04)',
         paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)',
-        willChange: 'transform',
-        transform: 'translateZ(0)',
       }}
     >
       <div className="flex items-center justify-around" style={{ height: 64 }}>

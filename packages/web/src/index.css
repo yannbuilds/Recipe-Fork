@@ -29,6 +29,12 @@
     --shadow-sm: 0 1px 2px rgba(31,27,22,0.06);
     --shadow-md: 0 4px 16px rgba(31,27,22,0.08), 0 1px 4px rgba(31,27,22,0.04);
     --glass-bg: rgba(251,248,241,0.9);
+    /* Opaque twin of --glass-bg, for the sticky header / fixed bottom nav.
+       Those two bars must NOT use backdrop-filter: on iOS a blurred layer
+       pinned over the scroller forces WebKit onto main-thread scrolling, and
+       every position:fixed element then drifts with the content mid-scroll
+       (badly on iPad, where the bar is ~1366px wide to re-blur each frame). */
+    --bar-bg: #fbf8f1;
     --glass-card: rgba(251,248,241,0.78);
     --red-light: #f7e9e2;
     --red-border: rgba(184,74,43,0.35);
@@ -60,6 +66,7 @@
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
     --glass-bg: rgba(28,25,23,0.9);
+    --bar-bg: #1c1917;
     --glass-card: rgba(38,34,32,0.78);
     --red-light: rgba(224,120,90,0.14);
     --red-border: rgba(224,120,90,0.35);
@@ -113,20 +120,27 @@
   pointer-events: none;               /* never blocks taps/clicks */
   z-index: 2147483646;                /* above modals/banners; glow stays visible */
   animation: screenOnPulse 2.8s ease-in-out infinite;
+  will-change: opacity;               /* pulse runs on the compositor, not paint */
 }
-/* Soft, blurred band hugging every screen edge — the "glow". Green in the
-   top-left fading to orange in the bottom-right, matching the mobile halo. */
+/* Soft band hugging every screen edge — the "glow". Green along the top-left
+   edges fading to terracotta along the bottom-right, matching the mobile halo.
+   The falloff is four gradients rather than an 8px border under
+   `filter: blur(14px)`: a live blur on a full-viewport fixed layer has to be
+   re-rendered every frame of the pulse, which drops the whole page off iOS's
+   compositor scrolling — and once that happens every position:fixed element,
+   the bottom nav included, rides up the screen with the content instead of
+   staying pinned. Gradients rasterise once, so the layer just fades. */
 .rd-screen-on-frame::before {
   content: "";
   position: absolute;
   inset: 0;
-  border: 8px solid transparent;
-  border-image: linear-gradient(
-    135deg,
-    rgba(61, 107, 78, 0.55),          /* --green */
-    rgba(200, 99, 63, 0.55)           /* --terracotta */
-  ) 1;
-  filter: blur(14px);                 /* turns the band into a diffuse halo */
+  /* 0.20 over 34px lands on the same intensity the blurred 8px band had —
+     the blur diluted it a lot, so matching alphas would read far too strong. */
+  background:
+    linear-gradient(to bottom, rgba(61, 107, 78, 0.20), rgba(61, 107, 78, 0))     top    / 100% 34px no-repeat,
+    linear-gradient(to right,  rgba(61, 107, 78, 0.20), rgba(61, 107, 78, 0))     left   / 34px 100% no-repeat,
+    linear-gradient(to top,    rgba(200, 99, 63, 0.20), rgba(200, 99, 63, 0))     bottom / 100% 34px no-repeat,
+    linear-gradient(to left,   rgba(200, 99, 63, 0.20), rgba(200, 99, 63, 0))     right  / 34px 100% no-repeat;
 }
 /* Graduated light-bleed fading toward the centre, for depth — green bleeding
    from the top-left, orange from the bottom-right. */

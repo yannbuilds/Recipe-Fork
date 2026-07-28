@@ -9,22 +9,13 @@ interface VideoPlayerProps {
 export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  function sendCommand(func: string) {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func, args: '' }), '*'
-    );
-  }
 
   function open() {
     setIsOpen(true);
-    // Small delay to ensure overlay is visible before sending play command
-    setTimeout(() => sendCommand('playVideo'), 100);
   }
 
+  // Unmounting the overlay stops playback, so there's no pause command to send.
   function close() {
-    sendCommand('pauseVideo');
     setIsOpen(false);
   }
 
@@ -77,12 +68,20 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
         </div>
       </button>
 
-      {/* Fullscreen overlay — portaled to body, always mounted so iframe stays alive */}
-      {createPortal(
+      {/* Fullscreen overlay — portaled to body, and mounted only while open.
+          It used to stay mounted permanently "so the iframe stays alive", which
+          left a full-viewport position:fixed layer wrapping a live YouTube
+          player on every recipe page with a video. iOS drops the whole page off
+          compositor scrolling when it has to deal with that, and every
+          position:fixed element — the bottom nav included — then scrolls with
+          the content instead of staying pinned. Autoplay via the src param
+          replaces the postMessage play command the live iframe was needed for. */}
+      {isOpen && createPortal(
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 invisible pointer-events-none'}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          style={{ animation: 'fadeIn 0.2s ease' }}
           role="dialog"
-          aria-modal={isOpen}
+          aria-modal="true"
           onClick={close}
         >
           <button
@@ -102,9 +101,8 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <iframe
-              ref={iframeRef}
               className="w-full h-full rounded-lg"
-              src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
               title={`${title} video`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
