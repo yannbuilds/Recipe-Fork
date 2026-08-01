@@ -11,6 +11,7 @@ import IngredientIcon from '../components/IngredientIcon';
 import VideoPlayer from '../components/VideoPlayer';
 import MyNotesModal from '../components/MyNotesModal';
 import AddToCookbookSheet from '../components/AddToCookbookSheet';
+import NutritionPanel from '../components/NutritionPanel';
 import RateCookModal from '../components/RateCookModal';
 import { scaleQuantity } from '../utils/scaleQuantity';
 
@@ -1557,6 +1558,12 @@ export default function RecipeDetail() {
             {recipe.video_url && <div className="mt-8">{renderVideo(true)}</div>}
           </div>
         )}
+
+        {/* ── Nutrition (only when the source published it) ──────── */}
+        <NutritionPanel
+          nutrition={recipe.nutrition}
+          sourceLabel={recipe.source_url ? getDomain(recipe.source_url) : null}
+        />
 
         {/* ── Edit / Delete ──────────────────────────────────────── */}
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 32 }} />

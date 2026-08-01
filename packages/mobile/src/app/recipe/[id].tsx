@@ -14,6 +14,7 @@ import ConfirmModal from '@/components/ConfirmModal';
 import FavouriteButton from '@/components/FavouriteButton';
 import IngredientIcon from '@/components/IngredientIcon';
 import MyNotesModal from '@/components/MyNotesModal';
+import NutritionPanel from '@/components/NutritionPanel';
 import RateCookSheet from '@/components/RateCookSheet';
 import { ScreenOnGlow } from '@/components/ScreenOnGlow';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
@@ -825,6 +826,12 @@ export default function RecipeDetailScreen() {
               </Pressable>
             </View>
           )}
+
+          {/* Nutrition (only when the source published it) */}
+          <NutritionPanel
+            nutrition={recipe.nutrition}
+            sourceLabel={recipe.source_url ? getDomain(recipe.source_url) : null}
+          />
 
           <Divider style={{ marginTop: 30 }} />
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>

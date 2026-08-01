@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   extractSchemaRecipe,
   mergeIngredientEnrichment,
+  normaliseAiNutrition,
   normaliseAiSteps,
   validateRecipeCompleteness,
 } from "./recipe-schema.ts";
@@ -37,7 +38,8 @@ Return ONLY a JSON object with this exact structure:
   "video_url": "full video URL or null",
   "creator_name": "recipe author/creator name or null",
   "tags": [{"name": "tag1", "emoji": "🍽️"}, {"name": "tag2", "emoji": "🍗"}],
-  "author_notes": "verbatim recipe notes from the author, or null"
+  "author_notes": "verbatim recipe notes from the author, or null",
+  "nutrition": null or { "calories": "530 kcal", "protein": "37 g", "carbohydrate": "9 g", "fat": "44 g", "saturated_fat": "24 g", "fibre": "1 g", "sugar": "3 g", "sodium": "449 mg", "cholesterol": "125 mg", "serving_size": "1 serving" }
 }
 
 Example ingredient parsing — JSON-LD "recipeIngredient" contains flat strings. You MUST parse each into separate fields:
@@ -67,6 +69,7 @@ Rules:
 - For tags: suggest 3–5 tags as objects with "name" (lowercase) and "emoji" (a single emoji that represents the tag). Only use tags that help filter recipes by: cuisine (e.g. "indian", "italian", "mexican", "chinese"), protein (e.g. "chicken", "beef", "fish", "tofu"), meal type (e.g. "dinner", "breakfast", "dessert", "snack"), or dietary restriction (e.g. "vegetarian", "vegan", "gluten-free"). Do NOT include generic adjectives like "easy", "quick", "healthy", "moist", "delicious", or ingredient names that aren't the main protein.
 - For creator_name: extract the recipe author/creator name. Check JSON-LD "author.name", byline elements, or meta tags. Return the name as-is (e.g. "Nagi | RecipeTin Eats"). Return null if not found.
 - For author_notes: look for a "Recipe Notes", "Notes", "Tips", or similar section on the page that contains the author's tips, substitutions, or commentary about the recipe. Copy the full text verbatim as a single string, preserving numbered lists and line breaks (use "\\n" for newlines). Do NOT include the section heading itself. Return null if no notes section exists.
+- For nutrition: copy the per-serving nutrition ONLY if the page explicitly publishes it (a "Nutrition" panel or JSON-LD "nutrition" block). Copy each value with its unit exactly as written. Omit any field the page doesn't state, and return null when the page publishes no nutrition at all. NEVER estimate, calculate, or infer nutrition from the ingredients — a wrong number is far worse than no number.
 - If you cannot find a recipe on the page, return: { "error": "No recipe found on this page" }`;
 
 const ENRICHMENT_PROMPT = `You enrich ingredient data that was extracted directly from a recipe's JSON-LD.
@@ -1026,6 +1029,9 @@ Deno.serve(async (req) => {
       servings: schemaRecipe?.servings ?? parseServings(parsed.servings),
       prep_time: schemaRecipe?.prep_time ?? parseServings(parsed.prep_time),
       cook_time: schemaRecipe?.cook_time ?? parseServings(parsed.cook_time),
+      // Published nutrition only: the page's own schema first, then whatever the
+      // model read off a page without one. Never derived from the ingredients.
+      nutrition: schemaRecipe?.nutrition ?? normaliseAiNutrition(parsed.nutrition),
       author_notes: htmlExtractedNotes ?? parsed.author_notes ?? null,
     };
     const completenessErrors = validateRecipeCompleteness(recipeWithoutHostedImage);

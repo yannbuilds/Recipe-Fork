@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {
+  extractNutrition,
   extractRecipeNode,
   extractSchemaRecipe,
   mergeIngredientEnrichment,
+  normaliseAiNutrition,
   normaliseAiSteps,
   parseIngredientLine,
   validateRecipeCompleteness,
@@ -261,5 +263,111 @@ assert.deepEqual(parseIngredientLine('400g canned tomatoes'), {
   item: 'canned tomatoes',
   category: '',
 });
+
+// ── Nutrition ────────────────────────────────────────────────────
+// The recipe above publishes none, so the field stays null rather than
+// inventing numbers from the ingredients.
+assert.equal(recipe.nutrition, null, 'no nutrition published means no nutrition stored');
+
+// RecipeTin Eats shape: full macro set, "586 kcal" / "9 g" / "125 mg".
+assert.deepEqual(
+  extractNutrition({
+    '@type': 'NutritionInformation',
+    servingSize: '243 g',
+    calories: '586 kcal',
+    carbohydrateContent: '9 g',
+    proteinContent: '37 g',
+    fatContent: '44 g',
+    saturatedFatContent: '24 g',
+    cholesterolContent: '125 mg',
+    sodiumContent: '449 mg',
+    fiberContent: '1 g',
+    sugarContent: '3 g',
+  }),
+  {
+    calories: 586,
+    protein: 37,
+    carbohydrate: 9,
+    fat: 44,
+    saturated_fat: 24,
+    trans_fat: null,
+    unsaturated_fat: null,
+    fibre: 1,
+    sugar: 3,
+    sodium: 449,
+    cholesterol: 125,
+    serving_size: '243 g',
+  },
+  'reads the full RecipeTin macro set',
+);
+
+// BBC Good Food spells its units out ("52 grams fat", "844 calories").
+const bbc = extractNutrition({
+  calories: '844 calories',
+  fatContent: '52 grams fat',
+  saturatedFatContent: '30 grams saturated fat',
+  carbohydrateContent: '54 grams carbohydrates',
+  proteinContent: '37 grams protein',
+});
+assert.equal(bbc?.calories, 844, 'reads spelled-out calorie units');
+assert.equal(bbc?.fat, 52, 'reads spelled-out gram units');
+assert.equal(bbc?.protein, 37);
+
+// Units are converted to canonical ones: mg for sodium, g for macros, kcal
+// for energy. Values themselves are copied faithfully — never "corrected".
+assert.equal(extractNutrition({ sodiumContent: '1.2 g' })?.sodium, 1200, 'grams of sodium → mg');
+assert.equal(extractNutrition({ sodiumContent: '449' })?.sodium, 449, 'bare sodium is already mg');
+assert.equal(extractNutrition({ fatContent: '500 mg' })?.fat, 0.5, 'mg of fat → grams');
+assert.equal(extractNutrition({ calories: '2500 kJ' })?.calories, 597.51, 'kJ → kcal');
+assert.equal(extractNutrition({ calories: 530 })?.calories, 530, 'plain numbers pass through');
+
+// A serving size with no numbers behind it isn't worth a panel.
+assert.equal(
+  extractNutrition({ servingSize: '1 serving' }),
+  null,
+  'serving size alone is not nutrition',
+);
+assert.equal(extractNutrition(undefined), null);
+assert.equal(extractNutrition('530 kcal'), null, 'a bare string is not NutritionInformation');
+
+// Calories-only pages (common on RecipeTin) still produce a panel.
+const caloriesOnly = extractNutrition({ calories: '530 kcal', servingSize: '1 serving' });
+assert.equal(caloriesOnly?.calories, 530);
+assert.equal(caloriesOnly?.protein, null, 'unpublished fields stay null');
+
+// The AI path accepts our own field names and normalises identically.
+assert.deepEqual(
+  normaliseAiNutrition({ calories: '530 kcal', protein: '31 g', carbs: '12 g', sodium: '1.1 g' }),
+  {
+    calories: 530,
+    protein: 31,
+    carbohydrate: 12,
+    fat: null,
+    saturated_fat: null,
+    trans_fat: null,
+    unsaturated_fat: null,
+    fibre: null,
+    sugar: null,
+    sodium: 1100,
+    cholesterol: null,
+    serving_size: null,
+  },
+  'AI nutrition is normalised the same way as schema nutrition',
+);
+assert.equal(normaliseAiNutrition(null), null, 'no AI nutrition means null');
+
+// A recipe whose schema carries nutrition surfaces it on the extraction.
+const nutritionHtml = `<html><head><script type="application/ld+json">${
+  JSON.stringify({
+    '@type': 'Recipe',
+    name: 'Test Stroganoff',
+    recipeIngredient: ['500g beef'],
+    recipeInstructions: [{ '@type': 'HowToStep', text: 'Cook it.' }],
+    nutrition: { '@type': 'NutritionInformation', calories: '586 kcal', proteinContent: '37 g' },
+  })
+}</script></head><body></body></html>`;
+const nutritionRecipe = extractSchemaRecipe(nutritionHtml, 'https://example.com/stroganoff');
+assert.equal(nutritionRecipe?.nutrition?.calories, 586, 'nutrition rides along on the schema recipe');
+assert.equal(nutritionRecipe?.nutrition?.protein, 37);
 
 console.log('recipe-schema tests passed');

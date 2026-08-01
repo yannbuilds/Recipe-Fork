@@ -7,6 +7,7 @@ export type {
   TagInsert,
   RecipeTag,
   Ingredient,
+  Nutrition,
   Step,
   MealPlan,
   MealPlanRecipe,

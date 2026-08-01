@@ -17,6 +17,26 @@ export interface ExtractedTag {
   emoji: string;
 }
 
+/**
+ * Per-serving nutrition as published by the source (schema.org
+ * NutritionInformation). Mirrors the `Nutrition` type in packages/shared —
+ * keep the two in step. Canonical units: kcal, grams, mg.
+ */
+export interface ExtractedNutrition {
+  calories: number | null;
+  protein: number | null;
+  carbohydrate: number | null;
+  fat: number | null;
+  saturated_fat: number | null;
+  trans_fat: number | null;
+  unsaturated_fat: number | null;
+  fibre: number | null;
+  sugar: number | null;
+  sodium: number | null;
+  cholesterol: number | null;
+  serving_size: string | null;
+}
+
 export interface SchemaRecipe {
   title: string;
   description: string | null;
@@ -29,6 +49,7 @@ export interface SchemaRecipe {
   servings: number | null;
   prep_time: number | null;
   cook_time: number | null;
+  nutrition: ExtractedNutrition | null;
   tags: ExtractedTag[];
 }
 
@@ -439,6 +460,114 @@ function parseServings(value: unknown): number | null {
   return match ? parseInt(match[0], 10) : null;
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Pull the number out of a schema.org nutrition value and convert it to the
+ * field's canonical unit.
+ *
+ * Sites write these every way imaginable — "586 kcal", "844 calories",
+ * "52 grams fat", "9 g", "1.1 milligram of sodium" — so the unit is read from
+ * the text when it's there and assumed to already be canonical when it isn't
+ * (which is what schema.org specifies). Values are copied faithfully: a site
+ * that publishes an implausible number gets shown that number, attributed to
+ * the source, rather than a guess of ours.
+ */
+function parseNutritionAmount(
+  value: unknown,
+  canonical: "kcal" | "g" | "mg",
+): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? round2(value) : null;
+  }
+  if (typeof value !== "string") return null;
+
+  const text = cleanText(value).toLowerCase();
+  const match = text.match(/-?\d+(?:[.,]\d+)?/);
+  if (!match || match.index === undefined) return null;
+  const amount = Number(match[0].replace(",", "."));
+  if (!Number.isFinite(amount) || amount < 0) return null;
+
+  const unit = text.slice(match.index + match[0].length).trim();
+
+  if (canonical === "kcal") {
+    // Kilojoules are the only energy unit worth converting; "cal" on a recipe
+    // always means kcal.
+    return /^kj\b/.test(unit) ? round2(amount / 4.184) : round2(amount);
+  }
+
+  const isMilligram = /^(mg\b|milligram)/.test(unit);
+  const isMicrogram = /^(mcg\b|µg\b|microgram)/.test(unit);
+  const isGram = /^(g\b|gram)/.test(unit);
+
+  if (canonical === "mg") {
+    if (isGram) return round2(amount * 1000);
+    if (isMicrogram) return round2(amount / 1000);
+    return round2(amount);
+  }
+  if (isMilligram) return round2(amount / 1000);
+  if (isMicrogram) return round2(amount / 1_000_000);
+  return round2(amount);
+}
+
+function hasAnyNutritionValue(nutrition: ExtractedNutrition): boolean {
+  const { serving_size: _servingSize, ...amounts } = nutrition;
+  return Object.values(amounts).some((amount) => amount !== null);
+}
+
+/**
+ * Read a schema.org NutritionInformation object into our canonical shape.
+ * Returns null when the source publishes no usable numbers — a bare serving
+ * size on its own isn't worth a panel.
+ */
+export function extractNutrition(value: unknown): ExtractedNutrition | null {
+  const source = Array.isArray(value) ? value.find(isObject) : value;
+  if (!isObject(source)) return null;
+
+  const nutrition: ExtractedNutrition = {
+    calories: parseNutritionAmount(source.calories, "kcal"),
+    protein: parseNutritionAmount(source.proteinContent, "g"),
+    carbohydrate: parseNutritionAmount(source.carbohydrateContent, "g"),
+    fat: parseNutritionAmount(source.fatContent, "g"),
+    saturated_fat: parseNutritionAmount(source.saturatedFatContent, "g"),
+    trans_fat: parseNutritionAmount(source.transFatContent, "g"),
+    unsaturated_fat: parseNutritionAmount(source.unsaturatedFatContent, "g"),
+    fibre: parseNutritionAmount(source.fiberContent ?? source.fibreContent, "g"),
+    sugar: parseNutritionAmount(source.sugarContent, "g"),
+    sodium: parseNutritionAmount(source.sodiumContent, "mg"),
+    cholesterol: parseNutritionAmount(source.cholesterolContent, "mg"),
+    serving_size: cleanText(source.servingSize) || null,
+  };
+
+  return hasAnyNutritionValue(nutrition) ? nutrition : null;
+}
+
+/**
+ * Normalise a nutrition object the AI returned for a page with no usable
+ * recipe schema. Accepts both our field names and the schema.org ones, then
+ * runs the same unit conversion so AI-sourced values are indistinguishable in
+ * shape from schema-sourced ones.
+ */
+export function normaliseAiNutrition(value: unknown): ExtractedNutrition | null {
+  if (!isObject(value)) return null;
+  return extractNutrition({
+    calories: value.calories,
+    proteinContent: value.protein ?? value.proteinContent,
+    carbohydrateContent: value.carbohydrate ?? value.carbs ?? value.carbohydrateContent,
+    fatContent: value.fat ?? value.fatContent,
+    saturatedFatContent: value.saturated_fat ?? value.saturatedFatContent,
+    transFatContent: value.trans_fat ?? value.transFatContent,
+    unsaturatedFatContent: value.unsaturated_fat ?? value.unsaturatedFatContent,
+    fiberContent: value.fibre ?? value.fiber ?? value.fiberContent,
+    sugarContent: value.sugar ?? value.sugarContent,
+    sodiumContent: value.sodium ?? value.sodiumContent,
+    cholesterolContent: value.cholesterol ?? value.cholesterolContent,
+    servingSize: value.serving_size ?? value.servingSize,
+  });
+}
+
 function creatorName(value: unknown): string | null {
   if (typeof value === "string") return cleanText(value) || null;
   if (Array.isArray(value)) {
@@ -523,6 +652,7 @@ export function extractSchemaRecipe(html: string, sourceUrl: string): SchemaReci
     servings: parseServings(node.recipeYield),
     prep_time: parseDuration(node.prepTime),
     cook_time: parseDuration(node.cookTime),
+    nutrition: extractNutrition(node.nutrition),
     tags: buildTags(node),
   };
 }

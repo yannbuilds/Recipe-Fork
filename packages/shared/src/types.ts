@@ -12,6 +12,31 @@ export interface Step {
   category?: string;
 }
 
+/**
+ * Per-serving nutrition, exactly as the source recipe published it
+ * (schema.org NutritionInformation). Every field is optional — sites publish
+ * very different subsets, and we never estimate the ones they leave out.
+ *
+ * Units are canonical: kcal for calories, grams for the macros, mg for sodium
+ * and cholesterol. "Per serving" means one serving of the recipe's own yield,
+ * so these numbers don't change when the cook scales the servings.
+ */
+export interface Nutrition {
+  calories?: number | null;
+  protein?: number | null;
+  carbohydrate?: number | null;
+  fat?: number | null;
+  saturated_fat?: number | null;
+  trans_fat?: number | null;
+  unsaturated_fat?: number | null;
+  fibre?: number | null;
+  sugar?: number | null;
+  sodium?: number | null;
+  cholesterol?: number | null;
+  /** What one serving is, as published ("1 serving", "243 g"). */
+  serving_size?: string | null;
+}
+
 export interface Recipe {
   id: string;
   user_id: string;
@@ -29,6 +54,7 @@ export interface Recipe {
   custom_servings: number | null;
   prep_time: number | null;
   cook_time: number | null;
+  nutrition?: Nutrition | null;
   is_favourite: boolean;
   created_at: string;
   updated_at: string;

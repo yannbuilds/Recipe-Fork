@@ -182,6 +182,17 @@
 @media (max-width: 768px) {
   .rd-panel { padding: 16px; }
 }
+
+/* Nutrition panel: full width on a phone like every other panel, but capped to
+   an editorial measure on desktop — stretched across 1100px the stats and
+   breakdown rows drift apart and read as empty. Sources that publish calories
+   alone get the narrow cap so the box isn't mostly air. */
+.rd-nutrition        { max-width: 720px; }
+.rd-nutrition-sparse { max-width: 300px; }
+@media (max-width: 768px) {
+  .rd-nutrition,
+  .rd-nutrition-sparse { max-width: none; }
+}
 .rd-awake-tooltip { left: 0; }
 @media (max-width: 768px) {
   .rd-awake-tooltip { left: auto; } /* let inline right: 0 take effect — tooltip stays within screen */

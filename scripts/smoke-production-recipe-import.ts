@@ -16,6 +16,15 @@ const jsonLd = {
     { '@type': 'HowToStep', text: 'Mix the flour and salt.' },
     { '@type': 'HowToStep', text: 'Cook for 10 minutes.' },
   ],
+  nutrition: {
+    '@type': 'NutritionInformation',
+    servingSize: '243 g',
+    calories: '586 kcal',
+    proteinContent: '37 g',
+    carbohydrateContent: '9 g',
+    fatContent: '44 g',
+    sodiumContent: '1.2 g',
+  },
 };
 const html = `<html><head><script type="application/ld+json">${JSON.stringify(jsonLd)}</script></head><body></body></html>`;
 
@@ -48,6 +57,15 @@ async function main() {
   assert.equal(body.extraction?.ingredient_count, 2);
   assert.equal(body.extraction?.step_count, 2);
 
+  // Published nutrition rides along, normalised to canonical units (kcal,
+  // grams, mg) — note sodium arrives as "1.2 g" and lands as 1200 mg.
+  assert.equal(body.recipe?.nutrition?.calories, 586, 'production must keep published calories');
+  assert.equal(body.recipe?.nutrition?.protein, 37);
+  assert.equal(body.recipe?.nutrition?.carbohydrate, 9);
+  assert.equal(body.recipe?.nutrition?.fat, 44);
+  assert.equal(body.recipe?.nutrition?.sodium, 1200, 'grams of sodium normalise to mg');
+  assert.equal(body.recipe?.nutrition?.serving_size, '243 g');
+
   console.log({
     status: response.status,
     method: body.extraction.method,
@@ -77,6 +95,12 @@ async function main() {
   assert.equal(fallback.body.extraction?.method, 'ai-fallback');
   assert.equal(fallback.body.recipe?.ingredients?.length, 3);
   assert.equal(fallback.body.recipe?.steps?.length, 3);
+  // A page that publishes no nutrition must not get invented numbers.
+  assert.equal(
+    fallback.body.recipe?.nutrition ?? null,
+    null,
+    'nutrition is never estimated from the ingredients',
+  );
   console.log({
     status: fallback.response.status,
     method: fallback.body.extraction.method,
