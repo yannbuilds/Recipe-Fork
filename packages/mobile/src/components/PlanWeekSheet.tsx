@@ -19,7 +19,7 @@ import RecipeFilterBar from '@/components/RecipeFilterBar';
 import { Body, Button, Divider, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
-import { DAY_INDEXES, DAY_SHORT, dayDate, todayIndex } from '@/lib/mealPlanDays';
+import { DAY_INDEXES, DAY_SHORT, dayDate, planServings, todayIndex } from '@/lib/mealPlanDays';
 import { supabase } from '@/lib/supabase';
 import type { RecipeTagRow } from '@/lib/tagMeta';
 import { font, useTheme } from '@/lib/theme';
@@ -258,6 +258,16 @@ export default function PlanWeekSheet({
 
   function recipeFor(id: string): Recipe | undefined {
     return recipes.find((r) => r.id === id);
+  }
+
+  /**
+   * What one pick gets shopped for, and whether the recipe — not the maths —
+   * set that number. `asWritten` is the case worth labelling: the recipe already
+   * makes more than people × nights, so it's planned whole instead of scaled down.
+   */
+  function servingsFor(pick: PlanPick): { total: number; asWritten: boolean } {
+    const total = planServings(pick.recipe, servings, pick.nights);
+    return { total, asWritten: total > servings * pick.nights };
   }
 
   function goToPlacement() {
@@ -653,7 +663,8 @@ export default function PlanWeekSheet({
             }}
           >
             <Mono size={9} color={t.green} style={{ letterSpacing: 0.8 }}>
-              {pick.nights} NIGHT{pick.nights > 1 ? 'S' : ''} · SERVES {servings * pick.nights}
+              {pick.nights} NIGHT{pick.nights > 1 ? 'S' : ''} ·{' '}
+              {servingsFor(pick).asWritten ? 'MAKES' : 'SERVES'} {servingsFor(pick).total}
             </Mono>
           </Pressable>
         )}
@@ -774,6 +785,7 @@ export default function PlanWeekSheet({
                       ? `Cooked fresh each night — every cook shops for ${servings}.`
                       : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
                     {plannedNights > 7 ? ' More than seven nights — you’ll have some spare.' : ''}
+                    {' A recipe already written for more than that is planned whole, never scaled down.'}
                   </Body>
                 </View>
 

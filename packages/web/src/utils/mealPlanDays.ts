@@ -1,4 +1,4 @@
-import type { MealPlanEntry } from '@recipe-aggregator/shared';
+import type { MealPlanEntry, Recipe } from '@recipe-aggregator/shared';
 
 // Day helpers for the week grid. Weeks run Monday-first (0 = Mon … 6 = Sun) to
 // match `week_start` always being a Monday.
@@ -60,6 +60,26 @@ export function shoppingSourceEntries(entries: MealPlanEntry[]): MealPlanEntry[]
 /** Servings this cook should be shopped for; falls back to the recipe's own. */
 export function entryServings(entry: MealPlanEntry): number | undefined {
   return entry.servings ?? entry.recipe?.custom_servings ?? entry.recipe?.servings ?? undefined;
+}
+
+/** What a recipe makes on its own terms, before plan mode has an opinion. */
+export function recipeBatch(recipe: Pick<Recipe, 'servings' | 'custom_servings'>): number {
+  return recipe.custom_servings ?? recipe.servings ?? 0;
+}
+
+/**
+ * Servings one cook gets shopped for. Plan mode's own maths is people × nights,
+ * but that's a floor, not a ceiling: a recipe already written for more than that
+ * is planned as it stands. A six-serve slow cook or a tray of twelve dumplings is
+ * portioned that way on purpose — scaling it down makes the cook fiddlier and the
+ * leftovers, which are the point, disappear. Scaling *up* still happens as before.
+ */
+export function planServings(
+  recipe: Pick<Recipe, 'servings' | 'custom_servings'>,
+  servingsPerNight: number,
+  nights: number,
+): number {
+  return Math.max(servingsPerNight * nights, recipeBatch(recipe));
 }
 
 /** Every row belonging to one cook — the cook itself plus its extra nights. */

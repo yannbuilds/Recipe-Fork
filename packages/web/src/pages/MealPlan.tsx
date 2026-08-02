@@ -46,6 +46,7 @@ import {
   unplacedEntries,
   shoppingSourceEntries,
   entryServings,
+  planServings,
   batchPosition,
   batchSiblings,
   formatMins,
@@ -439,7 +440,7 @@ export default function MealPlan() {
           recipe_id: pick.recipe.id,
           day_index: first?.day ?? null,
           entry_type: 'cook',
-          servings: servingsPerNight * pick.nights,
+          servings: planServings(pick.recipe, servingsPerNight, pick.nights),
         })
         .select('*, recipe:recipes(*)')
         .single();

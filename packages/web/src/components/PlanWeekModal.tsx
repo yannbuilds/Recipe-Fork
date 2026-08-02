@@ -7,7 +7,7 @@ import useRecipeFilters from '../hooks/useRecipeFilters';
 import { useAuth } from '../context/AuthContext';
 import type { RecipeTagRow } from '../constants/tagMeta';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
-import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex } from '../utils/mealPlanDays';
+import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex, planServings } from '../utils/mealPlanDays';
 
 export interface PlanPrefs {
   /** Cooks in the week — pots on the stove, not nights at the table. */
@@ -329,6 +329,16 @@ export default function PlanWeekModal({
     return recipes.find((r) => r.id === id);
   }
 
+  /**
+   * What one pick gets shopped for, and whether the recipe — not the maths —
+   * set that number. `asWritten` is the case worth labelling: the recipe already
+   * makes more than people × nights, so it's planned whole instead of scaled down.
+   */
+  function servingsFor(pick: PlanPick): { total: number; asWritten: boolean } {
+    const total = planServings(pick.recipe, servings, pick.nights);
+    return { total, asWritten: total > servings * pick.nights };
+  }
+
   async function commit() {
     setSaving(true);
     await onCommit(
@@ -480,6 +490,7 @@ export default function PlanWeekModal({
                     ? `Cooked fresh each night — every cook shops for ${servings}.`
                     : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
                   {plannedNights > 7 && ' More than seven nights — you’ll have some spare.'}
+                  {' '}A recipe already written for more than that is planned whole, never scaled down.
                 </p>
               </div>
 
@@ -731,7 +742,11 @@ export default function PlanWeekModal({
                       {pick && (
                         <button
                           onClick={() => cycleNights(recipe.id)}
-                          title="How many nights this cook covers"
+                          title={
+                            servingsFor(pick).asWritten
+                              ? `How many nights this cook covers. This recipe already makes ${servingsFor(pick).total}, so it's planned as written rather than scaled down to ${servings * pick.nights}.`
+                              : 'How many nights this cook covers'
+                          }
                           style={{
                             marginTop: 5,
                             fontFamily: fMono,
@@ -746,7 +761,8 @@ export default function PlanWeekModal({
                             cursor: 'pointer',
                           }}
                         >
-                          {pick.nights} night{pick.nights > 1 ? 's' : ''} · serves {servings * pick.nights}
+                          {pick.nights} night{pick.nights > 1 ? 's' : ''} ·{' '}
+                          {servingsFor(pick).asWritten ? 'makes' : 'serves'} {servingsFor(pick).total}
                         </button>
                       )}
                     </div>

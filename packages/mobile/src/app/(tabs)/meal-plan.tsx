@@ -26,6 +26,7 @@ import {
   entriesForDay,
   entryServings,
   formatMins,
+  planServings,
   shoppingSourceEntries,
   todayIndex,
   unplacedEntries,
@@ -386,7 +387,7 @@ export default function MealPlanScreen() {
           recipe_id: pick.recipe.id,
           day_index: first?.day ?? null,
           entry_type: 'cook',
-          servings: servingsPerNight * pick.nights,
+          servings: planServings(pick.recipe, servingsPerNight, pick.nights),
         })
         .select('*, recipe:recipes(*)')
         .single();
