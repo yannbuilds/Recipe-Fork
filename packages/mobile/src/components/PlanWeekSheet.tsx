@@ -20,8 +20,12 @@ import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
 export interface PlanPrefs {
+  /** Cooks in the week — pots on the stove, not nights at the table. */
   meals: number;
+  /** People at the table on one night. */
   servings: number;
+  /** Nights one cook covers. 2 means Sunday's pot also feeds Wednesday. */
+  nights: number;
 }
 
 export interface PlanPick {
@@ -57,7 +61,7 @@ type Filter = 'suggested' | 'favourites' | 'recent' | 'all' | `cookbook:${string
 const COOKBOOK_PREFIX = 'cookbook:';
 
 /**
- * Plan mode. Asks the two setup questions once, remembers the answers, and from
+ * Plan mode. Asks the setup questions once, remembers the answers, and from
  * then on opens straight at picking. Every step after the first is skippable —
  * you can bail at any point and the meals just land in the week unplaced.
  */
@@ -73,8 +77,9 @@ export default function PlanWeekSheet({
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [meals, setMeals] = useState(4);
+  const [meals, setMeals] = useState(3);
   const [servings, setServings] = useState(2);
+  const [nights, setNights] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
@@ -90,8 +95,9 @@ export default function PlanWeekSheet({
   useEffect(() => {
     if (!open) return;
     setStep(prefs ? 2 : 1);
-    setMeals(prefs?.meals ?? 4);
+    setMeals(prefs?.meals ?? 3);
     setServings(prefs?.servings ?? 2);
+    setNights(prefs?.nights ?? 2);
     setPicks([]);
     setSlots([]);
     setActiveSlot(null);
@@ -154,20 +160,29 @@ export default function PlanWeekSheet({
   }, [recipes, search, filter, lastCooked, cookbookRecipes]);
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
+  // What the setup answers add up to: cooks × nights each.
+  const plannedNights = meals * nights;
+  // A pick can always be cycled past the default — the answer is a starting
+  // point, not a cap.
+  const maxNights = Math.max(3, nights);
 
   function togglePick(recipe: Recipe) {
     haptics.select();
     setPicks((prev) => {
       const found = prev.find((p) => p.recipe.id === recipe.id);
       if (found) return prev.filter((p) => p.recipe.id !== recipe.id);
-      return [...prev, { recipe, nights: 1 }];
+      // Everything starts on the answer from step 1 — most cooks here are meal
+      // prep, so 1 night would mean re-tapping every card.
+      return [...prev, { recipe, nights }];
     });
   }
 
   function cycleNights(recipeId: string) {
     haptics.light();
     setPicks((prev) =>
-      prev.map((p) => (p.recipe.id === recipeId ? { ...p, nights: p.nights >= 3 ? 1 : p.nights + 1 } : p)),
+      prev.map((p) =>
+        p.recipe.id === recipeId ? { ...p, nights: p.nights >= maxNights ? 1 : p.nights + 1 } : p,
+      ),
     );
   }
 
@@ -270,64 +285,76 @@ export default function PlanWeekSheet({
     onClose();
   }
 
-  const stepper = (value: number, set: (n: number) => void, unit: string, min: number, max: number) => (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 26,
-        paddingVertical: 16,
-        borderWidth: 1,
-        borderColor: t.border,
-        borderRadius: 4,
-        backgroundColor: t.card,
-      }}
-    >
-      <Pressable
-        onPress={() => {
-          haptics.select();
-          set(Math.max(min, value - 1));
-        }}
+  /**
+   * One line of the setup sentence: "I want to cook — 3 — meals". Three stacked
+   * dial-sized steppers would read as a form; three sentence rows read as one
+   * thought, and take up less room than the two big ones they replace.
+   */
+  const numberRow = (
+    lead: string,
+    value: number,
+    set: (n: number) => void,
+    unit: string,
+    min: number,
+    max: number,
+  ) => {
+    const round = {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.bg,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    };
+    return (
+      <View
         style={{
-          width: 42,
-          height: 42,
-          borderRadius: 21,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 9,
+          paddingHorizontal: 13,
+          paddingVertical: 9,
+          marginBottom: 7,
           borderWidth: 1,
           borderColor: t.border,
-          alignItems: 'center',
-          justifyContent: 'center',
+          borderRadius: 4,
+          backgroundColor: t.card,
         }}
       >
-        <Ionicons name="remove" size={18} color={t.green} />
-      </Pressable>
-      <View style={{ alignItems: 'center', minWidth: 70 }}>
-        <Serif size={42} style={{ lineHeight: 46 }}>
+        <Serif size={16} color={t.textSoft} numberOfLines={1} style={{ flex: 1 }}>
+          {lead}
+        </Serif>
+        <Pressable
+          hitSlop={6}
+          onPress={() => {
+            haptics.select();
+            set(Math.max(min, value - 1));
+          }}
+          style={round}
+        >
+          <Ionicons name="remove" size={16} color={t.green} />
+        </Pressable>
+        <Serif size={27} style={{ minWidth: 28, textAlign: 'center', lineHeight: 32 }}>
           {value}
         </Serif>
-        <Mono size={9} style={{ letterSpacing: 1.6, marginTop: 4 }}>
+        <Pressable
+          hitSlop={6}
+          onPress={() => {
+            haptics.select();
+            set(Math.min(max, value + 1));
+          }}
+          style={round}
+        >
+          <Ionicons name="add" size={16} color={t.green} />
+        </Pressable>
+        <Mono size={9} style={{ letterSpacing: 1.3, minWidth: 42 }}>
           {unit.toUpperCase()}
         </Mono>
       </View>
-      <Pressable
-        onPress={() => {
-          haptics.select();
-          set(Math.min(max, value + 1));
-        }}
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          borderWidth: 1,
-          borderColor: t.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Ionicons name="add" size={18} color={t.green} />
-      </Pressable>
-    </View>
-  );
+    );
+  };
 
   return (
     // Full screen, not `pageSheet`. A page sheet is laid out by UIKit at a
@@ -364,7 +391,7 @@ export default function PlanWeekSheet({
               {step === 1
                 ? 'SET UP · ONCE'
                 : step === 2
-                  ? `${totalNights} OF ${meals} NIGHTS`
+                  ? `${picks.length} OF ${meals} MEALS · ${totalNights} NIGHT${totalNights === 1 ? '' : 'S'}`
                   : 'PUT THEM ON DAYS'}
             </Mono>
             <Serif size={23} style={{ marginTop: 6 }}>
@@ -381,34 +408,47 @@ export default function PlanWeekSheet({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          {/* ── Step 1: the two questions ────────────── */}
+          {/* ── Step 1: one sentence, three numbers ───── */}
           {step === 1 && (
             <View>
-              <Serif size={20} style={{ marginBottom: 12 }}>
-                How many meals do you want to cook?
+              <Serif size={20} style={{ marginBottom: 14 }}>
+                How does a normal week go?
               </Serif>
-              {stepper(meals, setMeals, 'meals', 1, 14)}
 
-              <Serif size={20} style={{ marginTop: 24, marginBottom: 12 }}>
-                Cooking for how many?
-              </Serif>
-              {stepper(servings, setServings, 'per night', 1, 12)}
+              {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
+              {numberRow('for', servings, setServings, 'people', 1, 12)}
+              {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
 
+              {/* The whole point of the sentence: you never do the multiplication. */}
               <View
                 style={{
-                  marginTop: 20,
-                  padding: 13,
+                  marginTop: 16,
+                  paddingHorizontal: 15,
+                  paddingVertical: 13,
                   borderLeftWidth: 2,
                   borderLeftColor: t.green,
                   backgroundColor: t.greenLight,
                   borderRadius: 3,
                 }}
               >
-                <Body size={12.5} color={t.textSoft} style={{ lineHeight: 19 }}>
-                  Saved for next time — you'll skip straight to picking. A meal set to two nights shops for{' '}
-                  {servings * 2} servings, so one cook covers both.
+                <Serif size={19} style={{ lineHeight: 24 }}>
+                  That's{' '}
+                  <Serif size={19} color={t.green} italic>
+                    {plannedNights} night{plannedNights === 1 ? '' : 's'}
+                  </Serif>{' '}
+                  of dinner.
+                </Serif>
+                <Body size={12.5} color={t.textSoft} style={{ lineHeight: 19, marginTop: 5 }}>
+                  {nights === 1
+                    ? `Cooked fresh each night — every cook shops for ${servings}.`
+                    : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
+                  {plannedNights > 7 ? ' More than seven nights — you’ll have some spare.' : ''}
                 </Body>
               </View>
+
+              <Mono size={9} style={{ letterSpacing: 1.3, marginTop: 12, lineHeight: 14 }}>
+                SAVED FOR NEXT TIME — YOU'LL SKIP STRAIGHT TO PICKING
+              </Mono>
             </View>
           )}
 
@@ -431,7 +471,7 @@ export default function PlanWeekSheet({
                 }}
               >
                 <Mono size={9.5} color={t.textSoft} style={{ letterSpacing: 1 }}>
-                  {meals} MEALS · SERVES {servings}
+                  {meals} × {nights} NIGHT{nights === 1 ? '' : 'S'} · {servings} PER NIGHT
                 </Mono>
                 <Pressable
                   onPress={() => setStep(1)}
@@ -792,7 +832,7 @@ export default function PlanWeekSheet({
               label="Choose recipes"
               onPress={() => {
                 haptics.success();
-                onSavePrefs({ meals, servings });
+                onSavePrefs({ meals, servings, nights });
                 setStep(2);
               }}
               style={{ flex: 1 }}

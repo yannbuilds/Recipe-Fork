@@ -112,12 +112,18 @@ export default function MealPlan() {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('plan_meals_per_week, plan_default_servings')
+      .select('plan_meals_per_week, plan_default_servings, plan_nights_per_meal')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.plan_meals_per_week && data?.plan_default_servings) {
-          setPrefs({ meals: data.plan_meals_per_week, servings: data.plan_default_servings });
+        // All three or none. Anyone who set up before nights existed gets asked
+        // the (now shorter) setup sentence once more rather than a silent guess.
+        if (data?.plan_meals_per_week && data?.plan_default_servings && data?.plan_nights_per_meal) {
+          setPrefs({
+            meals: data.plan_meals_per_week,
+            servings: data.plan_default_servings,
+            nights: data.plan_nights_per_meal,
+          });
         }
       });
   }, [user]);
@@ -405,7 +411,11 @@ export default function MealPlan() {
     if (!user) return;
     await supabase
       .from('profiles')
-      .update({ plan_meals_per_week: next.meals, plan_default_servings: next.servings })
+      .update({
+        plan_meals_per_week: next.meals,
+        plan_default_servings: next.servings,
+        plan_nights_per_meal: next.nights,
+      })
       .eq('id', user.id);
   }
 

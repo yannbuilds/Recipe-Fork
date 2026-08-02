@@ -6,8 +6,12 @@ import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex } from '../utils/mealPlanDays';
 
 export interface PlanPrefs {
+  /** Cooks in the week — pots on the stove, not nights at the table. */
   meals: number;
+  /** People at the table on one night. */
   servings: number;
+  /** Nights one cook covers. 2 means Sunday's pot also feeds Wednesday. */
+  nights: number;
 }
 
 export interface PlanPick {
@@ -40,7 +44,7 @@ type Filter = 'suggested' | 'favourites' | 'recent' | 'all' | `cookbook:${string
 const COOKBOOK_PREFIX = 'cookbook:';
 
 /**
- * Plan mode. Asks the two setup questions once, remembers the answers, and from
+ * Plan mode. Asks the setup questions once, remembers the answers, and from
  * then on opens straight at picking. Every step after the first is skippable —
  * you can bail at any point and the meals just land in the week unplaced.
  */
@@ -54,8 +58,9 @@ export default function PlanWeekModal({
   onClose,
 }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [meals, setMeals] = useState(4);
+  const [meals, setMeals] = useState(3);
   const [servings, setServings] = useState(2);
+  const [nights, setNights] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
@@ -71,8 +76,9 @@ export default function PlanWeekModal({
   useEffect(() => {
     if (!open) return;
     setStep(prefs ? 2 : 1);
-    setMeals(prefs?.meals ?? 4);
+    setMeals(prefs?.meals ?? 3);
     setServings(prefs?.servings ?? 2);
+    setNights(prefs?.nights ?? 2);
     setPicks([]);
     setSlots([]);
     setActiveSlot(null);
@@ -144,18 +150,27 @@ export default function PlanWeekModal({
   }, [recipes, search, filter, lastCooked, cookbookRecipes]);
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
+  // What the setup answers add up to: cooks × nights each.
+  const plannedNights = meals * nights;
+  // A pick can always be cycled past the default — the answer is a starting
+  // point, not a cap.
+  const maxNights = Math.max(3, nights);
 
   function togglePick(recipe: Recipe) {
     setPicks((prev) => {
       const found = prev.find((p) => p.recipe.id === recipe.id);
       if (found) return prev.filter((p) => p.recipe.id !== recipe.id);
-      return [...prev, { recipe, nights: 1 }];
+      // Everything starts on the answer from step 1 — most cooks here are meal
+      // prep, so 1 night would mean re-tapping every card.
+      return [...prev, { recipe, nights }];
     });
   }
 
   function cycleNights(recipeId: string) {
     setPicks((prev) =>
-      prev.map((p) => (p.recipe.id === recipeId ? { ...p, nights: p.nights >= 3 ? 1 : p.nights + 1 } : p)),
+      prev.map((p) =>
+        p.recipe.id === recipeId ? { ...p, nights: p.nights >= maxNights ? 1 : p.nights + 1 } : p,
+      ),
     );
   }
 
@@ -254,31 +269,92 @@ export default function PlanWeekModal({
 
   if (!open) return null;
 
-  const stepper = (value: number, set: (n: number) => void, unit: string, min: number, max: number) => (
-    <div
-      className="flex items-center justify-center"
-      style={{ gap: 26, padding: '18px 0 14px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--card)' }}
-    >
-      <button
-        onClick={() => set(Math.max(min, value - 1))}
-        aria-label={`One fewer ${unit}`}
-        style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border)', background: 'none', color: 'var(--green)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+  /**
+   * One line of the setup sentence: "I want to cook — 3 — meals". Three stacked
+   * dial-sized steppers would read as a form; three sentence rows read as one
+   * thought, and take up less room than the two big ones they replace.
+   */
+  const numberRow = (
+    lead: string,
+    value: number,
+    set: (n: number) => void,
+    unit: string,
+    min: number,
+    max: number,
+  ) => {
+    const round: React.CSSProperties = {
+      width: 30,
+      height: 30,
+      borderRadius: '50%',
+      border: '1px solid var(--border)',
+      background: 'var(--paper)',
+      color: 'var(--green)',
+      cursor: 'pointer',
+      display: 'grid',
+      placeItems: 'center',
+      flexShrink: 0,
+      padding: 0,
+    };
+    return (
+      <div
+        className="flex items-center"
+        style={{
+          gap: 10,
+          padding: '10px 13px',
+          marginBottom: 7,
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          background: 'var(--card)',
+        }}
       >
-        <Minus size={17} strokeWidth={2} />
-      </button>
-      <div style={{ textAlign: 'center', minWidth: 70 }}>
-        <div style={{ fontFamily: fSerif, fontSize: 42, lineHeight: 1, letterSpacing: '-0.03em', color: 'var(--text)' }}>{value}</div>
-        <div style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 7 }}>{unit}</div>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontFamily: fSerif,
+            fontSize: 16,
+            letterSpacing: '-0.01em',
+            color: 'var(--text-soft)',
+          }}
+        >
+          {lead}
+        </span>
+        <button onClick={() => set(Math.max(min, value - 1))} aria-label={`One fewer ${unit}`} style={round}>
+          <Minus size={15} strokeWidth={2} />
+        </button>
+        <span
+          style={{
+            fontFamily: fSerif,
+            fontSize: 27,
+            lineHeight: 1,
+            letterSpacing: '-0.03em',
+            color: 'var(--text)',
+            minWidth: 28,
+            textAlign: 'center',
+            flexShrink: 0,
+          }}
+        >
+          {value}
+        </span>
+        <button onClick={() => set(Math.min(max, value + 1))} aria-label={`One more ${unit}`} style={round}>
+          <Plus size={15} strokeWidth={2} />
+        </button>
+        <span
+          style={{
+            fontFamily: fMono,
+            fontSize: 9,
+            letterSpacing: '0.13em',
+            textTransform: 'uppercase',
+            color: 'var(--muted)',
+            flexShrink: 0,
+            minWidth: 42,
+          }}
+        >
+          {unit}
+        </span>
       </div>
-      <button
-        onClick={() => set(Math.min(max, value + 1))}
-        aria-label={`One more ${unit}`}
-        style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border)', background: 'none', color: 'var(--green)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-      >
-        <Plus size={17} strokeWidth={2} />
-      </button>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -290,7 +366,11 @@ export default function PlanWeekModal({
         <div className="flex items-center justify-between" style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--border)' }}>
           <div>
             <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--green)' }}>
-              {step === 1 ? 'Set up · once' : step === 2 ? `${totalNights} of ${meals} nights` : 'Put them on days'}
+              {step === 1
+                ? 'Set up · once'
+                : step === 2
+                  ? `${picks.length} of ${meals} meals · ${totalNights} night${totalNights === 1 ? '' : 's'}`
+                  : 'Put them on days'}
             </span>
             <h2 style={{ margin: '6px 0 0', fontFamily: fSerif, fontWeight: 400, fontSize: 23, letterSpacing: '-0.02em', color: 'var(--text)' }}>
               Plan the week
@@ -302,24 +382,37 @@ export default function PlanWeekModal({
         </div>
 
         <div className="overflow-y-auto" style={{ padding: '20px 22px', flex: 1 }}>
-          {/* ── Step 1: the two questions ────────────── */}
+          {/* ── Step 1: one sentence, three numbers ───── */}
           {step === 1 && (
             <div>
-              <h3 style={{ margin: '0 0 12px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.015em', color: 'var(--text)' }}>
-                How many meals do you want to cook?
+              <h3 style={{ margin: '0 0 14px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.015em', color: 'var(--text)' }}>
+                How does a normal week go?
               </h3>
-              {stepper(meals, setMeals, 'meals', 1, 14)}
 
-              <h3 style={{ margin: '24px 0 12px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.015em', color: 'var(--text)' }}>
-                Cooking for how many?
-              </h3>
-              {stepper(servings, setServings, 'per night', 1, 12)}
+              {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
+              {numberRow('for', servings, setServings, 'people', 1, 12)}
+              {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
 
-              <div style={{ marginTop: 20, padding: '12px 14px', borderLeft: '2px solid var(--green)', background: 'var(--green-light)', borderRadius: '0 3px 3px 0' }}>
-                <p style={{ margin: 0, fontFamily: fSans, fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-soft)' }}>
-                  Saved for next time — you'll skip straight to picking. A meal set to two nights shops for {servings * 2} servings, so one cook covers both.
+              {/* The whole point of the sentence: you never do the multiplication. */}
+              <div style={{ marginTop: 16, padding: '13px 15px', borderLeft: '2px solid var(--green)', background: 'var(--green-light)', borderRadius: '0 3px 3px 0' }}>
+                <p style={{ margin: 0, fontFamily: fSerif, fontSize: 19, letterSpacing: '-0.015em', lineHeight: 1.25, color: 'var(--text)' }}>
+                  That's{' '}
+                  <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>
+                    {plannedNights} night{plannedNights === 1 ? '' : 's'}
+                  </em>{' '}
+                  of dinner.
+                </p>
+                <p style={{ margin: '5px 0 0', fontFamily: fSans, fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-soft)' }}>
+                  {nights === 1
+                    ? `Cooked fresh each night — every cook shops for ${servings}.`
+                    : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
+                  {plannedNights > 7 && ' More than seven nights — you’ll have some spare.'}
                 </p>
               </div>
+
+              <p style={{ margin: '12px 0 0', fontFamily: fMono, fontSize: 9, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                Saved for next time — you'll skip straight to picking
+              </p>
             </div>
           )}
 
@@ -331,7 +424,7 @@ export default function PlanWeekModal({
                 style={{ border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', padding: '6px 8px 6px 14px', marginBottom: 14 }}
               >
                 <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-soft)' }}>
-                  {meals} meals · serves {servings}
+                  {meals} × {nights} night{nights === 1 ? '' : 's'} · {servings} per night
                 </span>
                 <button
                   onClick={() => setStep(1)}
@@ -623,7 +716,7 @@ export default function PlanWeekModal({
           {step === 1 && (
             <button
               onClick={() => {
-                onSavePrefs({ meals, servings });
+                onSavePrefs({ meals, servings, nights });
                 setStep(2);
               }}
               style={primaryBtn}
