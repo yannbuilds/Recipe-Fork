@@ -26,6 +26,8 @@ interface Props {
   visibleTabs: { value: TagCategory; label: string; emoji: string }[];
   toggleCategory: (tagName: string) => void;
   tabHasSelection: (tabValue: TagCategory) => boolean;
+  /** Gutter to line the rails up with whatever is above them. */
+  gutter?: number;
 }
 
 function Chip({
@@ -71,6 +73,7 @@ export default function RecipeFilterBar({
   visibleTabs,
   toggleCategory,
   tabHasSelection,
+  gutter = 16,
 }: Props) {
   if (visibleTabs.length === 0) return <View style={{ height: 4 }} />;
 
@@ -79,7 +82,7 @@ export default function RecipeFilterBar({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}
+        contentContainerStyle={{ gap: 6, paddingHorizontal: gutter }}
       >
         {visibleTabs.map((tab) => (
           <Chip
@@ -96,7 +99,7 @@ export default function RecipeFilterBar({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}
+          contentContainerStyle={{ gap: 6, paddingHorizontal: gutter }}
         >
           {visibleCategories.map((cat) => (
             <Chip

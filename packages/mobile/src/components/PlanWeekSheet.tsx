@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
+import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,11 +14,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Body, Button, Mono, Serif } from '@/components/ui';
+import BottomSheet from '@/components/BottomSheet';
+import RecipeFilterBar from '@/components/RecipeFilterBar';
+import { Body, Button, Divider, Mono, Serif } from '@/components/ui';
+import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
 import { DAY_INDEXES, DAY_SHORT, dayDate, todayIndex } from '@/lib/mealPlanDays';
 import { supabase } from '@/lib/supabase';
+import type { RecipeTagRow } from '@/lib/tagMeta';
 import { font, useTheme } from '@/lib/theme';
+import useRecipeFilters from '@/lib/useRecipeFilters';
 
 export interface PlanPrefs {
   /** Cooks in the week — pots on the stove, not nights at the table. */
@@ -55,10 +61,20 @@ interface Props {
   onClose: () => void;
 }
 
-/** Where the picker is reading from. `cookbook:<id>` narrows to one cookbook. */
-type Filter = 'suggested' | 'favourites' | 'recent' | 'all' | `cookbook:${string}`;
+/**
+ * Home's four sort options plus the one plan mode cares about most: what you
+ * haven't cooked in a while. That's the default here — the whole point of the
+ * picker is to get last month's recipes back in front of you.
+ */
+type SortOption = 'suggested' | 'newest' | 'oldest' | 'a-z' | 'z-a';
 
-const COOKBOOK_PREFIX = 'cookbook:';
+const SORT_LABELS: [SortOption, string][] = [
+  ['suggested', 'Not cooked lately'],
+  ['newest', 'Newest first'],
+  ['oldest', 'Oldest first'],
+  ['a-z', 'A – Z'],
+  ['z-a', 'Z – A'],
+];
 
 /**
  * Plan mode. Asks the setup questions once, remembers the answers, and from
@@ -76,21 +92,37 @@ export default function PlanWeekSheet({
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [meals, setMeals] = useState(3);
   const [servings, setServings] = useState(2);
   const [nights, setNights] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
   const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
   const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
   const [cookbookRecipes, setCookbookRecipes] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<Filter>('suggested');
+  const [sortBy, setSortBy] = useState<SortOption>('suggested');
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [cookbookId, setCookbookId] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [picks, setPicks] = useState<PlanPick[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Same filtering the home tab runs on: search across titles and ingredients,
+  // owner, and the tag-category facets.
+  const filters = useRecipeFilters({
+    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
+    tags,
+    recipeTags,
+    userId: user?.id,
+    searchQuery: search,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -102,20 +134,32 @@ export default function PlanWeekSheet({
     setSlots([]);
     setActiveSlot(null);
     setSearch('');
-    setFilter('suggested');
+    setSortBy('suggested');
+    setShowFavouritesOnly(false);
+    setCookbookId(null);
+    setFilterOpen(false);
+    filters.resetFilters();
     setLoading(true);
     (async () => {
-      const [{ data: recipeData }, { data: cookData }, { data: cbData }, { data: cbRecipeData }] =
-        await Promise.all([
-          supabase.from('recipes').select('*').order('title'),
-          supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
-          supabase
-            .from('cookbooks')
-            .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
-            .order('sort_order', { ascending: true })
-            .order('created_at', { ascending: false }),
-          supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
-        ]);
+      const [
+        { data: recipeData },
+        { data: cookData },
+        { data: cbData },
+        { data: cbRecipeData },
+        { data: tagData },
+        { data: recipeTagData },
+      ] = await Promise.all([
+        supabase.from('recipes').select('*').order('title'),
+        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
+        supabase
+          .from('cookbooks')
+          .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: false }),
+        supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
+        supabase.from('tags').select('*').order('name'),
+        supabase.from('recipe_tags').select('recipe_id, tag_id'),
+      ]);
       setRecipes((recipeData as Recipe[]) ?? []);
       const map: Record<string, string> = {};
       for (const r of (cookData as { recipe_id: string; cooked_at: string }[]) ?? []) {
@@ -128,8 +172,11 @@ export default function PlanWeekSheet({
         (members[row.cookbook_id] ??= new Set()).add(row.recipe_id);
       }
       setCookbookRecipes(members);
+      setTags((tagData as Tag[]) ?? []);
+      setRecipeTags((recipeTagData as RecipeTagRow[]) ?? []);
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefs]);
 
   // Cookbooks you can actually pick from — an empty one is just noise here.
@@ -138,26 +185,44 @@ export default function PlanWeekSheet({
     [cookbooks, cookbookRecipes],
   );
 
-  const activeCookbook = filter.startsWith(COOKBOOK_PREFIX)
-    ? cookbooks.find((c) => c.id === filter.slice(COOKBOOK_PREFIX.length))
-    : undefined;
+  const activeCookbook = cookbookId ? cookbooks.find((c) => c.id === cookbookId) : undefined;
 
+  // Everything that matches — no cap. If you have 200 recipes, plan mode shows
+  // 200; narrowing is the filters' job, not a silent truncation's.
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = recipes.filter((r) => !q || r.title.toLowerCase().includes(q));
-    if (filter === 'favourites') list = list.filter((r) => r.is_favourite);
-    if (filter.startsWith(COOKBOOK_PREFIX)) {
-      const ids = cookbookRecipes[filter.slice(COOKBOOK_PREFIX.length)];
+    let list = filters.filteredRecipes;
+    if (cookbookId) {
+      const ids = cookbookRecipes[cookbookId];
       list = ids ? list.filter((r) => ids.has(r.id)) : [];
     }
-    if (filter === 'recent') {
-      list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (filter === 'suggested' || filter.startsWith(COOKBOOK_PREFIX)) {
-      // Longest time since you last cooked it, never-cooked first.
-      list = [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
-    }
-    return list.slice(0, 60);
-  }, [recipes, search, filter, lastCooked, cookbookRecipes]);
+    return [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'a-z':
+          return a.title.localeCompare(b.title);
+        case 'z-a':
+          return b.title.localeCompare(a.title);
+        default:
+          // Longest time since you last cooked it, never-cooked first.
+          return (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? '');
+      }
+    });
+  }, [filters.filteredRecipes, cookbookId, cookbookRecipes, sortBy, lastCooked]);
+
+  const hasActiveFilters =
+    showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested' || cookbookId !== null;
+  const isNarrowed = hasActiveFilters || filters.activeCategories.size > 0 || search.trim() !== '';
+
+  function resetAllFilters() {
+    filters.resetFilters();
+    setSearch('');
+    setShowFavouritesOnly(false);
+    setSortBy('suggested');
+    setCookbookId(null);
+  }
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
   // What the setup answers add up to: cooks × nights each.
@@ -356,6 +421,246 @@ export default function PlanWeekSheet({
     );
   };
 
+  /**
+   * Step 2's controls. Deliberately the home tab's kit — same search field,
+   * same filter button and sheet, same category rails — so narrowing a big
+   * collection works the way you already know it does.
+   */
+  const pickHeader = (
+    <View style={{ paddingTop: 20 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderWidth: 1,
+          borderColor: t.border,
+          borderRadius: 999,
+          backgroundColor: t.card,
+          paddingLeft: 14,
+          paddingRight: 6,
+          paddingVertical: 6,
+          marginHorizontal: 20,
+          marginBottom: 14,
+        }}
+      >
+        <Mono size={9.5} color={t.textSoft} style={{ letterSpacing: 1 }}>
+          {meals} × {nights} NIGHT{nights === 1 ? '' : 'S'} · {servings} PER NIGHT
+        </Mono>
+        <Pressable
+          onPress={() => setStep(1)}
+          style={{ borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}
+        >
+          <Body size={12} color={t.green}>
+            Change
+          </Body>
+        </Pressable>
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 12 }}>
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: t.card,
+            borderWidth: 1,
+            borderColor: t.border,
+            borderRadius: 10,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Ionicons name="search" size={16} color={t.muted} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search recipes…"
+            placeholderTextColor={t.muted}
+            autoCapitalize="none"
+            style={{ flex: 1, paddingVertical: 11, fontSize: 15, color: t.text, fontFamily: font.sans }}
+          />
+        </View>
+        <Pressable
+          onPress={() => {
+            haptics.select();
+            setFilterOpen(true);
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: hasActiveFilters ? t.greenLight : t.card,
+            borderWidth: 1,
+            borderColor: hasActiveFilters ? t.green : t.border,
+          }}
+        >
+          <Ionicons name="options-outline" size={20} color={hasActiveFilters ? t.green : t.muted} />
+        </Pressable>
+      </View>
+
+      <RecipeFilterBar {...filters} gutter={20} />
+
+      {/* Your shelves, right here — half the week is already decided in a
+          cookbook, so make it pickable without leaving plan mode. */}
+      {pickableCookbooks.length > 0 && (
+        <View style={{ marginTop: 14 }}>
+          <Mono size={9} style={{ letterSpacing: 1.5, marginBottom: 8, paddingHorizontal: 20 }}>
+            FROM A COOKBOOK
+          </Mono>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}
+          >
+            {pickableCookbooks.map((cb) => {
+              const on = cookbookId === cb.id;
+              const count = cookbookRecipes[cb.id]?.size ?? 0;
+              return (
+                <Pressable
+                  key={cb.id}
+                  onPress={() => {
+                    haptics.select();
+                    setCookbookId(on ? null : cb.id);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    maxWidth: 210,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: on ? t.greenSolid : t.border,
+                    backgroundColor: on ? t.greenSolid : 'transparent',
+                  }}
+                >
+                  <Body size={12}>{cb.emoji || '📗'}</Body>
+                  <Body size={12} numberOfLines={1} color={on ? t.onGreen : t.textSoft} style={{ flexShrink: 1 }}>
+                    {cb.name}
+                  </Body>
+                  <Mono size={9} color={on ? t.onGreen : t.muted}>
+                    {count}
+                  </Mono>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Always say how much of the collection you're looking at — the picker
+          used to quietly stop at 60 and there was no way to tell. */}
+      {!loading && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 6,
+            paddingHorizontal: 20,
+            marginTop: 14,
+          }}
+        >
+          <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
+            {isNarrowed
+              ? `Showing ${visible.length} of ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}${activeCookbook ? ` in ${activeCookbook.name}` : ''}.`
+              : `All ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}, least recently cooked first.`}
+          </Body>
+          {isNarrowed && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptics.select();
+                resetAllFilters();
+              }}
+            >
+              <Body size={12.5} color={t.green}>
+                Show everything
+              </Body>
+            </Pressable>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  const renderPick = ({ item: recipe }: { item: Recipe }) => {
+    const pick = picks.find((p) => p.recipe.id === recipe.id);
+    return (
+      <View style={{ width: '48.5%' }}>
+        <Pressable onPress={() => togglePick(recipe)}>
+          <View
+            style={{
+              aspectRatio: 4 / 3,
+              borderRadius: 4,
+              overflow: 'hidden',
+              backgroundColor: t.paper3,
+              borderWidth: pick ? 2 : 1,
+              borderColor: pick ? t.greenSolid : t.border,
+            }}
+          >
+            {recipe.image_url ? (
+              <Image
+                source={{ uri: recipe.image_url }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={recipe.id}
+              />
+            ) : (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="restaurant-outline" size={22} color={t.muted} />
+              </View>
+            )}
+            <View
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pick ? t.greenSolid : 'rgba(0,0,0,0.45)',
+              }}
+            >
+              <Ionicons name={pick ? 'checkmark' : 'add'} size={14} color="#fff" />
+            </View>
+          </View>
+          <Serif size={14} numberOfLines={2} style={{ marginTop: 6, lineHeight: 17 }}>
+            {recipe.title}
+          </Serif>
+        </Pressable>
+
+        {/* Meal prep: one cook, several nights. */}
+        {pick && (
+          <Pressable
+            onPress={() => cycleNights(recipe.id)}
+            style={{
+              alignSelf: 'flex-start',
+              marginTop: 5,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: t.green,
+              backgroundColor: t.greenLight,
+            }}
+          >
+            <Mono size={9} color={t.green} style={{ letterSpacing: 0.8 }}>
+              {pick.nights} NIGHT{pick.nights > 1 ? 'S' : ''} · SERVES {servings * pick.nights}
+            </Mono>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
   return (
     // Full screen, not `pageSheet`. A page sheet is laid out by UIKit at a
     // height React Native doesn't reliably know about, so the pinned footer —
@@ -403,416 +708,194 @@ export default function PlanWeekSheet({
           </Pressable>
         </View>
 
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        >
-          {/* ── Step 1: one sentence, three numbers ───── */}
-          {step === 1 && (
-            <View>
-              <Serif size={20} style={{ marginBottom: 14 }}>
-                How does a normal week go?
-              </Serif>
-
-              {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
-              {numberRow('for', servings, setServings, 'people', 1, 12)}
-              {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
-
-              {/* The whole point of the sentence: you never do the multiplication. */}
-              <View
-                style={{
-                  marginTop: 16,
-                  paddingHorizontal: 15,
-                  paddingVertical: 13,
-                  borderLeftWidth: 2,
-                  borderLeftColor: t.green,
-                  backgroundColor: t.greenLight,
-                  borderRadius: 3,
-                }}
-              >
-                <Serif size={19} style={{ lineHeight: 24 }}>
-                  That's{' '}
-                  <Serif size={19} color={t.green} italic>
-                    {plannedNights} night{plannedNights === 1 ? '' : 's'}
-                  </Serif>{' '}
-                  of dinner.
-                </Serif>
-                <Body size={12.5} color={t.textSoft} style={{ lineHeight: 19, marginTop: 5 }}>
-                  {nights === 1
-                    ? `Cooked fresh each night — every cook shops for ${servings}.`
-                    : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
-                  {plannedNights > 7 ? ' More than seven nights — you’ll have some spare.' : ''}
+        {/* The picker is a real list — the whole collection, virtualised, so a
+            couple of hundred recipes scroll as smoothly as ten. */}
+        {step === 2 ? (
+          <FlatList
+            data={loading ? [] : visible}
+            keyExtractor={(r) => r.id}
+            numColumns={2}
+            renderItem={renderPick}
+            ListHeaderComponent={pickHeader}
+            ListEmptyComponent={
+              loading ? (
+                <ActivityIndicator color={t.green} style={{ marginVertical: 28 }} />
+              ) : (
+                <Body size={14} color={t.muted} style={{ paddingVertical: 24, textAlign: 'center' }}>
+                  {isNarrowed ? 'No recipes match those filters.' : 'Nothing to pick here yet.'}
                 </Body>
-              </View>
+              )
+            }
+            columnWrapperStyle={{ paddingHorizontal: 20, justifyContent: 'space-between' }}
+            contentContainerStyle={{ gap: 14, paddingBottom: 30 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={8}
+            windowSize={7}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {/* ── Step 1: one sentence, three numbers ───── */}
+            {step === 1 && (
+              <View>
+                <Serif size={20} style={{ marginBottom: 14 }}>
+                  How does a normal week go?
+                </Serif>
 
-              <Mono size={9} style={{ letterSpacing: 1.3, marginTop: 12, lineHeight: 14 }}>
-                SAVED FOR NEXT TIME — YOU'LL SKIP STRAIGHT TO PICKING
-              </Mono>
-            </View>
-          )}
+                {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
+                {numberRow('for', servings, setServings, 'people', 1, 12)}
+                {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
 
-          {/* ── Step 2: pick the recipes ─────────────── */}
-          {step === 2 && (
-            <View>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderWidth: 1,
-                  borderColor: t.border,
-                  borderRadius: 999,
-                  backgroundColor: t.card,
-                  paddingLeft: 14,
-                  paddingRight: 6,
-                  paddingVertical: 6,
-                  marginBottom: 14,
-                }}
-              >
-                <Mono size={9.5} color={t.textSoft} style={{ letterSpacing: 1 }}>
-                  {meals} × {nights} NIGHT{nights === 1 ? '' : 'S'} · {servings} PER NIGHT
-                </Mono>
-                <Pressable
-                  onPress={() => setStep(1)}
-                  style={{ borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}
+                {/* The whole point of the sentence: you never do the multiplication. */}
+                <View
+                  style={{
+                    marginTop: 16,
+                    paddingHorizontal: 15,
+                    paddingVertical: 13,
+                    borderLeftWidth: 2,
+                    borderLeftColor: t.green,
+                    backgroundColor: t.greenLight,
+                    borderRadius: 3,
+                  }}
                 >
-                  <Body size={12} color={t.green}>
-                    Change
+                  <Serif size={19} style={{ lineHeight: 24 }}>
+                    That's{' '}
+                    <Serif size={19} color={t.green} italic>
+                      {plannedNights} night{plannedNights === 1 ? '' : 's'}
+                    </Serif>{' '}
+                    of dinner.
+                  </Serif>
+                  <Body size={12.5} color={t.textSoft} style={{ lineHeight: 19, marginTop: 5 }}>
+                    {nights === 1
+                      ? `Cooked fresh each night — every cook shops for ${servings}.`
+                      : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
+                    {plannedNights > 7 ? ' More than seven nights — you’ll have some spare.' : ''}
                   </Body>
-                </Pressable>
+                </View>
+
+                <Mono size={9} style={{ letterSpacing: 1.3, marginTop: 12, lineHeight: 14 }}>
+                  SAVED FOR NEXT TIME — YOU'LL SKIP STRAIGHT TO PICKING
+                </Mono>
               </View>
+            )}
 
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search recipes…"
-                placeholderTextColor={t.muted}
-                autoCapitalize="none"
-                style={{
-                  borderWidth: 1,
-                  borderColor: t.border,
-                  borderRadius: 10,
-                  paddingHorizontal: 14,
-                  paddingVertical: 11,
-                  color: t.text,
-                  fontFamily: font.sans,
-                  fontSize: 15,
-                  backgroundColor: t.card,
-                  marginBottom: 12,
-                }}
-              />
+            {/* ── Step 3: place them ───────────────────── */}
+            {step === 3 && (
+              <View>
+                <Body size={13.5} color={t.textSoft} style={{ lineHeight: 20, marginBottom: 14 }}>
+                  Pick a night below, then tap a day. Anything you leave sits in the week without a day — that's fine.
+                </Body>
 
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  marginBottom: pickableCookbooks.length > 0 ? 14 : 16,
-                }}
-              >
-                {(
-                  [
-                    ['suggested', 'Not cooked lately'],
-                    ['favourites', 'Favourites'],
-                    ['recent', 'Newest'],
-                    ['all', 'All'],
-                  ] as [Filter, string][]
-                ).map(([key, label]) => {
-                  const on = filter === key;
+                {DAY_INDEXES.map((d) => {
+                  const slot = slots.find((s) => s.day === d);
+                  const recipe = slot ? recipeFor(slot.recipeId) : undefined;
+                  const busy = takenDays.has(d);
+                  const date = dayDate(weekStart, d);
                   return (
                     <Pressable
-                      key={key}
-                      onPress={() => {
-                        haptics.select();
-                        setFilter(key);
-                      }}
+                      key={d}
+                      onPress={() => !busy && placeOnDay(d)}
+                      disabled={busy}
                       style={{
-                        paddingHorizontal: 11,
-                        paddingVertical: 6,
-                        borderRadius: 999,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        paddingHorizontal: 10,
+                        paddingVertical: 9,
+                        marginBottom: 6,
+                        borderRadius: 4,
                         borderWidth: 1,
-                        borderColor: on ? t.greenSolid : t.border,
-                        backgroundColor: on ? t.greenSolid : 'transparent',
+                        borderStyle: slot || busy ? 'solid' : 'dashed',
+                        borderColor: slot ? t.green : t.border,
+                        backgroundColor: slot ? t.greenLight : t.card,
+                        opacity: busy ? 0.5 : 1,
                       }}
                     >
-                      <Mono size={9} color={on ? t.onGreen : t.muted} style={{ letterSpacing: 1 }}>
-                        {label.toUpperCase()}
+                      <Mono size={9.5} style={{ width: 46, letterSpacing: 0.6 }}>
+                        {DAY_SHORT[d].toUpperCase()} {date.getDate()}
                       </Mono>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* Your shelves, right here — half the week is already decided in a
-                  cookbook, so make it pickable without leaving plan mode. */}
-              {pickableCookbooks.length > 0 && (
-                <View style={{ marginBottom: 14 }}>
-                  <Mono size={9} style={{ letterSpacing: 1.5, marginBottom: 8 }}>
-                    FROM A COOKBOOK
-                  </Mono>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={{ marginHorizontal: -20 }}
-                    contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}
-                  >
-                    {pickableCookbooks.map((cb) => {
-                      const key: Filter = `${COOKBOOK_PREFIX}${cb.id}`;
-                      const on = filter === key;
-                      const count = cookbookRecipes[cb.id]?.size ?? 0;
-                      return (
-                        <Pressable
-                          key={cb.id}
-                          onPress={() => {
-                            haptics.select();
-                            setFilter(on ? 'suggested' : key);
-                          }}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            maxWidth: 210,
-                            paddingHorizontal: 12,
-                            paddingVertical: 7,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: on ? t.greenSolid : t.border,
-                            backgroundColor: on ? t.greenSolid : 'transparent',
-                          }}
-                        >
-                          <Body size={12}>{cb.emoji || '📗'}</Body>
-                          <Body size={12} numberOfLines={1} color={on ? t.onGreen : t.textSoft} style={{ flexShrink: 1 }}>
-                            {cb.name}
-                          </Body>
-                          <Mono size={9} color={on ? t.onGreen : t.muted}>
-                            {count}
-                          </Mono>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {activeCookbook && (
-                <View
-                  style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}
-                >
-                  <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
-                    Showing {activeCookbook.name}, least recently cooked first.
-                  </Body>
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => {
-                      haptics.select();
-                      setFilter('suggested');
-                    }}
-                  >
-                    <Body size={12.5} color={t.green}>
-                      Show everything
-                    </Body>
-                  </Pressable>
-                </View>
-              )}
-
-              {loading && <ActivityIndicator color={t.green} style={{ marginVertical: 28 }} />}
-
-              {!loading && visible.length === 0 && (
-                <Body size={14} color={t.muted} style={{ paddingVertical: 24, textAlign: 'center' }}>
-                  {search.trim() ? 'No recipes match that search.' : 'Nothing to pick here yet.'}
-                </Body>
-              )}
-
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 11 }}>
-                {visible.map((recipe) => {
-                  const pick = picks.find((p) => p.recipe.id === recipe.id);
-                  return (
-                    <View key={recipe.id} style={{ width: '47.5%' }}>
-                      <Pressable onPress={() => togglePick(recipe)}>
-                        <View
-                          style={{
-                            aspectRatio: 4 / 3,
-                            borderRadius: 4,
-                            overflow: 'hidden',
-                            backgroundColor: t.paper3,
-                            borderWidth: pick ? 2 : 1,
-                            borderColor: pick ? t.greenSolid : t.border,
-                          }}
-                        >
+                      {recipe ? (
+                        <>
                           {recipe.image_url ? (
                             <Image
                               source={{ uri: recipe.image_url }}
-                              style={{ width: '100%', height: '100%' }}
+                              style={{ width: 32, height: 32, borderRadius: 3 }}
                               contentFit="cover"
                               cachePolicy="memory-disk"
                               recyclingKey={recipe.id}
                             />
                           ) : (
-                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                              <Ionicons name="restaurant-outline" size={22} color={t.muted} />
-                            </View>
+                            <View style={{ width: 32, height: 32, borderRadius: 3, backgroundColor: t.paper3 }} />
                           )}
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: 6,
-                              right: 6,
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: pick ? t.greenSolid : 'rgba(0,0,0,0.45)',
-                            }}
-                          >
-                            <Ionicons name={pick ? 'checkmark' : 'add'} size={14} color="#fff" />
-                          </View>
-                        </View>
-                        <Serif size={14} numberOfLines={2} style={{ marginTop: 6, lineHeight: 17 }}>
-                          {recipe.title}
-                        </Serif>
-                      </Pressable>
-
-                      {/* Meal prep: one cook, several nights. */}
-                      {pick && (
-                        <Pressable
-                          onPress={() => cycleNights(recipe.id)}
-                          style={{
-                            alignSelf: 'flex-start',
-                            marginTop: 5,
-                            paddingHorizontal: 9,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: t.green,
-                            backgroundColor: t.greenLight,
-                          }}
-                        >
-                          <Mono size={9} color={t.green} style={{ letterSpacing: 0.8 }}>
-                            {pick.nights} NIGHT{pick.nights > 1 ? 'S' : ''} · SERVES {servings * pick.nights}
-                          </Mono>
-                        </Pressable>
+                          <Serif size={15} numberOfLines={1} style={{ flex: 1 }}>
+                            {recipe.title}
+                          </Serif>
+                        </>
+                      ) : (
+                        <Mono size={9} style={{ flex: 1, letterSpacing: 1.2 }}>
+                          {busy ? 'ALREADY PLANNED' : activeSlot ? 'TAP TO PLACE' : 'FREE'}
+                        </Mono>
                       )}
-                    </View>
+                    </Pressable>
                   );
                 })}
-              </View>
-            </View>
-          )}
 
-          {/* ── Step 3: place them ───────────────────── */}
-          {step === 3 && (
-            <View>
-              <Body size={13.5} color={t.textSoft} style={{ lineHeight: 20, marginBottom: 14 }}>
-                Pick a night below, then tap a day. Anything you leave sits in the week without a day — that's fine.
-              </Body>
-
-              {DAY_INDEXES.map((d) => {
-                const slot = slots.find((s) => s.day === d);
-                const recipe = slot ? recipeFor(slot.recipeId) : undefined;
-                const busy = takenDays.has(d);
-                const date = dayDate(weekStart, d);
-                return (
-                  <Pressable
-                    key={d}
-                    onPress={() => !busy && placeOnDay(d)}
-                    disabled={busy}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                      paddingHorizontal: 10,
-                      paddingVertical: 9,
-                      marginBottom: 6,
-                      borderRadius: 4,
-                      borderWidth: 1,
-                      borderStyle: slot || busy ? 'solid' : 'dashed',
-                      borderColor: slot ? t.green : t.border,
-                      backgroundColor: slot ? t.greenLight : t.card,
-                      opacity: busy ? 0.5 : 1,
-                    }}
-                  >
-                    <Mono size={9.5} style={{ width: 46, letterSpacing: 0.6 }}>
-                      {DAY_SHORT[d].toUpperCase()} {date.getDate()}
+                <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.border }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <Mono size={9} style={{ letterSpacing: 1.5 }}>
+                      STILL TO PLACE
                     </Mono>
-                    {recipe ? (
-                      <>
-                        {recipe.image_url ? (
-                          <Image
-                            source={{ uri: recipe.image_url }}
-                            style={{ width: 32, height: 32, borderRadius: 3 }}
-                            contentFit="cover"
-                            cachePolicy="memory-disk"
-                            recyclingKey={recipe.id}
-                          />
-                        ) : (
-                          <View style={{ width: 32, height: 32, borderRadius: 3, backgroundColor: t.paper3 }} />
-                        )}
-                        <Serif size={15} numberOfLines={1} style={{ flex: 1 }}>
-                          {recipe.title}
-                        </Serif>
-                      </>
-                    ) : (
-                      <Mono size={9} style={{ flex: 1, letterSpacing: 1.2 }}>
-                        {busy ? 'ALREADY PLANNED' : activeSlot ? 'TAP TO PLACE' : 'FREE'}
-                      </Mono>
-                    )}
-                  </Pressable>
-                );
-              })}
-
-              <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.border }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Mono size={9} style={{ letterSpacing: 1.5 }}>
-                    STILL TO PLACE
-                  </Mono>
-                  <Mono size={10}>{slots.filter((s) => s.day === null).length}</Mono>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {slots
-                    .filter((s) => s.day === null)
-                    .map((s) => {
-                      const recipe = recipeFor(s.recipeId);
-                      const isActive = activeSlot === s.key;
-                      return (
-                        <Pressable
-                          key={s.key}
-                          onPress={() => {
-                            haptics.select();
-                            setActiveSlot(s.key);
-                          }}
-                          style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: 3,
-                            overflow: 'hidden',
-                            backgroundColor: t.paper3,
-                            borderWidth: isActive ? 2 : 1,
-                            borderColor: isActive ? t.greenSolid : t.border,
-                          }}
-                        >
-                          {recipe?.image_url ? (
-                            <Image
-                              source={{ uri: recipe.image_url }}
-                              style={{ width: '100%', height: '100%' }}
-                              contentFit="cover"
-                              cachePolicy="memory-disk"
-                              recyclingKey={recipe.id}
-                            />
-                          ) : (
-                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                              <Ionicons name="restaurant-outline" size={16} color={t.muted} />
-                            </View>
-                          )}
-                        </Pressable>
-                      );
-                    })}
+                    <Mono size={10}>{slots.filter((s) => s.day === null).length}</Mono>
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {slots
+                      .filter((s) => s.day === null)
+                      .map((s) => {
+                        const recipe = recipeFor(s.recipeId);
+                        const isActive = activeSlot === s.key;
+                        return (
+                          <Pressable
+                            key={s.key}
+                            onPress={() => {
+                              haptics.select();
+                              setActiveSlot(s.key);
+                            }}
+                            style={{
+                              width: 52,
+                              height: 52,
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                              backgroundColor: t.paper3,
+                              borderWidth: isActive ? 2 : 1,
+                              borderColor: isActive ? t.greenSolid : t.border,
+                            }}
+                          >
+                            {recipe?.image_url ? (
+                              <Image
+                                source={{ uri: recipe.image_url }}
+                                style={{ width: '100%', height: '100%' }}
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                recyclingKey={recipe.id}
+                              />
+                            ) : (
+                              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="restaurant-outline" size={16} color={t.muted} />
+                              </View>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                  </View>
                 </View>
               </View>
-            </View>
-          )}
-        </ScrollView>
+            )}
+          </ScrollView>
+        )}
 
         {/* Footer — always on screen, never behind the tab bar or the keyboard. */}
         <View
@@ -856,6 +939,115 @@ export default function PlanWeekSheet({
             </>
           )}
         </View>
+
+        {/* Filter & sort — the home tab's sheet, minus nothing, plus the
+            not-cooked-lately sort that plan mode opens on. */}
+        <BottomSheet open={filterOpen} onClose={() => setFilterOpen(false)}>
+          <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4 }}>
+            <Serif size={19} weight="semi">
+              Filter &amp; sort
+            </Serif>
+
+            <Mono size={10} style={{ marginTop: 18, marginBottom: 8 }}>
+              SHOW
+            </Mono>
+            {(['all', 'mine', 'shared'] as const).map((value) => {
+              const label = value === 'all' ? 'All recipes' : value === 'mine' ? 'Mine' : 'Shared';
+              const active = filters.ownerFilter === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    haptics.select();
+                    filters.setOwnerFilter(value);
+                  }}
+                  style={{
+                    paddingVertical: 11,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: active ? t.greenLight : 'transparent',
+                  }}
+                >
+                  <Body size={14} weight={active ? 'semi' : 'regular'} color={active ? t.green : t.text}>
+                    {label}
+                  </Body>
+                </Pressable>
+              );
+            })}
+
+            <Divider style={{ marginVertical: 8 }} />
+
+            <Pressable
+              onPress={() => {
+                haptics.light();
+                setShowFavouritesOnly((v) => !v);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingVertical: 11,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: showFavouritesOnly ? t.redLight : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={showFavouritesOnly ? 'heart' : 'heart-outline'}
+                size={16}
+                color={showFavouritesOnly ? t.red : t.text}
+              />
+              <Body size={14} color={showFavouritesOnly ? t.red : t.text}>
+                Favourites only
+              </Body>
+            </Pressable>
+
+            <Divider style={{ marginVertical: 8 }} />
+
+            <Mono size={10} style={{ marginBottom: 8 }}>
+              SORT BY
+            </Mono>
+            {SORT_LABELS.map(([value, label]) => {
+              const active = sortBy === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    haptics.select();
+                    setSortBy(value);
+                  }}
+                  style={{
+                    paddingVertical: 11,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: active ? t.greenLight : 'transparent',
+                  }}
+                >
+                  <Body size={14} weight={active ? 'semi' : 'regular'} color={active ? t.green : t.text}>
+                    {label}
+                  </Body>
+                </Pressable>
+              );
+            })}
+
+            {isNarrowed && (
+              <>
+                <Divider style={{ marginVertical: 8 }} />
+                <Pressable
+                  onPress={() => {
+                    haptics.light();
+                    resetAllFilters();
+                  }}
+                  style={{ paddingVertical: 11, paddingHorizontal: 12 }}
+                >
+                  <Body size={14} color={t.red}>
+                    Reset all filters
+                  </Body>
+                </Pressable>
+              </>
+            )}
+          </ScrollView>
+        </BottomSheet>
       </KeyboardAvoidingView>
     </Modal>
   );
