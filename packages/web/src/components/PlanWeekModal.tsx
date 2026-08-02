@@ -3,6 +3,7 @@ import { Check, Minus, Plus, X as XIcon, Utensils, Wand2, Heart, SlidersHorizont
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeFilterBar from './RecipeFilterBar';
+import CookbookCard from './CookbookCard';
 import useRecipeFilters from '../hooks/useRecipeFilters';
 import { useAuth } from '../context/AuthContext';
 import type { RecipeTagRow } from '../constants/tagMeta';
@@ -85,6 +86,10 @@ export default function PlanWeekModal({
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('suggested');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  // Two ways to look at the same collection: the whole list, or your shelves.
+  // Not a filter — a mode. Cookbooks get the shelf treatment they have on the
+  // Cookbook page, because browsing them is half the reason they exist.
+  const [browse, setBrowse] = useState<'all' | 'cookbooks'>('all');
   const [cookbookId, setCookbookId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -116,6 +121,7 @@ export default function PlanWeekModal({
     setSearch('');
     setSortBy('suggested');
     setShowFavouritesOnly(false);
+    setBrowse('all');
     setCookbookId(null);
     setFilterOpen(false);
     filters.resetFilters();
@@ -185,15 +191,37 @@ export default function PlanWeekModal({
 
   const activeCookbook = cookbookId ? cookbooks.find((c) => c.id === cookbookId) : undefined;
 
+  // Four plates per shelf, newest first — the same cover strip the Cookbook
+  // page builds, derived from data this modal already has.
+  const cookbookCovers = useMemo(() => {
+    const byId = new Map(recipes.map((r) => [r.id, r]));
+    const out: Record<string, string[]> = {};
+    for (const cb of cookbooks) {
+      const ids = cookbookRecipes[cb.id];
+      out[cb.id] = !ids
+        ? []
+        : [...ids]
+            .map((id) => byId.get(id))
+            .filter((r): r is Recipe => !!r?.image_url)
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 4)
+            .map((r) => r.image_url as string);
+    }
+    return out;
+  }, [recipes, cookbooks, cookbookRecipes]);
+
   // Everything that matches — no cap. If you have 200 recipes, plan mode shows
   // 200; narrowing is the filters' job, not a silent truncation's.
   const visible = useMemo(() => {
-    let list = filters.filteredRecipes;
-    if (cookbookId) {
+    // Inside a shelf you get the shelf, least recently cooked first — the
+    // recipe filters belong to the all-recipes mode and are reset on the way in.
+    if (browse === 'cookbooks') {
+      if (!cookbookId) return [];
       const ids = cookbookRecipes[cookbookId];
-      list = ids ? list.filter((r) => ids.has(r.id)) : [];
+      const list = ids ? recipes.filter((r) => ids.has(r.id)) : [];
+      return [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
     }
-    return [...list].sort((a, b) => {
+    return [...filters.filteredRecipes].sort((a, b) => {
       switch (sortBy) {
         case 'newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -208,10 +236,9 @@ export default function PlanWeekModal({
           return (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? '');
       }
     });
-  }, [filters.filteredRecipes, cookbookId, cookbookRecipes, sortBy, lastCooked]);
+  }, [browse, cookbookId, recipes, filters.filteredRecipes, cookbookRecipes, sortBy, lastCooked]);
 
-  const hasActiveFilters =
-    showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested' || cookbookId !== null;
+  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested';
   const isNarrowed = hasActiveFilters || filters.activeCategories.size > 0 || search.trim() !== '';
 
   function resetAllFilters() {
@@ -219,7 +246,14 @@ export default function PlanWeekModal({
     setSearch('');
     setShowFavouritesOnly(false);
     setSortBy('suggested');
+  }
+
+  /** Switching mode is a clean slate — the other mode's controls don't linger. */
+  function setMode(next: 'all' | 'cookbooks') {
+    setBrowse(next);
     setCookbookId(null);
+    setFilterOpen(false);
+    resetAllFilters();
   }
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
@@ -518,8 +552,47 @@ export default function PlanWeekModal({
                 </button>
               </div>
 
-              {/* Search + filters — the same controls as the home page, so
-                  narrowing 200 recipes works the way you already know. */}
+              {/* Two ways in: the whole collection, or your shelves. */}
+              <div
+                className="flex"
+                style={{ gap: 4, padding: 3, marginBottom: 14, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)' }}
+              >
+                {([
+                  ['all', 'All recipes', recipes.length],
+                  ['cookbooks', 'Cookbooks', pickableCookbooks.length],
+                ] as const).map(([value, label, count]) => {
+                  const on = browse === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setMode(value)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 7,
+                        padding: '8px 0',
+                        borderRadius: 999,
+                        border: 'none',
+                        cursor: 'pointer',
+                        background: on ? 'var(--green-solid)' : 'transparent',
+                        color: on ? '#fff' : 'var(--muted)',
+                        fontFamily: fMono,
+                        fontSize: 9.5,
+                        letterSpacing: '0.13em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {label}
+                      <span style={{ opacity: on ? 0.75 : 0.6 }}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── All recipes: search + the home page's filters ───── */}
+              {browse === 'all' && (
               <div className="flex items-center gap-3 relative" style={{ marginBottom: 12 }}>
                 <input
                   value={search}
@@ -612,61 +685,18 @@ export default function PlanWeekModal({
                   )}
                 </div>
               </div>
-
-              <RecipeFilterBar {...filters} />
-
-              {/* Your shelves, right here — half the week is already decided in a
-                  cookbook, so make it pickable without leaving plan mode. */}
-              {pickableCookbooks.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
-                    From a cookbook
-                  </div>
-                  {/* One scrolling rail rather than a wrapping block — a big shelf
-                      would otherwise push the recipes below the fold. */}
-                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ flexWrap: 'nowrap' }}>
-                    {pickableCookbooks.map((cb) => {
-                      const on = cookbookId === cb.id;
-                      const count = cookbookRecipes[cb.id]?.size ?? 0;
-                      return (
-                        <button
-                          key={cb.id}
-                          onClick={() => setCookbookId(on ? null : cb.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontFamily: fSans,
-                            fontSize: 12,
-                            padding: '6px 12px',
-                            borderRadius: 999,
-                            cursor: 'pointer',
-                            border: `1px solid ${on ? 'var(--green-solid)' : 'var(--border)'}`,
-                            background: on ? 'var(--green-solid)' : 'transparent',
-                            color: on ? '#fff' : 'var(--text-soft)',
-                            flexShrink: 0,
-                            maxWidth: 220,
-                          }}
-                        >
-                          <span aria-hidden>{cb.emoji || '📗'}</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cb.name}</span>
-                          <span style={{ fontFamily: fMono, fontSize: 9.5, opacity: on ? 0.85 : 0.6 }}>{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
               )}
+
+              {browse === 'all' && <RecipeFilterBar {...filters} />}
 
               {/* Always say how much of the collection you're looking at — the
                   picker used to quietly stop at 60 and there was no way to tell. */}
-              {!loading && (
+              {browse === 'all' && !loading && (
                 <p style={{ margin: '0 0 12px', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
                   {isNarrowed ? (
                     <>
                       Showing <strong style={{ color: 'var(--text-soft)' }}>{visible.length}</strong> of {recipes.length} recipe
-                      {recipes.length === 1 ? '' : 's'}
-                      {activeCookbook ? ` in ${activeCookbook.name}` : ''}.{' '}
+                      {recipes.length === 1 ? '' : 's'}.{' '}
                       <button
                         onClick={resetAllFilters}
                         style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
@@ -680,11 +710,53 @@ export default function PlanWeekModal({
                 </p>
               )}
 
+              {/* ── Cookbooks: the shelf, as it looks on the Cookbook page ───── */}
+              {browse === 'cookbooks' && !activeCookbook && !loading && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {pickableCookbooks.length === 0 ? (
+                    <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>
+                      No cookbooks with recipes in them yet.
+                    </p>
+                  ) : (
+                    pickableCookbooks.map((cb, i) => (
+                      <CookbookCard
+                        key={cb.id}
+                        cookbook={cb}
+                        recipeCount={cookbookRecipes[cb.id]?.size ?? 0}
+                        coverImages={cookbookCovers[cb.id] ?? []}
+                        index={i}
+                        onSelect={() => setCookbookId(cb.id)}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Inside a shelf — back out the way you came in. */}
+              {browse === 'cookbooks' && activeCookbook && (
+                <div style={{ marginBottom: 14 }}>
+                  <button
+                    onClick={() => setCookbookId(null)}
+                    style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    ← Cookbooks
+                  </button>
+                  <h3 style={{ margin: '8px 0 0', fontFamily: fSerif, fontWeight: 400, fontSize: 22, letterSpacing: '-0.018em', color: 'var(--text)' }}>
+                    <span aria-hidden style={{ marginRight: 8 }}>{activeCookbook.emoji || '📗'}</span>
+                    {activeCookbook.name}
+                  </h3>
+                  <p style={{ margin: '5px 0 0', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
+                    {visible.length} recipe{visible.length === 1 ? '' : 's'}, least recently cooked first
+                    {activeCookbook.description ? ` · ${activeCookbook.description}` : ''}
+                  </p>
+                </div>
+              )}
+
               {loading && (
                 <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>Loading…</p>
               )}
 
-              {!loading && visible.length === 0 && (
+              {!loading && visible.length === 0 && browse === 'all' && (
                 <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>
                   {isNarrowed ? 'No recipes match those filters.' : 'Nothing to pick here yet.'}
                 </p>

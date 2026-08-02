@@ -12,17 +12,19 @@ interface Props {
   coverImages: string[]; // up to 4
   index?: number;
   onPress: () => void;
+  /** Gutter to line the row up with whatever it's listed inside. */
+  gutter?: number;
 }
 
 // Editorial "shelf" row — mirrors the web CookbookCard (Pie Keeper Screen 02).
 // Index · name · count, a 4-across photo strip under a hairline, then a
 // description · "Open →" footer.
-export default function CookbookRow({ cookbook, recipeCount, coverImages, index = 0, onPress }: Props) {
+export default function CookbookRow({ cookbook, recipeCount, coverImages, index = 0, onPress, gutter = 16 }: Props) {
   const t = useTheme();
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
 
   return (
-    <PressableScale onPress={onPress} scaleTo={0.985} style={{ paddingHorizontal: 16 }}>
+    <PressableScale onPress={onPress} scaleTo={0.985} style={{ paddingHorizontal: gutter }}>
       {/* Title row: index · name · count */}
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
         <Serif size={14} italic color={t.green}>

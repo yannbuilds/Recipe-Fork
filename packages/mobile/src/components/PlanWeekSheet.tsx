@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
+import CookbookRow from '@/components/CookbookRow';
 import RecipeFilterBar from '@/components/RecipeFilterBar';
 import { Body, Button, Divider, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -106,6 +107,10 @@ export default function PlanWeekSheet({
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('suggested');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  // Two ways to look at the same collection: the whole list, or your shelves.
+  // Not a filter — a mode. Cookbooks get the shelf treatment they have on the
+  // Cookbook tab, because browsing them is half the reason they exist.
+  const [browse, setBrowse] = useState<'all' | 'cookbooks'>('all');
   const [cookbookId, setCookbookId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -136,6 +141,7 @@ export default function PlanWeekSheet({
     setSearch('');
     setSortBy('suggested');
     setShowFavouritesOnly(false);
+    setBrowse('all');
     setCookbookId(null);
     setFilterOpen(false);
     filters.resetFilters();
@@ -187,15 +193,37 @@ export default function PlanWeekSheet({
 
   const activeCookbook = cookbookId ? cookbooks.find((c) => c.id === cookbookId) : undefined;
 
+  // Four plates per shelf, newest first — the same cover strip the Cookbook
+  // tab builds, derived from data this sheet already has.
+  const cookbookCovers = useMemo(() => {
+    const byId = new Map(recipes.map((r) => [r.id, r]));
+    const out: Record<string, string[]> = {};
+    for (const cb of cookbooks) {
+      const ids = cookbookRecipes[cb.id];
+      out[cb.id] = !ids
+        ? []
+        : [...ids]
+            .map((id) => byId.get(id))
+            .filter((r): r is Recipe => !!r?.image_url)
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 4)
+            .map((r) => r.image_url as string);
+    }
+    return out;
+  }, [recipes, cookbooks, cookbookRecipes]);
+
   // Everything that matches — no cap. If you have 200 recipes, plan mode shows
   // 200; narrowing is the filters' job, not a silent truncation's.
   const visible = useMemo(() => {
-    let list = filters.filteredRecipes;
-    if (cookbookId) {
+    // Inside a shelf you get the shelf, least recently cooked first — the
+    // recipe filters belong to the all-recipes mode and are reset on the way in.
+    if (browse === 'cookbooks') {
+      if (!cookbookId) return [];
       const ids = cookbookRecipes[cookbookId];
-      list = ids ? list.filter((r) => ids.has(r.id)) : [];
+      const list = ids ? recipes.filter((r) => ids.has(r.id)) : [];
+      return [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
     }
-    return [...list].sort((a, b) => {
+    return [...filters.filteredRecipes].sort((a, b) => {
       switch (sortBy) {
         case 'newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -210,10 +238,9 @@ export default function PlanWeekSheet({
           return (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? '');
       }
     });
-  }, [filters.filteredRecipes, cookbookId, cookbookRecipes, sortBy, lastCooked]);
+  }, [browse, cookbookId, recipes, filters.filteredRecipes, cookbookRecipes, sortBy, lastCooked]);
 
-  const hasActiveFilters =
-    showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested' || cookbookId !== null;
+  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested';
   const isNarrowed = hasActiveFilters || filters.activeCategories.size > 0 || search.trim() !== '';
 
   function resetAllFilters() {
@@ -221,7 +248,15 @@ export default function PlanWeekSheet({
     setSearch('');
     setShowFavouritesOnly(false);
     setSortBy('suggested');
+  }
+
+  /** Switching mode is a clean slate — the other mode's controls don't linger. */
+  function setMode(next: 'all' | 'cookbooks') {
+    haptics.select();
+    setBrowse(next);
     setCookbookId(null);
+    setFilterOpen(false);
+    resetAllFilters();
   }
 
   const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
@@ -431,12 +466,9 @@ export default function PlanWeekSheet({
     );
   };
 
-  /**
-   * Step 2's controls. Deliberately the home tab's kit — same search field,
-   * same filter button and sheet, same category rails — so narrowing a big
-   * collection works the way you already know it does.
-   */
-  const pickHeader = (
+  /** Prefs recap plus the All-recipes / Cookbooks switch — on top of every
+   *  step-2 view, so the mode is always one tap away. */
+  const modeSwitch = (
     <View style={{ paddingTop: 20 }}>
       <View
         style={{
@@ -467,133 +499,170 @@ export default function PlanWeekSheet({
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 12 }}>
-        <View
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            backgroundColor: t.card,
-            borderWidth: 1,
-            borderColor: t.border,
-            borderRadius: 10,
-            paddingHorizontal: 12,
-          }}
-        >
-          <Ionicons name="search" size={16} color={t.muted} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search recipes…"
-            placeholderTextColor={t.muted}
-            autoCapitalize="none"
-            style={{ flex: 1, paddingVertical: 11, fontSize: 15, color: t.text, fontFamily: font.sans }}
-          />
-        </View>
-        <Pressable
-          onPress={() => {
-            haptics.select();
-            setFilterOpen(true);
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: hasActiveFilters ? t.greenLight : t.card,
-            borderWidth: 1,
-            borderColor: hasActiveFilters ? t.green : t.border,
-          }}
-        >
-          <Ionicons name="options-outline" size={20} color={hasActiveFilters ? t.green : t.muted} />
-        </Pressable>
+      {/* Two ways in: the whole collection, or your shelves. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: 4,
+          padding: 3,
+          marginHorizontal: 20,
+          marginBottom: 14,
+          borderWidth: 1,
+          borderColor: t.border,
+          borderRadius: 999,
+          backgroundColor: t.card,
+        }}
+      >
+        {(
+          [
+            ['all', 'All recipes', recipes.length],
+            ['cookbooks', 'Cookbooks', pickableCookbooks.length],
+          ] as const
+        ).map(([value, label, count]) => {
+          const on = browse === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => setMode(value)}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                paddingVertical: 9,
+                borderRadius: 999,
+                backgroundColor: on ? t.greenSolid : 'transparent',
+              }}
+            >
+              <Mono size={9.5} color={on ? t.onGreen : t.muted} style={{ letterSpacing: 1.3 }}>
+                {label.toUpperCase()}
+              </Mono>
+              <Mono size={9.5} color={on ? t.onGreen : t.muted} style={{ opacity: 0.75 }}>
+                {count}
+              </Mono>
+            </Pressable>
+          );
+        })}
       </View>
+    </View>
+  );
 
-      <RecipeFilterBar {...filters} gutter={20} />
+  /**
+   * The recipe grid's header. In all-recipes mode it's the home tab's kit —
+   * same search field, same filter button and sheet, same category rails. Inside
+   * a cookbook it's the shelf's own title bar instead.
+   */
+  const pickHeader = (
+    <View>
+      {modeSwitch}
 
-      {/* Your shelves, right here — half the week is already decided in a
-          cookbook, so make it pickable without leaving plan mode. */}
-      {pickableCookbooks.length > 0 && (
-        <View style={{ marginTop: 14 }}>
-          <Mono size={9} style={{ letterSpacing: 1.5, marginBottom: 8, paddingHorizontal: 20 }}>
-            FROM A COOKBOOK
-          </Mono>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}
-          >
-            {pickableCookbooks.map((cb) => {
-              const on = cookbookId === cb.id;
-              const count = cookbookRecipes[cb.id]?.size ?? 0;
-              return (
+      {browse === 'all' ? (
+        <View>
+          <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 12 }}>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: t.card,
+                borderWidth: 1,
+                borderColor: t.border,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+              }}
+            >
+              <Ionicons name="search" size={16} color={t.muted} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search recipes…"
+                placeholderTextColor={t.muted}
+                autoCapitalize="none"
+                style={{ flex: 1, paddingVertical: 11, fontSize: 15, color: t.text, fontFamily: font.sans }}
+              />
+            </View>
+            <Pressable
+              onPress={() => {
+                haptics.select();
+                setFilterOpen(true);
+              }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: hasActiveFilters ? t.greenLight : t.card,
+                borderWidth: 1,
+                borderColor: hasActiveFilters ? t.green : t.border,
+              }}
+            >
+              <Ionicons name="options-outline" size={20} color={hasActiveFilters ? t.green : t.muted} />
+            </Pressable>
+          </View>
+
+          <RecipeFilterBar {...filters} gutter={20} />
+
+          {/* Always say how much of the collection you're looking at — the picker
+              used to quietly stop at 60 and there was no way to tell. */}
+          {!loading && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 6,
+                paddingHorizontal: 20,
+                marginTop: 14,
+              }}
+            >
+              <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
+                {isNarrowed
+                  ? `Showing ${visible.length} of ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}.`
+                  : `All ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}, least recently cooked first.`}
+              </Body>
+              {isNarrowed && (
                 <Pressable
-                  key={cb.id}
+                  hitSlop={8}
                   onPress={() => {
                     haptics.select();
-                    setCookbookId(on ? null : cb.id);
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    maxWidth: 210,
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: on ? t.greenSolid : t.border,
-                    backgroundColor: on ? t.greenSolid : 'transparent',
+                    resetAllFilters();
                   }}
                 >
-                  <Body size={12}>{cb.emoji || '📗'}</Body>
-                  <Body size={12} numberOfLines={1} color={on ? t.onGreen : t.textSoft} style={{ flexShrink: 1 }}>
-                    {cb.name}
+                  <Body size={12.5} color={t.green}>
+                    Show everything
                   </Body>
-                  <Mono size={9} color={on ? t.onGreen : t.muted}>
-                    {count}
-                  </Mono>
                 </Pressable>
-              );
-            })}
-          </ScrollView>
+              )}
+            </View>
+          )}
         </View>
-      )}
-
-      {/* Always say how much of the collection you're looking at — the picker
-          used to quietly stop at 60 and there was no way to tell. */}
-      {!loading && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 6,
-            paddingHorizontal: 20,
-            marginTop: 14,
-          }}
-        >
-          <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
-            {isNarrowed
-              ? `Showing ${visible.length} of ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}${activeCookbook ? ` in ${activeCookbook.name}` : ''}.`
-              : `All ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}, least recently cooked first.`}
-          </Body>
-          {isNarrowed && (
+      ) : (
+        activeCookbook && (
+          // Inside a shelf — back out the way you came in.
+          <View style={{ paddingHorizontal: 20 }}>
             <Pressable
               hitSlop={8}
               onPress={() => {
                 haptics.select();
-                resetAllFilters();
+                setCookbookId(null);
               }}
             >
-              <Body size={12.5} color={t.green}>
-                Show everything
-              </Body>
+              <Mono size={9.5} color={t.green} style={{ letterSpacing: 1.3 }}>
+                ← COOKBOOKS
+              </Mono>
             </Pressable>
-          )}
-        </View>
+            <Serif size={22} numberOfLines={2} style={{ marginTop: 8, lineHeight: 26 }}>
+              {activeCookbook.emoji || '📗'} {activeCookbook.name}
+            </Serif>
+            <Body size={12.5} color={t.muted} style={{ marginTop: 5, lineHeight: 18 }}>
+              {visible.length} recipe{visible.length === 1 ? '' : 's'}, least recently cooked first
+              {activeCookbook.description ? ` · ${activeCookbook.description}` : ''}
+            </Body>
+          </View>
+        )
       )}
     </View>
   );
@@ -721,7 +790,40 @@ export default function PlanWeekSheet({
 
         {/* The picker is a real list — the whole collection, virtualised, so a
             couple of hundred recipes scroll as smoothly as ten. */}
-        {step === 2 ? (
+        {step === 2 && browse === 'cookbooks' && !activeCookbook ? (
+          // The shelf, as it looks on the Cookbook tab.
+          <FlatList
+            data={loading ? [] : pickableCookbooks}
+            keyExtractor={(c) => c.id}
+            renderItem={({ item, index }) => (
+              <CookbookRow
+                cookbook={item}
+                recipeCount={cookbookRecipes[item.id]?.size ?? 0}
+                coverImages={cookbookCovers[item.id] ?? []}
+                index={index}
+                gutter={20}
+                onPress={() => {
+                  haptics.select();
+                  setCookbookId(item.id);
+                }}
+              />
+            )}
+            ListHeaderComponent={modeSwitch}
+            ListEmptyComponent={
+              loading ? (
+                <ActivityIndicator color={t.green} style={{ marginVertical: 28 }} />
+              ) : (
+                <Body size={14} color={t.muted} style={{ paddingVertical: 24, textAlign: 'center' }}>
+                  No cookbooks with recipes in them yet.
+                </Body>
+              )
+            }
+            contentContainerStyle={{ gap: 20, paddingBottom: 30 }}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={4}
+            windowSize={7}
+          />
+        ) : step === 2 ? (
           <FlatList
             data={loading ? [] : visible}
             keyExtractor={(r) => r.id}

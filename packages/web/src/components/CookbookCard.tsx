@@ -8,23 +8,26 @@ interface CookbookCardProps {
   recipeCount: number;
   coverImages: string[]; // up to 4
   index?: number;
+  /**
+   * When set the card opens the shelf in place instead of navigating — plan
+   * mode browses cookbooks inside its own modal.
+   */
+  onSelect?: () => void;
 }
 
 // Editorial "shelf" row — Pie Keeper design language (Screen 02 · CookbookEntry).
-export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0 }: CookbookCardProps) {
+export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0, onSelect }: CookbookCardProps) {
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
 
-  return (
-    <Link
-      to={`/cookbook/${cookbook.id}`}
-      className="block"
-      style={{
-        color: PK.ink,
-        textDecoration: 'none',
-        animation: 'fadeUp 0.4s ease both',
-        animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
-      }}
-    >
+  const shell: React.CSSProperties = {
+    color: PK.ink,
+    textDecoration: 'none',
+    animation: 'fadeUp 0.4s ease both',
+    animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
+  };
+
+  const body = (
+    <>
       {/* Title row: index · name · count */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
         <span style={{ fontFamily: fSerif, fontStyle: 'italic', color: PK.green, fontSize: 14 }}>
@@ -152,6 +155,23 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
           Open →
         </span>
       </div>
+    </>
+  );
+
+  if (onSelect) {
+    return (
+      <button
+        onClick={onSelect}
+        style={{ ...shell, display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <Link to={`/cookbook/${cookbook.id}`} className="block" style={shell}>
+      {body}
     </Link>
   );
 }
