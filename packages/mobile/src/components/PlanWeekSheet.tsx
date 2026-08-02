@@ -29,9 +29,9 @@ import useRecipeFilters from '@/lib/useRecipeFilters';
 export interface PlanPrefs {
   /** Cooks in the week — pots on the stove, not nights at the table. */
   meals: number;
-  /** People at the table on one night. */
+  /** People eating one meal. */
   servings: number;
-  /** Nights one cook covers. 2 means Sunday's pot also feeds Wednesday. */
+  /** Meals one cook covers, without assigning the later meals to dates. */
   nights: number;
 }
 
@@ -40,11 +40,10 @@ export interface PlanPick {
   nights: number;
 }
 
-/** One night of one pick — the unit that gets placed on a day. */
+/** One cook — the only unit that gets placed on a day. */
 interface Slot {
   key: string;
   recipeId: string;
-  nightIndex: number;
   day: number | null;
 }
 
@@ -56,8 +55,8 @@ interface Props {
   onSavePrefs: (prefs: PlanPrefs) => void;
   onCommit: (
     picks: PlanPick[],
-    slots: { recipeId: string; nightIndex: number; day: number | null }[],
-    servingsPerNight: number,
+    slots: { recipeId: string; day: number | null }[],
+    servingsPerMeal: number,
   ) => Promise<void>;
   onClose: () => void;
 }
@@ -259,9 +258,9 @@ export default function PlanWeekSheet({
     resetAllFilters();
   }
 
-  const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
-  // What the setup answers add up to: cooks × nights each.
-  const plannedNights = meals * nights;
+  const totalMeals = picks.reduce((sum, p) => sum + p.nights, 0);
+  // What the setup answers add up to: cooks × meals covered by each batch.
+  const plannedMeals = meals * nights;
   // A pick can always be cycled past the default — the answer is a starting
   // point, not a cap.
   const maxNights = Math.max(3, nights);
@@ -272,7 +271,7 @@ export default function PlanWeekSheet({
       const found = prev.find((p) => p.recipe.id === recipe.id);
       if (found) return prev.filter((p) => p.recipe.id !== recipe.id);
       // Everything starts on the answer from step 1 — most cooks here are meal
-      // prep, so 1 night would mean re-tapping every card.
+      // prep, so 1 meal would mean re-tapping every card.
       return [...prev, { recipe, nights }];
     });
   }
@@ -298,7 +297,7 @@ export default function PlanWeekSheet({
   /**
    * What one pick gets shopped for, and whether the recipe — not the maths —
    * set that number. `asWritten` is the case worth labelling: the recipe already
-   * makes more than people × nights, so it's planned whole instead of scaled down.
+   * makes more than people × meals, so it's planned whole instead of scaled down.
    */
   function servingsFor(pick: PlanPick): { total: number; asWritten: boolean } {
     const total = planServings(pick.recipe, servings, pick.nights);
@@ -306,12 +305,11 @@ export default function PlanWeekSheet({
   }
 
   function goToPlacement() {
-    const next: Slot[] = [];
-    for (const pick of picks) {
-      for (let n = 0; n < pick.nights; n++) {
-        next.push({ key: `${pick.recipe.id}-${n}`, recipeId: pick.recipe.id, nightIndex: n, day: null });
-      }
-    }
+    const next: Slot[] = picks.map((pick) => ({
+      key: pick.recipe.id,
+      recipeId: pick.recipe.id,
+      day: null,
+    }));
     setSlots(next);
     setActiveSlot(next[0]?.key ?? null);
     setStep(3);
@@ -342,42 +340,18 @@ export default function PlanWeekSheet({
       if (i >= 0) free.splice(i, 1);
     };
 
-    // Group the open nights by recipe so a meal-prep batch can be spread out
-    // rather than landing on two days in a row.
-    const byRecipe = new Map<string, Slot[]>();
-    for (const s of slots.filter((s) => s.day === null)) {
-      const list = byRecipe.get(s.recipeId) ?? [];
-      list.push(s);
-      byRecipe.set(s.recipeId, list);
-    }
-
     // Longest cooks choose first, so the 90-minute braise gets a weekend.
-    const groups = [...byRecipe.entries()].sort((a, b) => minutesFor(b[0]) - minutesFor(a[0]));
+    const open = slots
+      .filter((s) => s.day === null)
+      .sort((a, b) => minutesFor(b.recipeId) - minutesFor(a.recipeId));
 
     const assigned = new Map<string, number>();
-    for (const [recipeId, nights] of groups) {
-      nights.sort((a, b) => a.nightIndex - b.nightIndex);
-      let prev: number | null = null;
-      for (const slot of nights) {
-        if (free.length === 0) break;
-        let day: number;
-        if (prev === null) {
-          const weekend = free.filter((d) => d >= 5);
-          day = minutesFor(recipeId) >= 45 && weekend.length > 0 ? weekend[0] : free[0];
-        } else {
-          // Later nights of the same cook want a gap — eating the same thing two
-          // nights running is the thing meal prep is trying to avoid.
-          const gap = prev;
-          const spaced = free.filter((d) => Math.abs(d - gap) >= 2);
-          day =
-            spaced.length > 0
-              ? spaced.reduce((best, d) => (Math.abs(d - gap) < Math.abs(best - gap) ? d : best))
-              : free[0];
-        }
-        take(day);
-        assigned.set(slot.key, day);
-        prev = day;
-      }
+    for (const slot of open) {
+      if (free.length === 0) break;
+      const weekend = free.filter((d) => d === 0 || d === 6);
+      const day = minutesFor(slot.recipeId) >= 45 && weekend.length > 0 ? weekend[0] : free[0];
+      take(day);
+      assigned.set(slot.key, day);
     }
     setSlots((prev) => prev.map((s) => (assigned.has(s.key) ? { ...s, day: assigned.get(s.key)! } : s)));
     setActiveSlot(null);
@@ -387,7 +361,7 @@ export default function PlanWeekSheet({
     setSaving(true);
     await onCommit(
       picks,
-      slots.map((s) => ({ recipeId: s.recipeId, nightIndex: s.nightIndex, day: s.day })),
+      slots.map((s) => ({ recipeId: s.recipeId, day: s.day })),
       servings,
     );
     setSaving(false);
@@ -487,7 +461,7 @@ export default function PlanWeekSheet({
         }}
       >
         <Mono size={9.5} color={t.textSoft} style={{ letterSpacing: 1 }}>
-          {meals} × {nights} NIGHT{nights === 1 ? '' : 'S'} · {servings} PER NIGHT
+          {meals} COOKS × {nights} MEAL{nights === 1 ? '' : 'S'} · {servings} PEOPLE
         </Mono>
         <Pressable
           onPress={() => setStep(1)}
@@ -716,7 +690,7 @@ export default function PlanWeekSheet({
           </Serif>
         </Pressable>
 
-        {/* Meal prep: one cook, several nights. */}
+        {/* One cook can cover several flexible meals. */}
         {pick && (
           <Pressable
             onPress={() => cycleNights(recipe.id)}
@@ -732,7 +706,7 @@ export default function PlanWeekSheet({
             }}
           >
             <Mono size={9} color={t.green} style={{ letterSpacing: 0.8 }}>
-              {pick.nights} NIGHT{pick.nights > 1 ? 'S' : ''} ·{' '}
+              {pick.nights}× ·{' '}
               {servingsFor(pick).asWritten ? 'MAKES' : 'SERVES'} {servingsFor(pick).total}
             </Mono>
           </Pressable>
@@ -776,8 +750,8 @@ export default function PlanWeekSheet({
               {step === 1
                 ? 'SET UP · ONCE'
                 : step === 2
-                  ? `${picks.length} OF ${meals} MEALS · ${totalNights} NIGHT${totalNights === 1 ? '' : 'S'}`
-                  : 'PUT THEM ON DAYS'}
+                  ? `${picks.length} OF ${meals} COOKS · ${totalMeals} MEAL${totalMeals === 1 ? '' : 'S'}`
+                  : 'CHOOSE COOKING DAYS'}
             </Mono>
             <Serif size={23} style={{ marginTop: 6 }}>
               Plan the week
@@ -859,9 +833,9 @@ export default function PlanWeekSheet({
                   How does a normal week go?
                 </Serif>
 
-                {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
+                {numberRow('I want to cook', meals, setMeals, 'recipes', 1, 14)}
                 {numberRow('for', servings, setServings, 'people', 1, 12)}
-                {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
+                {numberRow('each batch covers', nights, setNights, 'meals', 1, 7)}
 
                 {/* The whole point of the sentence: you never do the multiplication. */}
                 <View
@@ -878,15 +852,15 @@ export default function PlanWeekSheet({
                   <Serif size={19} style={{ lineHeight: 24 }}>
                     That's{' '}
                     <Serif size={19} color={t.green} italic>
-                      {plannedNights} night{plannedNights === 1 ? '' : 's'}
+                      {plannedMeals} meal{plannedMeals === 1 ? '' : 's'}
                     </Serif>{' '}
-                    of dinner.
+                    covered.
                   </Serif>
                   <Body size={12.5} color={t.textSoft} style={{ lineHeight: 19, marginTop: 5 }}>
                     {nights === 1
-                      ? `Cooked fresh each night — every cook shops for ${servings}.`
-                      : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
-                    {plannedNights > 7 ? ' More than seven nights — you’ll have some spare.' : ''}
+                      ? `Each cook shops for ${servings} serving${servings === 1 ? '' : 's'}.`
+                      : `One cook covers ${nights} meals, so each batch shops for ${servings * nights} servings.`}
+                    {plannedMeals > 7 ? ' That covers more than seven dinners, so you’ll have some spare.' : ''}
                     {' A recipe already written for more than that is planned whole, never scaled down.'}
                   </Body>
                 </View>
@@ -901,7 +875,7 @@ export default function PlanWeekSheet({
             {step === 3 && (
               <View>
                 <Body size={13.5} color={t.textSoft} style={{ lineHeight: 20, marginBottom: 14 }}>
-                  Pick a night below, then tap a day. Anything you leave sits in the week without a day — that's fine.
+                  Pick a recipe below, then tap the day you plan to cook it. Later meals from the batch stay flexible.
                 </Body>
 
                 {DAY_INDEXES.map((d) => {
@@ -1039,7 +1013,7 @@ export default function PlanWeekSheet({
             <>
               <Button label="Cancel" variant="secondary" onPress={onClose} style={{ flex: 1 }} />
               <Button
-                label={picks.length === 0 ? 'Pick some meals' : `Next — ${totalNights} night${totalNights === 1 ? '' : 's'}`}
+                label={picks.length === 0 ? 'Pick some recipes' : `Next — place ${picks.length} cook${picks.length === 1 ? '' : 's'}`}
                 onPress={goToPlacement}
                 disabled={picks.length === 0}
                 style={{ flex: 1.4 }}

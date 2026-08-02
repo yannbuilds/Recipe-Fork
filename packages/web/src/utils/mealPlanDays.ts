@@ -1,19 +1,19 @@
 import type { MealPlanEntry, Recipe } from '@recipe-aggregator/shared';
 
-// Day helpers for the week grid. Weeks run Monday-first (0 = Mon … 6 = Sun) to
-// match `week_start` always being a Monday.
+// Day helpers for the week grid. Weeks run Sunday-first (0 = Sun … 6 = Sat) to
+// match `week_start` always being a Sunday.
 //
 // Mirrored in packages/mobile/src/lib/mealPlanDays.ts — keep the two in step.
 
-export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DAY_FULL = [
+  'Sunday',
   'Monday',
   'Tuesday',
   'Wednesday',
   'Thursday',
   'Friday',
   'Saturday',
-  'Sunday',
 ];
 export const DAY_INDEXES = [0, 1, 2, 3, 4, 5, 6];
 
@@ -38,20 +38,20 @@ export function todayIndex(weekStart: Date): number | null {
 /** Entries sitting on a day, oldest first so the order is stable. */
 export function entriesForDay(entries: MealPlanEntry[], dayIndex: number): MealPlanEntry[] {
   return entries
-    .filter((e) => e.day_index === dayIndex)
+    .filter((e) => e.entry_type !== 'batch' && e.day_index === dayIndex)
     .sort((a, b) => a.added_at.localeCompare(b.added_at));
 }
 
 /** Meals in the week that haven't been given a day. Never a to-do list. */
 export function unplacedEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
   return entries
-    .filter((e) => e.day_index === null || e.day_index === undefined)
+    .filter((e) => e.entry_type !== 'batch' && (e.day_index === null || e.day_index === undefined))
     .sort((a, b) => a.added_at.localeCompare(b.added_at));
 }
 
 /**
- * Only 'cook' rows put ingredients on the shopping list. A 'batch' night eats
- * from the same pot, and 'out' buys nothing at all.
+ * Only 'cook' rows put ingredients on the shopping list. Legacy 'batch' rows
+ * buy nothing, and 'out' buys nothing at all.
  */
 export function shoppingSourceEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
   return entries.filter((e) => e.entry_type === 'cook' && e.recipe);
@@ -68,57 +68,26 @@ export function recipeBatch(recipe: Pick<Recipe, 'servings' | 'custom_servings'>
 }
 
 /**
- * Servings one cook gets shopped for. Plan mode's own maths is people × nights,
+ * Servings one cook gets shopped for. Plan mode's own maths is people × meals,
  * but that's a floor, not a ceiling: a recipe already written for more than that
  * is planned as it stands. A six-serve slow cook or a tray of twelve dumplings is
  * portioned that way on purpose — scaling it down makes the cook fiddlier and the
- * leftovers, which are the point, disappear. Scaling *up* still happens as before.
+ * extra meals, which are the point, disappear. Scaling *up* still happens as before.
  */
 export function planServings(
   recipe: Pick<Recipe, 'servings' | 'custom_servings'>,
-  servingsPerNight: number,
-  nights: number,
+  servingsPerMeal: number,
+  meals: number,
 ): number {
-  return Math.max(servingsPerNight * nights, recipeBatch(recipe));
+  return Math.max(servingsPerMeal * meals, recipeBatch(recipe));
 }
 
-/** Every row belonging to one cook — the cook itself plus its extra nights. */
-export function batchSiblings(entry: MealPlanEntry, entries: MealPlanEntry[]): MealPlanEntry[] {
-  const rootId = entry.entry_type === 'batch' ? entry.parent_id : entry.id;
-  if (!rootId) return [entry];
-  return entries
-    .filter((e) => e.id === rootId || e.parent_id === rootId)
-    .sort((a, b) => {
-      // Placed nights read in day order; unplaced ones trail behind.
-      const ad = a.day_index ?? 99;
-      const bd = b.day_index ?? 99;
-      if (ad !== bd) return ad - bd;
-      return a.added_at.localeCompare(b.added_at);
-    });
-}
-
-/**
- * "Night 2 of 3" for a meal-prep batch. Null for a one-night meal, so the UI
- * only marks up the case that actually needs explaining.
- */
-export function batchPosition(
-  entry: MealPlanEntry,
-  entries: MealPlanEntry[],
-): { index: number; total: number } | null {
-  if (entry.entry_type === 'out') return null;
-  const siblings = batchSiblings(entry, entries);
-  if (siblings.length < 2) return null;
-  const index = siblings.findIndex((e) => e.id === entry.id);
-  return { index: index + 1, total: siblings.length };
-}
-
-/** The row that actually gets cooked for this batch. */
-export function batchCookEntry(
-  entry: MealPlanEntry,
-  entries: MealPlanEntry[],
-): MealPlanEntry | null {
-  if (entry.entry_type !== 'batch') return entry.entry_type === 'cook' ? entry : null;
-  return entries.find((e) => e.id === entry.parent_id) ?? null;
+/** Number of meals represented by one cook. Legacy batch rows are counted so
+ * an older mobile build can coexist during rollout without resurfacing them. */
+export function plannedMealCount(entry: MealPlanEntry, entries: MealPlanEntry[]): number {
+  if (entry.entry_type !== 'cook') return 1;
+  const legacyCount = 1 + entries.filter((e) => e.entry_type === 'batch' && e.parent_id === entry.id).length;
+  return Math.max(entry.planned_nights ?? 1, legacyCount);
 }
 
 function totalMinutes(entry: MealPlanEntry): number {
@@ -135,12 +104,12 @@ export function autoPlace(
   weekStart: Date,
 ): { id: string; day_index: number }[] {
   const today = todayIndex(weekStart);
-  const taken = new Set(entries.filter((e) => e.day_index != null).map((e) => e.day_index));
+  const taken = new Set(entries.filter((e) => e.entry_type !== 'batch' && e.day_index != null).map((e) => e.day_index));
   const free = DAY_INDEXES.filter((d) => !taken.has(d) && (today === null || d >= today));
   if (free.length === 0) return [];
 
-  const weekend = free.filter((d) => d >= 5);
-  const weekday = free.filter((d) => d < 5);
+  const weekend = free.filter((d) => d === 0 || d === 6);
+  const weekday = free.filter((d) => d >= 1 && d <= 5);
 
   // Longest first, so the 90-minute ragù gets first claim on a weekend slot.
   const toPlace = [...unplacedEntries(entries)].sort((a, b) => totalMinutes(b) - totalMinutes(a));

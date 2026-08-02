@@ -13,9 +13,9 @@ import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex, planServings } from '../ut
 export interface PlanPrefs {
   /** Cooks in the week — pots on the stove, not nights at the table. */
   meals: number;
-  /** People at the table on one night. */
+  /** People eating one meal. */
   servings: number;
-  /** Nights one cook covers. 2 means Sunday's pot also feeds Wednesday. */
+  /** Meals one cook covers, without assigning the later meals to dates. */
   nights: number;
 }
 
@@ -24,11 +24,10 @@ export interface PlanPick {
   nights: number;
 }
 
-/** One night of one pick — the unit that gets placed on a day. */
+/** One cook — the only unit that gets placed on a day. */
 interface Slot {
   key: string;
   recipeId: string;
-  nightIndex: number;
   day: number | null;
 }
 
@@ -39,7 +38,7 @@ interface Props {
   takenDays: Set<number>;
   prefs: PlanPrefs | null;
   onSavePrefs: (prefs: PlanPrefs) => void;
-  onCommit: (picks: PlanPick[], slots: { recipeId: string; nightIndex: number; day: number | null }[], servingsPerNight: number) => Promise<void>;
+  onCommit: (picks: PlanPick[], slots: { recipeId: string; day: number | null }[], servingsPerMeal: number) => Promise<void>;
   onClose: () => void;
 }
 
@@ -256,9 +255,9 @@ export default function PlanWeekModal({
     resetAllFilters();
   }
 
-  const totalNights = picks.reduce((sum, p) => sum + p.nights, 0);
-  // What the setup answers add up to: cooks × nights each.
-  const plannedNights = meals * nights;
+  const totalMeals = picks.reduce((sum, p) => sum + p.nights, 0);
+  // What the setup answers add up to: cooks × meals covered by each batch.
+  const plannedMeals = meals * nights;
   // A pick can always be cycled past the default — the answer is a starting
   // point, not a cap.
   const maxNights = Math.max(3, nights);
@@ -268,7 +267,7 @@ export default function PlanWeekModal({
       const found = prev.find((p) => p.recipe.id === recipe.id);
       if (found) return prev.filter((p) => p.recipe.id !== recipe.id);
       // Everything starts on the answer from step 1 — most cooks here are meal
-      // prep, so 1 night would mean re-tapping every card.
+      // prep, so 1 meal would mean re-tapping every card.
       return [...prev, { recipe, nights }];
     });
   }
@@ -282,12 +281,11 @@ export default function PlanWeekModal({
   }
 
   function goToPlacement() {
-    const next: Slot[] = [];
-    for (const pick of picks) {
-      for (let n = 0; n < pick.nights; n++) {
-        next.push({ key: `${pick.recipe.id}-${n}`, recipeId: pick.recipe.id, nightIndex: n, day: null });
-      }
-    }
+    const next: Slot[] = picks.map((pick) => ({
+      key: pick.recipe.id,
+      recipeId: pick.recipe.id,
+      day: null,
+    }));
     setSlots(next);
     setActiveSlot(next[0]?.key ?? null);
     setStep(3);
@@ -313,42 +311,18 @@ export default function PlanWeekModal({
       if (i >= 0) free.splice(i, 1);
     };
 
-    // Group the open nights by recipe so a meal-prep batch can be spread out
-    // rather than landing on two days in a row.
-    const byRecipe = new Map<string, Slot[]>();
-    for (const s of slots.filter((s) => s.day === null)) {
-      const list = byRecipe.get(s.recipeId) ?? [];
-      list.push(s);
-      byRecipe.set(s.recipeId, list);
-    }
-
     // Longest cooks choose first, so the 90-minute braise gets a weekend.
-    const groups = [...byRecipe.entries()].sort((a, b) => minutesFor(b[0]) - minutesFor(a[0]));
+    const open = slots
+      .filter((s) => s.day === null)
+      .sort((a, b) => minutesFor(b.recipeId) - minutesFor(a.recipeId));
 
     const assigned = new Map<string, number>();
-    for (const [recipeId, nights] of groups) {
-      nights.sort((a, b) => a.nightIndex - b.nightIndex);
-      let prev: number | null = null;
-      for (const slot of nights) {
-        if (free.length === 0) break;
-        let day: number;
-        if (prev === null) {
-          const weekend = free.filter((d) => d >= 5);
-          day = minutesFor(recipeId) >= 45 && weekend.length > 0 ? weekend[0] : free[0];
-        } else {
-          // Later nights of the same cook want a gap — eating the same thing two
-          // nights running is the thing meal prep is trying to avoid.
-          const gap = prev;
-          const spaced = free.filter((d) => Math.abs(d - gap) >= 2);
-          day =
-            spaced.length > 0
-              ? spaced.reduce((best, d) => (Math.abs(d - gap) < Math.abs(best - gap) ? d : best))
-              : free[0];
-        }
-        take(day);
-        assigned.set(slot.key, day);
-        prev = day;
-      }
+    for (const slot of open) {
+      if (free.length === 0) break;
+      const weekend = free.filter((d) => d === 0 || d === 6);
+      const day = minutesFor(slot.recipeId) >= 45 && weekend.length > 0 ? weekend[0] : free[0];
+      take(day);
+      assigned.set(slot.key, day);
     }
     setSlots((prev) => prev.map((s) => (assigned.has(s.key) ? { ...s, day: assigned.get(s.key)! } : s)));
     setActiveSlot(null);
@@ -366,7 +340,7 @@ export default function PlanWeekModal({
   /**
    * What one pick gets shopped for, and whether the recipe — not the maths —
    * set that number. `asWritten` is the case worth labelling: the recipe already
-   * makes more than people × nights, so it's planned whole instead of scaled down.
+   * makes more than people × meals, so it's planned whole instead of scaled down.
    */
   function servingsFor(pick: PlanPick): { total: number; asWritten: boolean } {
     const total = planServings(pick.recipe, servings, pick.nights);
@@ -377,7 +351,7 @@ export default function PlanWeekModal({
     setSaving(true);
     await onCommit(
       picks,
-      slots.map((s) => ({ recipeId: s.recipeId, nightIndex: s.nightIndex, day: s.day })),
+      slots.map((s) => ({ recipeId: s.recipeId, day: s.day })),
       servings,
     );
     setSaving(false);
@@ -486,8 +460,8 @@ export default function PlanWeekModal({
               {step === 1
                 ? 'Set up · once'
                 : step === 2
-                  ? `${picks.length} of ${meals} meals · ${totalNights} night${totalNights === 1 ? '' : 's'}`
-                  : 'Put them on days'}
+                  ? `${picks.length} of ${meals} cooks · ${totalMeals} meal${totalMeals === 1 ? '' : 's'}`
+                  : 'Choose cooking days'}
             </span>
             <h2 style={{ margin: '6px 0 0', fontFamily: fSerif, fontWeight: 400, fontSize: 23, letterSpacing: '-0.02em', color: 'var(--text)' }}>
               Plan the week
@@ -506,24 +480,24 @@ export default function PlanWeekModal({
                 How does a normal week go?
               </h3>
 
-              {numberRow('I want to cook', meals, setMeals, 'meals', 1, 14)}
+              {numberRow('I want to cook', meals, setMeals, 'recipes', 1, 14)}
               {numberRow('for', servings, setServings, 'people', 1, 12)}
-              {numberRow('and eat each', nights, setNights, 'nights', 1, 7)}
+              {numberRow('each batch covers', nights, setNights, 'meals', 1, 7)}
 
               {/* The whole point of the sentence: you never do the multiplication. */}
               <div style={{ marginTop: 16, padding: '13px 15px', borderLeft: '2px solid var(--green)', background: 'var(--green-light)', borderRadius: '0 3px 3px 0' }}>
                 <p style={{ margin: 0, fontFamily: fSerif, fontSize: 19, letterSpacing: '-0.015em', lineHeight: 1.25, color: 'var(--text)' }}>
                   That's{' '}
                   <em style={{ fontStyle: 'italic', color: 'var(--green)' }}>
-                    {plannedNights} night{plannedNights === 1 ? '' : 's'}
+                    {plannedMeals} meal{plannedMeals === 1 ? '' : 's'}
                   </em>{' '}
-                  of dinner.
+                  covered.
                 </p>
                 <p style={{ margin: '5px 0 0', fontFamily: fSans, fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-soft)' }}>
                   {nights === 1
-                    ? `Cooked fresh each night — every cook shops for ${servings}.`
-                    : `One pot covers ${nights} nights, so each cook shops for ${servings * nights} servings.`}
-                  {plannedNights > 7 && ' More than seven nights — you’ll have some spare.'}
+                    ? `Each cook shops for ${servings} serving${servings === 1 ? '' : 's'}.`
+                    : `One cook covers ${nights} meals, so each batch shops for ${servings * nights} servings.`}
+                  {plannedMeals > 7 && ' That covers more than seven dinners, so you’ll have some spare.'}
                   {' '}A recipe already written for more than that is planned whole, never scaled down.
                 </p>
               </div>
@@ -542,7 +516,7 @@ export default function PlanWeekModal({
                 style={{ border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', padding: '6px 8px 6px 14px', marginBottom: 14 }}
               >
                 <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-soft)' }}>
-                  {meals} × {nights} night{nights === 1 ? '' : 's'} · {servings} per night
+                  {meals} cooks × {nights} meal{nights === 1 ? '' : 's'} · {servings} people
                 </span>
                 <button
                   onClick={() => setStep(1)}
@@ -810,14 +784,14 @@ export default function PlanWeekModal({
                         </p>
                       </button>
 
-                      {/* Meal prep: one cook, several nights. */}
+                      {/* One cook can cover several flexible meals. */}
                       {pick && (
                         <button
                           onClick={() => cycleNights(recipe.id)}
                           title={
                             servingsFor(pick).asWritten
-                              ? `How many nights this cook covers. This recipe already makes ${servingsFor(pick).total}, so it's planned as written rather than scaled down to ${servings * pick.nights}.`
-                              : 'How many nights this cook covers'
+                              ? `How many meals this cook covers. This recipe already makes ${servingsFor(pick).total}, so it's planned as written rather than scaled down to ${servings * pick.nights}.`
+                              : 'How many meals this cook covers'
                           }
                           style={{
                             marginTop: 5,
@@ -833,7 +807,7 @@ export default function PlanWeekModal({
                             cursor: 'pointer',
                           }}
                         >
-                          {pick.nights} night{pick.nights > 1 ? 's' : ''} ·{' '}
+                          {pick.nights}× ·{' '}
                           {servingsFor(pick).asWritten ? 'makes' : 'serves'} {servingsFor(pick).total}
                         </button>
                       )}
@@ -848,7 +822,7 @@ export default function PlanWeekModal({
           {step === 3 && (
             <div>
               <p style={{ margin: '0 0 14px', fontFamily: fSans, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-soft)' }}>
-                Pick a night below, then tap a day. Anything you leave sits in the week without a day — that's fine.
+                Pick a recipe below, then tap the day you plan to cook it. Later meals from the batch stay flexible.
               </p>
 
               {DAY_INDEXES.map((d) => {
@@ -899,7 +873,7 @@ export default function PlanWeekModal({
                 );
               })}
 
-              {/* Nights still waiting for a day */}
+              {/* Cooks still waiting for a day */}
               <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
                 <div className="flex items-baseline justify-between" style={{ marginBottom: 10 }}>
                   <span style={{ fontFamily: fMono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--muted)' }}>Still to place</span>
@@ -959,7 +933,7 @@ export default function PlanWeekModal({
             <>
               <button onClick={onClose} style={ghostBtn}>Cancel</button>
               <button onClick={goToPlacement} disabled={picks.length === 0} style={{ ...primaryBtn, opacity: picks.length === 0 ? 0.45 : 1, cursor: picks.length === 0 ? 'not-allowed' : 'pointer' }}>
-                {picks.length === 0 ? 'Pick some meals' : `Next — ${totalNights} night${totalNights === 1 ? '' : 's'} →`}
+                {picks.length === 0 ? 'Pick some recipes' : `Next — place ${picks.length} cook${picks.length === 1 ? '' : 's'} →`}
               </button>
             </>
           )}

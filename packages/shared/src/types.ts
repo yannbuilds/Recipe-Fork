@@ -100,7 +100,7 @@ export interface MealPlanRecipe {
   recipe_id: string | null;
   is_cooked: boolean;
   added_at: string;
-  // 0 = Monday … 6 = Sunday. Null means "in the week, not on a day yet" —
+  // 0 = Sunday … 6 = Saturday. Null means "in the week, not on a day yet" —
   // placing a meal on a day is always optional.
   day_index: number | null;
   entry_type: MealEntryType;
@@ -108,6 +108,10 @@ export interface MealPlanRecipe {
   parent_id: string | null;
   // Servings for this plan only; falls back to the recipe's own value.
   servings: number | null;
+  // How many meals this one cook covers. It is deliberately not a set of
+  // eating dates: the planner schedules cooking, not every time leftovers are
+  // eaten.
+  planned_nights: number;
   // Free text for 'out' entries ("Thai place").
   note: string | null;
 }

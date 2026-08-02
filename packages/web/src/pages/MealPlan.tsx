@@ -8,7 +8,6 @@ import {
   Flame,
   ChevronDown,
   Store,
-  Repeat,
   MoreHorizontal,
   Sparkles,
   CalendarDays,
@@ -36,7 +35,7 @@ import { DraggableMealRow, MealDropZone, dayFromDropId, dropId } from '../compon
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { scaleIngredientsForServings } from '../utils/scaleQuantity';
-import { getMonday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
+import { getSunday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import {
   DAY_SHORT,
   DAY_INDEXES,
@@ -47,8 +46,7 @@ import {
   shoppingSourceEntries,
   entryServings,
   planServings,
-  batchPosition,
-  batchSiblings,
+  plannedMealCount,
   formatMins,
 } from '../utils/mealPlanDays';
 import IngredientIcon from '../components/IngredientIcon';
@@ -187,8 +185,7 @@ export default function MealPlan() {
   // ── Derived ─────────────────────────────────────────
   const today = todayIndex(weekStart);
 
-  // Only cooks buy ingredients — a meal-prep night eats from the same pot and
-  // an "eating out" night buys nothing at all.
+  // Only cooks buy ingredients; eating out and legacy batch rows buy nothing.
   const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
   const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
     scaleIngredientsForServings(
@@ -203,11 +200,11 @@ export default function MealPlan() {
   );
   const combined = combineIngredients(allIngredients);
 
-  const mealEntries = entries.filter((e) => e.entry_type !== 'out');
+  const mealEntries = entries.filter((e) => e.entry_type === 'cook');
   const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
   const unplaced = unplacedEntries(entries);
   const takenDays = useMemo(
-    () => new Set(entries.filter((e) => e.day_index != null).map((e) => e.day_index as number)),
+    () => new Set(entries.filter((e) => e.entry_type !== 'batch' && e.day_index != null).map((e) => e.day_index as number)),
     [entries],
   );
 
@@ -295,6 +292,7 @@ export default function MealPlan() {
         day_index: dayIndex,
         entry_type: 'cook',
         servings: servings ?? null,
+        planned_nights: 1,
       })
       .select('*, recipe:recipes(*)')
       .single();
@@ -302,47 +300,36 @@ export default function MealPlan() {
     if (!error && data) setEntries((prev) => [...prev, data as MealPlanEntry]);
   }
 
-  /**
-   * Another night off an existing cook. Buys nothing extra, but bumps the cook's
-   * servings so the shopping list covers the additional night.
-   */
-  async function addBatchNight(cookEntryId: string, dayIndex: number | null) {
+  /** Update how many meals one cook covers without scheduling leftover days. */
+  async function updatePlannedNights(cookEntryId: string, plannedNights: number) {
     if (!plan) return;
     const cook = entries.find((e) => e.id === cookEntryId);
-    if (!cook || !cook.recipe_id) return;
+    if (!cook || cook.entry_type !== 'cook' || !cook.recipe_id || !cook.recipe) return;
 
-    // Only scale up once we know the household size. Until then the recipe's
-    // own yield is assumed to already stretch — which is the whole point of
-    // eating the same cook twice.
     const perNight = prefs?.servings ?? null;
-    const nights = batchSiblings(cook, entries).length + 1;
-    const nextServings = perNight ? perNight * nights : cook.servings;
+    const nextServings = perNight ? planServings(cook.recipe, perNight, plannedNights) : cook.servings;
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('meal_plan_recipes')
-      .insert({
-        meal_plan_id: plan.id,
-        recipe_id: cook.recipe_id,
-        day_index: dayIndex,
-        entry_type: 'batch',
-        parent_id: cook.id,
-      })
-      .select('*, recipe:recipes(*)')
-      .single();
+      .update({ planned_nights: plannedNights, servings: nextServings })
+      .eq('id', cook.id);
 
-    if (error || !data) {
-      console.error('Failed to add another night:', JSON.stringify(error));
+    if (error) {
+      console.error('Failed to update meals covered:', JSON.stringify(error));
       return;
     }
 
-    if (nextServings && nextServings !== cook.servings) {
-      await supabase.from('meal_plan_recipes').update({ servings: nextServings }).eq('id', cook.id);
-    }
+    // Clear any legacy child rows an older mobile build may have created.
+    await supabase.from('meal_plan_recipes').delete().eq('parent_id', cook.id).eq('entry_type', 'batch');
 
-    setEntries((prev) => [
-      ...prev.map((e) => (e.id === cook.id && nextServings ? { ...e, servings: nextServings } : e)),
-      data as MealPlanEntry,
-    ]);
+    setEntries((prev) => prev
+      .filter((e) => e.parent_id !== cook.id)
+      .map((e) => e.id === cook.id
+        ? { ...e, planned_nights: plannedNights, servings: nextServings }
+        : e));
+    setEntryMenu((prev) => prev?.id === cook.id
+      ? { ...prev, planned_nights: plannedNights, servings: nextServings }
+      : prev);
   }
 
   async function addEatingOut(dayIndex: number, note: string) {
@@ -371,8 +358,7 @@ export default function MealPlan() {
 
   async function handleRemove(entryId: string) {
     const entry = entries.find((e) => e.id === entryId);
-    // Removing a cook takes its extra nights with it — the DB cascades, so the
-    // local state has to as well.
+    // Removing a cook also clears any legacy batch children.
     const alsoGone = entry?.entry_type === 'cook'
       ? entries.filter((e) => e.parent_id === entryId).map((e) => e.id)
       : [];
@@ -389,8 +375,7 @@ export default function MealPlan() {
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, is_cooked: next } : e)));
     await supabase.from('meal_plan_recipes').update({ is_cooked: next }).eq('id', entryId);
 
-    // Only a real cook goes in the recipe's history. A meal-prep night is the
-    // same pot reheated, and eating out isn't cooking at all.
+    // Only a real cook goes in the recipe's history.
     if (entry.entry_type !== 'cook' || !entry.recipe_id) return;
 
     if (next && user) {
@@ -420,57 +405,42 @@ export default function MealPlan() {
       .eq('id', user.id);
   }
 
-  /** Turn a finished plan-mode session into rows: one cook per pick, one batch row per extra night. */
+  /** Turn a finished plan-mode session into one cooking row per recipe. */
   async function commitPlan(
     picks: PlanPick[],
-    slots: { recipeId: string; nightIndex: number; day: number | null }[],
-    servingsPerNight: number,
+    slots: { recipeId: string; day: number | null }[],
+    servingsPerMeal: number,
   ) {
     if (!plan) return;
     const created: MealPlanEntry[] = [];
 
     for (const pick of picks) {
-      const mine = slots.filter((s) => s.recipeId === pick.recipe.id).sort((a, b) => a.nightIndex - b.nightIndex);
-      const first = mine[0];
+      const slot = slots.find((s) => s.recipeId === pick.recipe.id);
 
       const { data: cook } = await supabase
         .from('meal_plan_recipes')
         .insert({
           meal_plan_id: plan.id,
           recipe_id: pick.recipe.id,
-          day_index: first?.day ?? null,
+          day_index: slot?.day ?? null,
           entry_type: 'cook',
-          servings: planServings(pick.recipe, servingsPerNight, pick.nights),
+          servings: planServings(pick.recipe, servingsPerMeal, pick.nights),
+          planned_nights: pick.nights,
         })
         .select('*, recipe:recipes(*)')
         .single();
 
       if (!cook) continue;
       created.push(cook as MealPlanEntry);
-
-      for (const slot of mine.slice(1)) {
-        const { data: extra } = await supabase
-          .from('meal_plan_recipes')
-          .insert({
-            meal_plan_id: plan.id,
-            recipe_id: pick.recipe.id,
-            day_index: slot.day,
-            entry_type: 'batch',
-            parent_id: (cook as MealPlanEntry).id,
-          })
-          .select('*, recipe:recipes(*)')
-          .single();
-        if (extra) created.push(extra as MealPlanEntry);
-      }
     }
 
     setEntries((prev) => [...prev, ...created]);
   }
 
   // ── Week label ──────────────────────────────────────
-  const isCurrentWeek = formatWeekStart(getMonday(new Date())) === formatWeekStart(weekStart);
-  const isNextWeek = formatWeekStart(shiftWeek(getMonday(new Date()), 1)) === formatWeekStart(weekStart);
-  const isLastWeek = formatWeekStart(shiftWeek(getMonday(new Date()), -1)) === formatWeekStart(weekStart);
+  const isCurrentWeek = formatWeekStart(getSunday(new Date())) === formatWeekStart(weekStart);
+  const isNextWeek = formatWeekStart(shiftWeek(getSunday(new Date()), 1)) === formatWeekStart(weekStart);
+  const isLastWeek = formatWeekStart(shiftWeek(getSunday(new Date()), -1)) === formatWeekStart(weekStart);
 
   const weekLabel = isCurrentWeek
     ? 'This week'
@@ -484,14 +454,14 @@ export default function MealPlan() {
     ? 'Loading your week…'
     : mealEntries.length === 0
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
-      : `${mealEntries.length} night${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
+      : `${mealEntries.length} cook${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
   // ── Cooking ─────────────────────────────────────────
   /**
-   * A real cook that hasn't happened yet. Leftovers ('batch') nights reheat the
-   * same pot and eating out isn't cooking, so neither offers to start a cook.
+   * A real cook that hasn't happened yet. Eating out and legacy batch rows do
+   * not offer to start a cook.
    */
   function canCook(entry: MealPlanEntry): boolean {
     return entry.entry_type === 'cook' && !entry.is_cooked && !!entry.recipe_id;
@@ -568,14 +538,13 @@ export default function MealPlan() {
   // ── Row rendering ───────────────────────────────────
   function renderEntryRow(entry: MealPlanEntry, isToday: boolean) {
     const cooked = entry.is_cooked;
-    const batch = batchPosition(entry, entries);
-    const isExtraNight = entry.entry_type === 'batch';
+    const mealCount = plannedMealCount(entry, entries);
 
     if (entry.entry_type === 'out') {
       return (
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
-            style={{ width: 38, height: 38, borderRadius: 3, border: '1px dashed var(--border)', background: 'var(--card)', display: 'grid', placeItems: 'center', flexShrink: 0, color: 'var(--muted)' }}
+            style={{ width: 58, height: 58, borderRadius: 4, border: '1px dashed var(--border)', background: 'var(--card)', display: 'grid', placeItems: 'center', flexShrink: 0, color: 'var(--muted)' }}
           >
             <Store size={16} strokeWidth={1.5} />
           </div>
@@ -594,24 +563,32 @@ export default function MealPlan() {
     const meta: string[] = [];
     const mins = (entry.recipe?.prep_time ?? 0) + (entry.recipe?.cook_time ?? 0);
     if (mins > 0) meta.push(formatMins(mins));
-    if (batch) meta.push(`Meal prep ${batch.index}/${batch.total}`);
-    else if (entryServings(entry) != null) meta.push(`Serves ${entryServings(entry)}`);
+    if (mealCount > 1) meta.push(`Covers ${mealCount} meals`);
+    if (entryServings(entry) != null) meta.push(`Serves ${entryServings(entry)}`);
 
     return (
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <button
           onClick={() => entry.recipe_id && navigate(`/recipe/${entry.recipe_id}`)}
-          style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', background: 'var(--paper3)', flexShrink: 0, border: 'none', padding: 0, cursor: 'pointer' }}
+          style={{ position: 'relative', width: 58, height: 58, borderRadius: 4, overflow: 'hidden', background: 'var(--paper3)', flexShrink: 0, border: 'none', padding: 0, cursor: 'pointer' }}
         >
           {entry.recipe?.image_url ? (
             <img
               src={entry.recipe.image_url}
               alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: cooked ? 'grayscale(100%)' : 'none', opacity: isExtraNight ? 0.85 : 1 }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: cooked ? 'grayscale(100%)' : 'none' }}
             />
           ) : (
             <span style={{ display: 'grid', placeItems: 'center', height: '100%', color: 'var(--muted)' }}>
               <Utensils size={16} strokeWidth={1.3} />
+            </span>
+          )}
+          {mealCount > 1 && (
+            <span
+              aria-label={`Covers ${mealCount} meals`}
+              style={{ position: 'absolute', top: 5, right: 5, minWidth: 25, height: 21, padding: '0 6px', borderRadius: 999, display: 'grid', placeItems: 'center', background: 'rgba(31, 27, 22, 0.82)', color: '#fff', fontFamily: fMono, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.02em' }}
+            >
+              {mealCount}×
             </span>
           )}
         </button>
@@ -643,18 +620,15 @@ export default function MealPlan() {
           {meta.length > 0 && (
             <div
               className="flex items-center gap-1.5"
-              style={{ fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: batch ? 'var(--green)' : 'var(--muted)', marginTop: 3 }}
+              style={{ fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: mealCount > 1 ? 'var(--green)' : 'var(--muted)', marginTop: 4 }}
             >
-              {batch && <Repeat size={9} strokeWidth={2} />}
               {meta.join(' · ')}
             </div>
           )}
         </div>
 
-        {/* Any night can be cooked right now — the pot doesn't care what the
-            calendar says. Today gets the labelled primary button; the rest get
-            a quiet flame so the hierarchy still reads. Leftovers nights get
-            nothing: there's nothing to cook, only to reheat. */}
+        {/* Any planned cook can start now. Today gets the labelled primary
+            button; the rest get a quiet flame so the hierarchy still reads. */}
         {canCook(entry) && (
           <button
             onClick={() => startCooking(entry)}
@@ -677,7 +651,7 @@ export default function MealPlan() {
             style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--green-light)', color: 'var(--green)', fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.1em', textTransform: 'uppercase', flexShrink: 0 }}
           >
             <Check size={10} strokeWidth={3} />
-            {entry.entry_type === 'batch' ? 'Ate' : 'Cooked'}
+            Cooked
           </span>
         )}
       </div>
@@ -749,7 +723,7 @@ export default function MealPlan() {
               }}
             >
               {[-1, 0, 1, 2, 3].map((offset) => {
-                const target = shiftWeek(getMonday(new Date()), offset);
+                const target = shiftWeek(getSunday(new Date()), offset);
                 const active = formatWeekStart(target) === formatWeekStart(weekStart);
                 const name = offset === -1 ? 'Last week' : offset === 0 ? 'This week' : offset === 1 ? 'Next week' : `In ${offset} weeks`;
                 return (
@@ -806,7 +780,7 @@ export default function MealPlan() {
             It's the weekend — good time to sort the week ahead.
           </span>
           <button
-            onClick={() => setWeekStart(shiftWeek(getMonday(new Date()), 1))}
+            onClick={() => setWeekStart(shiftWeek(getSunday(new Date()), 1))}
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, color: 'var(--green)' }}
           >
             Plan next week →
@@ -891,6 +865,7 @@ export default function MealPlan() {
                   display: 'flex',
                   gap: 12,
                   alignItems: dayEntries.length > 0 ? 'flex-start' : 'center',
+                  minHeight: 76,
                   padding: isToday || isOver ? '10px 10px' : '9px 0',
                   margin: isToday || isOver ? '4px -10px' : 0,
                   borderRadius: isToday || isOver ? 4 : 0,
@@ -921,7 +896,7 @@ export default function MealPlan() {
                     lineHeight: 1.3,
                     color: isToday || isOver ? 'var(--green)' : 'var(--muted)',
                     fontWeight: isToday ? 600 : 400,
-                    marginTop: dayEntries.length > 0 ? 11 : 0,
+                    marginTop: dayEntries.length > 0 ? 20 : 0,
                   }}
                 >
                   {DAY_SHORT[d]}
@@ -937,7 +912,7 @@ export default function MealPlan() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        padding: '5px 0',
+                        padding: '15px 0',
                         cursor: 'pointer',
                         opacity: moving || dragging ? 1 : 0.6,
                         fontFamily: fMono,
@@ -1282,6 +1257,32 @@ export default function MealPlan() {
               {entryMenu.day_index != null ? DAY_SHORT[entryMenu.day_index] : 'No day yet'}
             </p>
 
+            {entryMenu.entry_type === 'cook' && (
+              <div className="flex items-center justify-between gap-3" style={{ padding: '13px 4px', borderTop: '1px solid var(--rule-hair)' }}>
+                <div>
+                  <div style={{ fontFamily: fSerif, fontSize: 16, color: 'var(--text)' }}>Meals this cook covers</div>
+                  <div style={{ marginTop: 2, fontFamily: fSans, fontSize: 12, color: 'var(--muted)' }}>Only the cooking day appears</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updatePlannedNights(entryMenu.id, Math.max(1, plannedMealCount(entryMenu, entries) - 1))}
+                    disabled={plannedMealCount(entryMenu, entries) <= 1}
+                    aria-label="Cover one fewer meal"
+                    style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--green)', cursor: 'pointer', opacity: plannedMealCount(entryMenu, entries) <= 1 ? 0.4 : 1 }}
+                  >−</button>
+                  <span style={{ minWidth: 30, textAlign: 'center', fontFamily: fMono, fontSize: 12, color: 'var(--green)', fontWeight: 700 }}>
+                    {plannedMealCount(entryMenu, entries)}×
+                  </span>
+                  <button
+                    onClick={() => updatePlannedNights(entryMenu.id, Math.min(7, plannedMealCount(entryMenu, entries) + 1))}
+                    disabled={plannedMealCount(entryMenu, entries) >= 7}
+                    aria-label="Cover one more meal"
+                    style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--green)', cursor: 'pointer', opacity: plannedMealCount(entryMenu, entries) >= 7 ? 0.4 : 1 }}
+                  >+</button>
+                </div>
+              </div>
+            )}
+
             {[
               canCook(entryMenu)
                 ? { label: 'Cook now', run: () => { setEntryMenu(null); startCooking(entryMenu); }, primary: true }
@@ -1289,14 +1290,11 @@ export default function MealPlan() {
               entryMenu.recipe_id
                 ? { label: 'View recipe', run: () => { setEntryMenu(null); navigate(`/recipe/${entryMenu.recipe_id}`); } }
                 : null,
-              !entryMenu.is_cooked && entryMenu.entry_type !== 'out'
-                ? { label: entryMenu.entry_type === 'batch' ? 'Mark eaten' : 'Mark cooked', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
+              !entryMenu.is_cooked && entryMenu.entry_type === 'cook'
+                ? { label: 'Mark cooked', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
                 : null,
               entryMenu.is_cooked
-                ? { label: entryMenu.entry_type === 'batch' ? 'Not eaten after all' : 'Not cooked after all', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
-                : null,
-              entryMenu.entry_type === 'cook'
-                ? { label: 'Add another night', run: () => { addBatchNight(entryMenu.id, null); setEntryMenu(null); } }
+                ? { label: 'Not cooked after all', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
                 : null,
               { label: 'Move to another day', run: () => { setMoving(entryMenu.id); setEntryMenu(null); setTab('meals'); } },
               entryMenu.day_index != null
@@ -1339,15 +1337,10 @@ export default function MealPlan() {
         open={daySheet !== null}
         dayIndex={daySheet}
         weekStart={weekStart}
-        entries={entries}
         onCook={() => {
           setAddTarget(daySheet);
           setDaySheet(null);
           setShowAddModal(true);
-        }}
-        onAnotherNight={(cookId) => {
-          addBatchNight(cookId, daySheet);
-          setDaySheet(null);
         }}
         onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
         onClose={() => setDaySheet(null)}
