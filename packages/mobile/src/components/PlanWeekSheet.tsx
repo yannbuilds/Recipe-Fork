@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { dedupeRecipesBySource } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
@@ -118,10 +119,17 @@ export default function PlanWeekSheet({
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // See the web planner: URL variants can be separate database rows, but they
+  // represent one recipe in the all-recipes picker.
+  const uniqueRecipes = useMemo(
+    () => dedupeRecipesBySource(recipes, user?.id),
+    [recipes, user?.id],
+  );
+
   // Same filtering the home tab runs on: search across titles and ingredients,
   // owner, and the tag-category facets.
   const filters = useRecipeFilters({
-    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
+    recipes: showFavouritesOnly ? uniqueRecipes.filter((r) => r.is_favourite) : uniqueRecipes,
     tags,
     recipeTags,
     userId: user?.id,
@@ -489,7 +497,7 @@ export default function PlanWeekSheet({
       >
         {(
           [
-            ['all', 'All recipes', recipes.length],
+            ['all', 'All recipes', uniqueRecipes.length],
             ['cookbooks', 'Cookbooks', pickableCookbooks.length],
           ] as const
         ).map(([value, label, count]) => {
@@ -594,8 +602,8 @@ export default function PlanWeekSheet({
             >
               <Body size={12.5} color={t.muted} style={{ flexShrink: 1, lineHeight: 18 }}>
                 {isNarrowed
-                  ? `Showing ${visible.length} of ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}.`
-                  : `All ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}, least recently cooked first.`}
+                  ? `Showing ${visible.length} of ${uniqueRecipes.length} recipe${uniqueRecipes.length === 1 ? '' : 's'}.`
+                  : `All ${uniqueRecipes.length} recipe${uniqueRecipes.length === 1 ? '' : 's'}, least recently cooked first.`}
               </Body>
               {isNarrowed && (
                 <Pressable

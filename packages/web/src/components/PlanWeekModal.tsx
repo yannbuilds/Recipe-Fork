@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Minus, Plus, X as XIcon, Utensils, Wand2, Heart, SlidersHorizontal } from 'lucide-react';
-import { supabase } from '@recipe-aggregator/shared';
+import { dedupeRecipesBySource, supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import RecipeFilterBar from './RecipeFilterBar';
 import CookbookCard from './CookbookCard';
@@ -98,10 +98,18 @@ export default function PlanWeekModal({
   const [saving, setSaving] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
+  // Importing the same page with a trailing slash or tracking link created a
+  // handful of distinct rows. The home page's newest-first order separates
+  // them; this alphabetical picker made the copies look like a render bug.
+  const uniqueRecipes = useMemo(
+    () => dedupeRecipesBySource(recipes, user?.id),
+    [recipes, user?.id],
+  );
+
   // Same filtering the home page runs on: search across titles and ingredients,
   // owner, and the tag-category facets.
   const filters = useRecipeFilters({
-    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
+    recipes: showFavouritesOnly ? uniqueRecipes.filter((r) => r.is_favourite) : uniqueRecipes,
     tags,
     recipeTags,
     userId: user?.id,
@@ -532,7 +540,7 @@ export default function PlanWeekModal({
                 style={{ gap: 4, padding: 3, marginBottom: 14, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)' }}
               >
                 {([
-                  ['all', 'All recipes', recipes.length],
+                  ['all', 'All recipes', uniqueRecipes.length],
                   ['cookbooks', 'Cookbooks', pickableCookbooks.length],
                 ] as const).map(([value, label, count]) => {
                   const on = browse === value;
@@ -669,8 +677,8 @@ export default function PlanWeekModal({
                 <p style={{ margin: '0 0 12px', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
                   {isNarrowed ? (
                     <>
-                      Showing <strong style={{ color: 'var(--text-soft)' }}>{visible.length}</strong> of {recipes.length} recipe
-                      {recipes.length === 1 ? '' : 's'}.{' '}
+                      Showing <strong style={{ color: 'var(--text-soft)' }}>{visible.length}</strong> of {uniqueRecipes.length} recipe
+                      {uniqueRecipes.length === 1 ? '' : 's'}.{' '}
                       <button
                         onClick={resetAllFilters}
                         style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
@@ -679,7 +687,7 @@ export default function PlanWeekModal({
                       </button>
                     </>
                   ) : (
-                    `All ${recipes.length} recipe${recipes.length === 1 ? '' : 's'}, least recently cooked first.`
+                    `All ${uniqueRecipes.length} recipe${uniqueRecipes.length === 1 ? '' : 's'}, least recently cooked first.`
                   )}
                 </p>
               )}

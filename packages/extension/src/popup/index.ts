@@ -1,3 +1,4 @@
+import { findRecipeWithSameSource, normalizeRecipeSourceUrl } from "@recipe-aggregator/shared";
 import { supabase } from "../lib/supabase";
 
 // Inline SVG logo – sage green rounded square with white "PK" text (matches PWA icon)
@@ -301,30 +302,10 @@ async function grabPageHtml(tabId: number): Promise<string | null> {
   }
 }
 
-// Tracking params commonly appended to recipe URLs that shouldn't differentiate a save
-const TRACKING_PARAMS = new Set([
-  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id", "utm_name",
-  "fbclid", "gclid", "gbraid", "wbraid", "msclkid", "mc_cid", "mc_eid",
-  "ref", "ref_src", "ref_url", "_ga", "_gl",
-]);
-
-function normalizeRecipeUrl(raw: string): string {
-  try {
-    const u = new URL(raw);
-    u.hash = ""; // strip fragment (e.g. "#recipe")
-    for (const key of Array.from(u.searchParams.keys())) {
-      if (TRACKING_PARAMS.has(key) || key.startsWith("utm_")) {
-        u.searchParams.delete(key);
-      }
-    }
-    // Strip trailing slash on the path (only when path > "/") so "/foo/" === "/foo"
-    if (u.pathname.length > 1 && u.pathname.endsWith("/")) {
-      u.pathname = u.pathname.slice(0, -1);
-    }
-    return u.toString();
-  } catch {
-    return raw;
-  }
+async function findExistingRecipe(sourceUrl: string): Promise<{ id: string } | undefined> {
+  const { data, error } = await supabase.from("recipes").select("id, source_url");
+  if (error) throw new Error(error.message);
+  return findRecipeWithSameSource(data ?? [], sourceUrl);
 }
 
 // Save handler — grabs page HTML via content script, then will send to Claude API
@@ -342,7 +323,7 @@ async function handleSaveRecipe() {
 
   // Normalize URL — strip fragment and tracking params so the same recipe
   // page isn't saved twice from different links (e.g. with `#recipe` or `?utm_*`)
-  const normalizedUrl = normalizeRecipeUrl(tab.url);
+  const normalizedUrl = normalizeRecipeSourceUrl(tab.url);
 
   // Ensure we have a logged-in user
   const {
@@ -353,27 +334,21 @@ async function handleSaveRecipe() {
     return;
   }
 
-  // Check for duplicate — skip save if this URL is already in the library
-  const { data: existing } = await supabase
-    .from("recipes")
-    .select("id")
-    .eq("source_url", normalizedUrl)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (existing) {
-    const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
-    if (footerLink) {
-      footerLink.href = `https://piekeeper.com/recipe/${existing.id}`;
-      footerLink.textContent = "View saved recipe ↗";
-    }
-    showSuccess("Recipe already saved!");
-    return;
-  }
-
-  showLoading("Cooking recipe…");
-
   try {
+    // Check the whole family collection before doing the expensive import.
+    const existing = await findExistingRecipe(normalizedUrl);
+    if (existing) {
+      const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
+      if (footerLink) {
+        footerLink.href = `https://piekeeper.com/recipe/${existing.id}`;
+        footerLink.textContent = "View saved recipe ↗";
+      }
+      showSuccess("Recipe already saved!");
+      return;
+    }
+
+    showLoading("Cooking recipe…");
+
     // Try server-side fetch first (preserves full HTML + JSON-LD for best results)
     let fnData: Record<string, unknown> | null = null;
     let fnError: { context?: unknown; message?: string } | null = null;
@@ -434,9 +409,27 @@ async function handleSaveRecipe() {
 
     const { recipe, tags } = fnData as { recipe: Record<string, unknown>; tags: { name: string; emoji: string }[] };
 
+    const canonicalUrl =
+      typeof recipe.source_url === "string" ? recipe.source_url : normalizedUrl;
+    const canonicalDuplicate = await findExistingRecipe(canonicalUrl);
+    if (canonicalDuplicate) {
+      const footerLink = document.getElementById("footer-link") as HTMLAnchorElement;
+      if (footerLink) {
+        footerLink.href = `https://piekeeper.com/recipe/${canonicalDuplicate.id}`;
+        footerLink.textContent = "View saved recipe ↗";
+      }
+      showSuccess("Recipe already saved!");
+      return;
+    }
+
     const { data, error: saveError } = await supabase
       .from("recipes")
-      .insert({ ...recipe, user_id: user.id, is_favourite: false })
+      .insert({
+        ...recipe,
+        source_url: normalizeRecipeSourceUrl(canonicalUrl),
+        user_id: user.id,
+        is_favourite: false,
+      })
       .select("id")
       .single();
 

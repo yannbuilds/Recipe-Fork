@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Globe, PenLine, ArrowLeft, Loader2, Images, Camera, X } from 'lucide-react';
-import { supabase } from '@recipe-aggregator/shared';
+import {
+  findRecipeWithSameSource,
+  normalizeRecipeSourceUrl,
+  supabase,
+} from '@recipe-aggregator/shared';
 import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 import { saveTags } from '../lib/saveTags';
 
@@ -13,6 +17,12 @@ const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 interface SelectedPhoto {
   file: File;
   previewUrl: string;
+}
+
+async function findExistingRecipe(sourceUrl: string): Promise<{ id: string } | undefined> {
+  const { data, error } = await supabase.from('recipes').select('id, source_url');
+  if (error) throw new Error(error.message);
+  return findRecipeWithSameSource(data ?? [], sourceUrl);
 }
 
 export default function NewRecipeModal() {
@@ -169,9 +179,13 @@ export default function NewRecipeModal() {
     data: { recipe: Record<string, unknown>; tags?: Array<{ name: string; emoji: string }> },
   ) {
     setStatusText('Saving recipe…');
+    const recipe = { ...data.recipe };
+    if (typeof recipe.source_url === 'string') {
+      recipe.source_url = normalizeRecipeSourceUrl(recipe.source_url);
+    }
     const { data: saved, error: saveError } = await supabase
       .from('recipes')
-      .insert({ ...data.recipe, user_id: userId, is_favourite: false })
+      .insert({ ...recipe, user_id: userId, is_favourite: false })
       .select('id')
       .single();
     if (saveError || !saved) throw new Error(saveError?.message ?? 'Failed to save recipe');
@@ -246,13 +260,10 @@ export default function NewRecipeModal() {
         throw new Error('Please sign in to import recipes');
       }
 
-      // RLS returns both own and family recipes, so this catches
-      // duplicates across the whole household automatically
-      const { data: existing } = await supabase
-        .from('recipes')
-        .select('id')
-        .eq('source_url', trimmed)
-        .maybeSingle();
+      const normalizedUrl = normalizeRecipeSourceUrl(trimmed);
+      // RLS returns both own and family recipes. Compare canonical source keys,
+      // not exact strings, so `/recipe` and `/recipe/?utm_…` are one recipe.
+      const existing = await findExistingRecipe(normalizedUrl);
 
       if (existing) {
         closeModal();
@@ -264,7 +275,7 @@ export default function NewRecipeModal() {
       setStatusText('Cooking recipe…');
 
       const { data, error } = await supabase.functions.invoke('import-recipe', {
-        body: { url: trimmed },
+        body: { url: normalizedUrl },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -294,6 +305,17 @@ export default function NewRecipeModal() {
       }
 
       const { recipe, tags } = data;
+
+      // The importer may follow a redirect to a different canonical URL, so
+      // check once more before inserting the returned record.
+      const canonicalUrl =
+        typeof recipe?.source_url === 'string' ? recipe.source_url : normalizedUrl;
+      const canonicalDuplicate = await findExistingRecipe(canonicalUrl);
+      if (canonicalDuplicate) {
+        closeModal();
+        navigate(`/recipe/${canonicalDuplicate.id}`);
+        return;
+      }
 
       // Save recipe to Supabase
       setStatusText('Saving recipe…');

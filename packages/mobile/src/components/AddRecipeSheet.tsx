@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { findRecipeWithSameSource, normalizeRecipeSourceUrl } from '@recipe-aggregator/shared';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,12 @@ const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 interface Props {
   open: boolean;
   onClose: () => void;
+}
+
+async function findExistingRecipe(sourceUrl: string): Promise<{ id: string } | undefined> {
+  const { data, error } = await supabase.from('recipes').select('id, source_url');
+  if (error) throw new Error(error.message);
+  return findRecipeWithSameSource(data ?? [], sourceUrl);
 }
 
 // The "Add a recipe" chooser + URL import, hosted in the standard bottom sheet
@@ -189,11 +196,8 @@ export default function AddRecipeSheet({ open, onClose }: Props) {
       const userId = session?.user?.id;
       if (!userId || !session) throw new Error('Please sign in to import recipes');
 
-      const { data: existing } = await supabase
-        .from('recipes')
-        .select('id')
-        .eq('source_url', trimmed)
-        .maybeSingle();
+      const normalizedUrl = normalizeRecipeSourceUrl(trimmed);
+      const existing = await findExistingRecipe(normalizedUrl);
       if (existing) {
         closeThen(() => router.push({ pathname: '/recipe/[id]', params: { id: existing.id } }));
         return;
@@ -201,17 +205,30 @@ export default function AddRecipeSheet({ open, onClose }: Props) {
 
       setStatus('Cooking recipe…');
       const { data, error } = await supabase.functions.invoke('import-recipe', {
-        body: { url: trimmed },
+        body: { url: normalizedUrl },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw new Error(error.message || 'Failed to import recipe');
       if (data?.error) throw new Error(data.error);
 
       const { recipe, tags } = data;
+      const canonicalUrl =
+        typeof recipe?.source_url === 'string' ? recipe.source_url : normalizedUrl;
+      const canonicalDuplicate = await findExistingRecipe(canonicalUrl);
+      if (canonicalDuplicate) {
+        closeThen(() => router.push({ pathname: '/recipe/[id]', params: { id: canonicalDuplicate.id } }));
+        return;
+      }
+
       setStatus('Saving recipe…');
       const { data: saved, error: saveError } = await supabase
         .from('recipes')
-        .insert({ ...recipe, user_id: userId, is_favourite: false })
+        .insert({
+          ...recipe,
+          source_url: normalizeRecipeSourceUrl(canonicalUrl),
+          user_id: userId,
+          is_favourite: false,
+        })
         .select('id')
         .single();
       if (saveError || !saved) throw new Error(saveError?.message ?? 'Failed to save recipe');

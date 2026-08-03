@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { findRecipeWithSameSource, normalizeRecipeSourceUrl } from '@recipe-aggregator/shared';
 import { useRouter } from 'expo-router';
 import { useShareIntentContext } from 'expo-share-intent';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +18,12 @@ function extractUrl(text: string | null | undefined): string | null {
   if (!text) return null;
   const match = text.match(/https?:\/\/[^\s<>"']+/i);
   return match?.[0]?.replace(/[),.;!?]+$/, '') ?? null;
+}
+
+async function findExistingRecipe(sourceUrl: string): Promise<{ id: string; title: string } | undefined> {
+  const { data, error } = await supabase.from('recipes').select('id, title, source_url');
+  if (error) throw new Error(error.message);
+  return findRecipeWithSameSource(data ?? [], sourceUrl);
 }
 
 async function functionErrorMessage(
@@ -64,11 +71,8 @@ export default function ShareRecipeScreen() {
     setStatus('Reading the caption and video…');
 
     try {
-      const { data: rawDuplicate } = await supabase
-        .from('recipes')
-        .select('id, title')
-        .eq('source_url', url)
-        .maybeSingle();
+      const normalizedUrl = normalizeRecipeSourceUrl(url);
+      const rawDuplicate = await findExistingRecipe(normalizedUrl);
       if (rawDuplicate) {
         setRecipeId(rawDuplicate.id);
         setRecipeTitle(rawDuplicate.title);
@@ -79,7 +83,7 @@ export default function ShareRecipeScreen() {
       }
 
       const { data, error: invokeError } = await supabase.functions.invoke('import-recipe', {
-        body: { url },
+        body: { url: normalizedUrl },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (invokeError) {
@@ -89,12 +93,8 @@ export default function ShareRecipeScreen() {
       if (!data?.recipe) throw new Error('No recipe was found in that post');
 
       setStatus('Saving it to your recipes…');
-      const canonicalUrl = data.recipe.source_url || url;
-      const { data: canonicalDuplicate } = await supabase
-        .from('recipes')
-        .select('id, title')
-        .eq('source_url', canonicalUrl)
-        .maybeSingle();
+      const canonicalUrl = data.recipe.source_url || normalizedUrl;
+      const canonicalDuplicate = await findExistingRecipe(canonicalUrl);
       if (canonicalDuplicate) {
         setRecipeId(canonicalDuplicate.id);
         setRecipeTitle(canonicalDuplicate.title);
@@ -106,7 +106,12 @@ export default function ShareRecipeScreen() {
 
       const { data: saved, error: saveError } = await supabase
         .from('recipes')
-        .insert({ ...data.recipe, user_id: session.user.id, is_favourite: false })
+        .insert({
+          ...data.recipe,
+          source_url: normalizeRecipeSourceUrl(canonicalUrl),
+          user_id: session.user.id,
+          is_favourite: false,
+        })
         .select('id, title')
         .single();
       if (saveError || !saved) throw new Error(saveError?.message ?? 'Could not save the recipe');
