@@ -33,10 +33,10 @@ type Item = Pick<
 type SortOption = 'a-z' | 'z-a' | 'newest' | 'oldest';
 
 const SORT_LABELS: [SortOption, string][] = [
-  ['a-z', 'A – Z'],
-  ['z-a', 'Z – A'],
   ['newest', 'Newest first'],
   ['oldest', 'Oldest first'],
+  ['a-z', 'A – Z'],
+  ['z-a', 'Z – A'],
 ];
 
 interface Props {
@@ -48,9 +48,13 @@ interface Props {
   excludeIds?: Set<string>;
   onPick: (recipe: Item) => void;
   onClose: () => void;
+  /** Newest first by default, the same order the home tab opens on — you're
+   *  usually reaching for something you just saved. Call sites where you're
+   *  hunting a known recipe by name (sub-recipe linking) pass 'a-z'. */
+  defaultSort?: SortOption;
 }
 
-export default function RecipePickerSheet({ open, title = 'Add a recipe', existingIds, excludeIds, onPick, onClose }: Props) {
+export default function RecipePickerSheet({ open, title = 'Add a recipe', existingIds, excludeIds, onPick, onClose, defaultSort = 'newest' }: Props) {
   const t = useTheme();
   const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
@@ -59,7 +63,7 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
   const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('a-z');
+  const [sortBy, setSortBy] = useState<SortOption>(defaultSort);
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
@@ -78,14 +82,20 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
     if (!open) return;
     setAdded(new Set());
     setSearch('');
-    setSortBy('a-z');
+    setSortBy(defaultSort);
     setShowFavouritesOnly(false);
     setFilterOpen(false);
     filters.resetFilters();
     setLoading(true);
     (async () => {
       const [recipesRes, tagsRes, recipeTagsRes] = await Promise.all([
-        supabase.from('recipes').select(RECIPE_SELECT).order('title'),
+        // Matches the home tab's ordering so ties (same created_at) land the
+        // same way in both places.
+        supabase
+          .from('recipes')
+          .select(RECIPE_SELECT)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false }),
         supabase.from('tags').select('*').order('name'),
         supabase.from('recipe_tags').select('recipe_id, tag_id'),
       ]);
@@ -118,14 +128,14 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
     [filters.filteredRecipes, added, excludeIds, sortBy],
   );
 
-  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'a-z';
+  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== defaultSort;
   const isNarrowed = hasActiveFilters || filters.activeCategories.size > 0 || search.trim() !== '';
 
   function resetAllFilters() {
     filters.resetFilters();
     setSearch('');
     setShowFavouritesOnly(false);
-    setSortBy('a-z');
+    setSortBy(defaultSort);
   }
 
   // The list gets the room the sheet can spare, so you're scrolling your whole

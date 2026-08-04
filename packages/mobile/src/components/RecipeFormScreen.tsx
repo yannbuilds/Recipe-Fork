@@ -592,6 +592,9 @@ export default function RecipeFormScreen({ recipeId }: Props) {
       <RecipePickerSheet
         open={linkTarget !== null}
         title="Use another recipe"
+        // Here you're hunting a specific component recipe by name, not browsing
+        // what you saved lately — alphabetical stays the better default.
+        defaultSort="a-z"
         existingIds={emptyIdSet}
         // A recipe can't be an ingredient of itself.
         excludeIds={recipeId ? new Set([recipeId]) : undefined}

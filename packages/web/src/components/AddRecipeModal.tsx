@@ -17,9 +17,13 @@ interface AddRecipeModalProps {
   onAdd: (recipe: Recipe) => void;
   onClose: () => void;
   title?: string;
+  /** Newest first by default, the same order the home page opens on — you're
+   *  usually reaching for something you just saved. Call sites where you're
+   *  hunting a known recipe by name (sub-recipe linking) pass 'a-z'. */
+  defaultSort?: SortOption;
 }
 
-export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan' }: AddRecipeModalProps) {
+export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan', defaultSort = 'newest' }: AddRecipeModalProps) {
   const { user } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -27,7 +31,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeI
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('a-z');
+  const [sortBy, setSortBy] = useState<SortOption>(defaultSort);
   const [filterOpen, setFilterOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -55,12 +59,18 @@ export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeI
     if (!open) return;
     setSearch('');
     setShowFavouritesOnly(false);
-    setSortBy('a-z');
+    setSortBy(defaultSort);
     setFilterOpen(false);
     filters.resetFilters();
     setLoading(true);
     Promise.all([
-      supabase.from('recipes').select('*').order('title'),
+      // Matches the home page's ordering so ties (same created_at) land the
+      // same way in both places.
+      supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false }),
       supabase.from('tags').select('*').order('name'),
       supabase.from('recipe_tags').select('recipe_id, tag_id'),
     ]).then(([recipesResult, tagsResult, recipeTagsResult]) => {
@@ -131,7 +141,7 @@ export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeI
                 onClick={() => setFilterOpen((prev) => !prev)}
                 className="flex items-center justify-center w-10 h-10 rounded-xl transition-colors"
                 style={
-                  filterOpen || showFavouritesOnly || sortBy !== 'a-z'
+                  filterOpen || showFavouritesOnly || sortBy !== defaultSort
                     ? { background: 'var(--green-light)', border: '1px solid var(--green)', color: 'var(--green)' }
                     : { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', boxShadow: 'var(--shadow-sm)' }
                 }
@@ -161,10 +171,10 @@ export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeI
                   <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
                   <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Sort by</p>
                   {([
-                    ['a-z', 'A – Z'],
-                    ['z-a', 'Z – A'],
                     ['newest', 'Newest first'],
                     ['oldest', 'Oldest first'],
+                    ['a-z', 'A – Z'],
+                    ['z-a', 'Z – A'],
                   ] as [SortOption, string][]).map(([value, label]) => (
                     <button
                       key={value}

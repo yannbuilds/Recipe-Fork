@@ -676,6 +676,9 @@ export default function RecipeForm() {
       <AddRecipeModal
         open={linkTarget !== null}
         title="Use another recipe for this ingredient"
+        // Here you're hunting a specific component recipe by name, not browsing
+        // what you saved lately — alphabetical stays the better default.
+        defaultSort="a-z"
         existingRecipeIds={new Set()}
         // A recipe can't be an ingredient of itself.
         excludeRecipeIds={id ? new Set([id]) : undefined}
