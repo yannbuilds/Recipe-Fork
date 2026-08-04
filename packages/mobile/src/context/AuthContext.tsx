@@ -58,11 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeUserId = useRef<string | null>(null);
 
   const fetchProfile = useCallback(async (userId: string, authUser?: User | null) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('display_name, measurement_preference')
       .eq('id', userId)
       .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load profile:', error);
+      setProfile(null);
+      return;
+    }
 
     if (data) {
       setProfile(data as Profile);
@@ -75,18 +81,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const meta = (authUser.user_metadata ?? {}) as Record<string, unknown>;
     const displayName =
+      (typeof meta.display_name === 'string' && meta.display_name) ||
       (typeof meta.full_name === 'string' && meta.full_name) ||
       (typeof meta.name === 'string' && meta.name) ||
       authUser.email?.split('@')[0] ||
       '';
 
-    const { data: upserted } = await supabase
+    // Profile creation is recovery for accounts whose signup trigger did not run.
+    // Never upsert here: an auth race or transient read issue must not overwrite
+    // a name or preference the user has already chosen.
+    const { data: inserted, error: insertError } = await supabase
       .from('profiles')
-      .upsert({ id: userId, display_name: displayName, measurement_preference: 'metric' })
+      .insert({ id: userId, display_name: displayName, measurement_preference: 'metric' })
       .select('display_name, measurement_preference')
       .maybeSingle();
 
-    setProfile((upserted as Profile) ?? { display_name: displayName, measurement_preference: 'metric' });
+    if (inserted) {
+      setProfile(inserted as Profile);
+      return;
+    }
+
+    // A concurrent auth event may have created the row after our first read.
+    // Re-read on a duplicate key; importantly, never update the existing row.
+    if (insertError?.code === '23505') {
+      const { data: existing, error: retryError } = await supabase
+        .from('profiles')
+        .select('display_name, measurement_preference')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (retryError) console.error('Failed to load concurrently created profile:', retryError);
+      setProfile((existing as Profile) ?? null);
+      return;
+    }
+
+    if (insertError) console.error('Failed to create missing profile:', insertError);
+    setProfile(null);
   }, []);
 
   const fetchFamily = useCallback(async (userId: string) => {
