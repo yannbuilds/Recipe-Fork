@@ -381,6 +381,82 @@
   color: #fbf8f1;
 }
 
+.rf-tag-search {
+  position: relative;
+}
+
+.rf-tag-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+}
+
+.rf-tag-suggestions button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 7px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.rf-tag-suggestions button:hover,
+.rf-tag-suggestions button:focus-visible {
+  background: var(--warm);
+  outline: none;
+}
+
+/* Recipe editor ingredients: the name gets the flexible column on desktop and
+   its own full-width row on phones, where it must never be squeezed out by the
+   metadata controls. */
+.rf-ingredient-edit-row {
+  display: grid;
+  grid-template-columns: 7rem 4rem 5rem minmax(0, 1fr) auto;
+  grid-template-areas: "category quantity unit item remove";
+  gap: 8px;
+  align-items: start;
+}
+
+.rf-ingredient-item { grid-area: item; width: 100%; min-width: 0; }
+.rf-ingredient-category { grid-area: category; width: 100%; min-width: 0; }
+.rf-ingredient-quantity { grid-area: quantity; width: 100%; min-width: 0; }
+.rf-ingredient-unit { grid-area: unit; width: 100%; min-width: 0; }
+.rf-ingredient-remove {
+  grid-area: remove;
+  padding: 10px 8px;
+}
+.rf-ingredient-remove-icon { display: none; }
+
+@media (max-width: 640px) {
+  .rf-ingredient-edit-row {
+    grid-template-columns: 4rem 4.5rem minmax(0, 1fr) 2.5rem;
+    grid-template-areas:
+      "item item item item"
+      "quantity unit category remove";
+  }
+
+  .rf-ingredient-remove {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 24px;
+  }
+
+  .rf-ingredient-remove-label { display: none; }
+  .rf-ingredient-remove-icon { display: inline; }
+}
+
 /* ── Tabs ──────────────────────────────────────── */
 .rf-tabs {
   display: flex;
@@ -762,4 +838,3 @@ input[type="checkbox"] { accent-color: var(--green); }
   height: 0;
   pointer-events: none;
 }
-

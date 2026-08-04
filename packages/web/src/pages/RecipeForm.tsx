@@ -83,19 +83,21 @@ export default function RecipeForm() {
     fetchData();
   }, [id]);
 
-  function toggleTag(tagId: string) {
+  function removeTag(tagId: string) {
     setSelectedTagIds((prev) => {
       const next = new Set(prev);
-      if (next.has(tagId)) {
-        next.delete(tagId);
-      } else {
-        next.add(tagId);
-      }
+      next.delete(tagId);
       return next;
     });
   }
 
-  async function handleAddNewTag() {
+  async function handleAddTag(tagToAdd?: Tag) {
+    if (tagToAdd) {
+      setSelectedTagIds((prev) => new Set(prev).add(tagToAdd.id));
+      setNewTagName('');
+      return;
+    }
+
     const name = newTagName.trim().toLowerCase();
     if (!name) return;
 
@@ -121,6 +123,21 @@ export default function RecipeForm() {
     }
     setNewTagName('');
   }
+
+  const selectedTags = allTags.filter((tag) => selectedTagIds.has(tag.id));
+  const normalisedTagQuery = newTagName.trim().toLowerCase();
+  const matchingTags = normalisedTagQuery
+    ? allTags
+        .filter(
+          (tag) =>
+            !selectedTagIds.has(tag.id) &&
+            tag.name.toLowerCase().includes(normalisedTagQuery),
+        )
+        .slice(0, 6)
+    : [];
+  const exactTagMatch = allTags.find(
+    (tag) => tag.name.toLowerCase() === normalisedTagQuery,
+  );
 
   function addIngredient() {
     const lastCategory = ingredients.length > 0 ? ingredients[ingredients.length - 1].category : '';
@@ -404,39 +421,64 @@ export default function RecipeForm() {
           {/* Tags */}
           <fieldset className="space-y-3">
             <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Tags</legend>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map((tag) => (
+            {selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2" aria-label="Selected tags">
+                {selectedTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => removeTag(tag.id)}
+                    className="rf-tag rf-tag-active cursor-pointer"
+                    aria-label={`Remove ${tag.name} tag`}
+                  >
+                    {tag.name} <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="rf-tag-search">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  className="rf-input w-full"
+                  placeholder="Search or create a tag"
+                  role="combobox"
+                  aria-expanded={matchingTags.length > 0}
+                  aria-controls="recipe-tag-suggestions"
+                />
                 <button
-                  key={tag.id}
                   type="button"
-                  onClick={() => toggleTag(tag.id)}
-                  className={`rf-tag cursor-pointer ${selectedTagIds.has(tag.id) ? 'rf-tag-active' : ''}`}
+                  onClick={() => handleAddTag()}
+                  disabled={!normalisedTagQuery || selectedTagIds.has(exactTagMatch?.id ?? '')}
+                  className="rf-btn rf-btn-secondary shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {tag.name}
+                  {exactTagMatch ? 'Add' : 'Create'}
                 </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddNewTag();
-                  }
-                }}
-                className="rf-input w-full"
-                placeholder="New tag name"
-              />
-              <button
-                type="button"
-                onClick={handleAddNewTag}
-                className="rf-btn rf-btn-secondary shrink-0"
-              >
-                Add Tag
-              </button>
+              </div>
+              {matchingTags.length > 0 && (
+                <div id="recipe-tag-suggestions" className="rf-tag-suggestions" role="listbox">
+                  {matchingTags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      onClick={() => handleAddTag(tag)}
+                    >
+                      <span>{tag.name}</span>
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>Add</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </fieldset>
 
@@ -444,43 +486,48 @@ export default function RecipeForm() {
           <fieldset className="space-y-3">
             <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Ingredients</legend>
             {ingredients.map((ing, i) => (
-              <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
+              <div key={i} className="rf-ingredient-edit-row">
+                <input
+                  type="text"
+                  value={ing.item}
+                  onChange={(e) => updateIngredient(i, 'item', e.target.value)}
+                  className="rf-input rf-ingredient-item"
+                  placeholder="Ingredient"
+                  aria-label={`Ingredient ${i + 1} name`}
+                />
                 <input
                   type="text"
                   value={ing.category ?? ''}
                   onChange={(e) => updateIngredient(i, 'category', e.target.value)}
-                  className="rf-input w-full sm:w-28 shrink-0"
+                  className="rf-input rf-ingredient-category"
                   placeholder="Category"
+                  aria-label={`Ingredient ${i + 1} category`}
                 />
                 <input
                   type="text"
                   value={ing.quantity}
                   onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
-                  className="rf-input w-16 shrink-0"
+                  className="rf-input rf-ingredient-quantity"
                   placeholder="Qty"
+                  aria-label={`Ingredient ${i + 1} quantity`}
                 />
                 <input
                   type="text"
                   value={ing.unit}
                   onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
-                  className="rf-input w-20 shrink-0"
+                  className="rf-input rf-ingredient-unit"
                   placeholder="Unit"
-                />
-                <input
-                  type="text"
-                  value={ing.item}
-                  onChange={(e) => updateIngredient(i, 'item', e.target.value)}
-                  className="rf-input flex-1 min-w-0"
-                  placeholder="Ingredient"
+                  aria-label={`Ingredient ${i + 1} unit`}
                 />
                 <button
                   type="button"
                   onClick={() => removeIngredient(i)}
-                  className="text-sm px-2 py-2 transition-colors"
+                  className="rf-ingredient-remove text-sm transition-colors"
                   style={{ color: 'var(--red)' }}
                   aria-label="Remove ingredient"
                 >
-                  Remove
+                  <span className="rf-ingredient-remove-label">Remove</span>
+                  <span className="rf-ingredient-remove-icon" aria-hidden="true">×</span>
                 </button>
               </div>
             ))}
