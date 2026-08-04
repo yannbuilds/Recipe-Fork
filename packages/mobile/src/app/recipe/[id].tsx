@@ -1,5 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { Recipe, Tag } from '@recipe-aggregator/shared';
+import {
+  SUB_RECIPE_SELECT,
+  resolveSubRecipe,
+  scaleIngredientsForServings,
+  subRecipeIdsIn,
+} from '@recipe-aggregator/shared';
+import type { Recipe, SubRecipe, SubRecipeMap, Tag } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -31,6 +37,9 @@ interface RecipeData {
   tags: Tag[];
   /** Cooking-history summary for the quiet "COOKED 3× · LAST …" line. */
   cooks: { count: number; last: string | null };
+  /** Recipes used as an ingredient of this one, keyed by id. A plain object so
+   *  it survives the JSON round-trip through the persisted query cache. */
+  subRecipes: SubRecipeMap;
 }
 
 // Compact date for the cooked-history line: "12 Jul", with the year added
@@ -82,12 +91,28 @@ async function fetchRecipe(id: string): Promise<RecipeData> {
       .order('cooked_at', { ascending: false }),
   ]);
   if (recipeRes.error) throw new Error(recipeRes.error.message);
+  const recipe = recipeRes.data as Recipe;
   const tags = ((tagsRes.data ?? []) as any[]).map((rt) => rt.tags).filter(Boolean) as Tag[];
   const cookRows = cooksRes.data ?? [];
+
+  // Recipes used as an ingredient here. Anything that doesn't come back —
+  // deleted, or outside the family group — simply renders as a plain line.
+  const subIds = subRecipeIdsIn(recipe.ingredients).filter((rid) => rid !== recipe.id);
+  let subRecipes: SubRecipeMap = {};
+  if (subIds.length > 0) {
+    const { data: subs } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', subIds);
+    if (subs) {
+      subRecipes = Object.fromEntries(
+        (subs as unknown as SubRecipe[]).map((r) => [r.id, r]),
+      );
+    }
+  }
+
   return {
-    recipe: recipeRes.data as Recipe,
+    recipe,
     tags,
     cooks: { count: cookRows.length, last: cookRows[0]?.cooked_at ?? null },
+    subRecipes,
   };
 }
 
@@ -169,6 +194,8 @@ export default function RecipeDetailScreen() {
   const [tab, setTab] = useState<'ingredients' | 'steps'>('ingredients');
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  // Which linked-recipe rows are opened up to show their ingredients inline.
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [currentServings, setCurrentServings] = useState(1);
   const [savedServings, setSavedServings] = useState(1);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -194,6 +221,7 @@ export default function RecipeDetailScreen() {
 
   const recipe = data?.recipe;
   const tags = data?.tags ?? [];
+  const subRecipes = data?.subRecipes ?? {};
 
   useEffect(() => {
     if (recipe) {
@@ -688,38 +716,191 @@ export default function RecipeDetailScreen() {
                         ing.quantity || ing.unit
                           ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
                           : '';
+                      // This ingredient is another recipe — the pastry in a pie.
+                      // Its ingredients open inline so you don't lose your
+                      // check-offs walking off to a second screen mid-cook.
+                      const sub = resolveSubRecipe(ing, subRecipes, recipe.id);
+                      const isExpanded = sub != null && expandedSubs.has(key);
+                      const subIngredients =
+                        sub && isExpanded
+                          ? scaleIngredientsForServings(
+                              sub.ingredients,
+                              sub.custom_servings ?? sub.servings,
+                              (sub.custom_servings ?? sub.servings ?? 0) *
+                                (recipe.servings ? currentServings / recipe.servings : 1),
+                            )
+                          : [];
                       return (
-                        <Pressable
+                        <View
                           key={index}
-                          onPress={() => {
-                            haptics.select();
-                            setUsedIngredients((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(key)) next.delete(key);
-                              else next.add(key);
-                              return next;
-                            });
-                          }}
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 12,
-                            paddingVertical: 12,
                             borderBottomWidth: i < group.items.length - 1 ? 1 : 0,
                             borderBottomColor: t.ruleHair,
                           }}
                         >
-                          <CheckSquare checked={used} />
-                          <IngredientIcon item={ing.item || ''} />
-                          <Serif
-                            size={16}
-                            color={used ? t.muted : t.text}
-                            style={{ flex: 1, textDecorationLine: used ? 'line-through' : 'none' }}
+                          <Pressable
+                            onPress={() => {
+                              haptics.select();
+                              setUsedIngredients((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(key)) next.delete(key);
+                                else next.add(key);
+                                return next;
+                              });
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 12,
+                              paddingVertical: 12,
+                            }}
                           >
-                            {name}
-                          </Serif>
-                          {qty ? <Mono size={11}>{qty}</Mono> : null}
-                        </Pressable>
+                            <CheckSquare checked={used} />
+                            {sub ? (
+                              sub.image_url ? (
+                                <Image
+                                  source={{ uri: sub.image_url }}
+                                  style={{ width: 34, height: 34, borderRadius: 6 }}
+                                  contentFit="cover"
+                                  cachePolicy="memory-disk"
+                                  recyclingKey={sub.id}
+                                />
+                              ) : (
+                                <View
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 6,
+                                    backgroundColor: t.greenLight,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Ionicons name="restaurant-outline" size={16} color={t.green} />
+                                </View>
+                              )
+                            ) : (
+                              <IngredientIcon item={ing.item || ''} />
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <Serif
+                                size={16}
+                                color={used ? t.muted : t.text}
+                                style={{ textDecorationLine: used ? 'line-through' : 'none' }}
+                              >
+                                {name}
+                              </Serif>
+                              {sub ? (
+                                <View
+                                  style={{
+                                    alignSelf: 'flex-start',
+                                    marginTop: 3,
+                                    paddingHorizontal: 5,
+                                    paddingVertical: 1,
+                                    borderRadius: 3,
+                                    backgroundColor: t.greenLight,
+                                  }}
+                                >
+                                  <Mono size={8} color={t.green} style={{ letterSpacing: 1.2 }}>
+                                    RECIPE
+                                  </Mono>
+                                </View>
+                              ) : null}
+                            </View>
+                            {qty ? <Mono size={11}>{qty}</Mono> : null}
+                            {sub ? (
+                              <Pressable
+                                onPress={() => {
+                                  haptics.select();
+                                  setExpandedSubs((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }}
+                                hitSlop={10}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                  isExpanded
+                                    ? `Hide ${sub.title} ingredients`
+                                    : `Show ${sub.title} ingredients`
+                                }
+                                style={{ width: 26, alignItems: 'flex-end' }}
+                              >
+                                <Ionicons
+                                  name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                  size={16}
+                                  color={t.green}
+                                />
+                              </Pressable>
+                            ) : null}
+                          </Pressable>
+                          {sub && isExpanded ? (
+                            <View
+                              style={{
+                                marginLeft: 10,
+                                paddingLeft: 22,
+                                paddingBottom: 12,
+                                borderLeftWidth: 2,
+                                borderLeftColor: t.greenLight,
+                              }}
+                            >
+                              {subIngredients.map((subIng, j) => {
+                                const subKey = `${key}::sub::${j}`;
+                                const subUsed = usedIngredients.has(subKey);
+                                const subQty = [subIng.quantity, subIng.unit]
+                                  .filter(Boolean)
+                                  .join(' ')
+                                  .trim();
+                                return (
+                                  <Pressable
+                                    key={j}
+                                    onPress={() => {
+                                      haptics.select();
+                                      setUsedIngredients((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(subKey)) next.delete(subKey);
+                                        else next.add(subKey);
+                                        return next;
+                                      });
+                                    }}
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      paddingVertical: 7,
+                                    }}
+                                  >
+                                    <CheckSquare checked={subUsed} size={17} />
+                                    <Serif
+                                      size={14}
+                                      color={subUsed ? t.muted : t.text}
+                                      style={{
+                                        flex: 1,
+                                        textDecorationLine: subUsed ? 'line-through' : 'none',
+                                      }}
+                                    >
+                                      {subIng.item || subIng.original_text || ''}
+                                    </Serif>
+                                    {subQty ? <Mono size={10}>{subQty}</Mono> : null}
+                                  </Pressable>
+                                );
+                              })}
+                              <Pressable
+                                onPress={() => {
+                                  haptics.select();
+                                  router.push({ pathname: '/recipe/[id]', params: { id: sub.id } });
+                                }}
+                                style={{ marginTop: 6 }}
+                              >
+                                <Serif size={14} italic color={t.green}>
+                                  Open {sub.title} →
+                                </Serif>
+                              </Pressable>
+                            </View>
+                          ) : null}
+                        </View>
                       );
                     })}
                   </View>
@@ -928,6 +1109,7 @@ export default function RecipeDetailScreen() {
           open={showWeekPicker}
           recipeId={recipe.id}
           recipeTitle={recipe.title}
+          ingredients={recipe.ingredients}
           userId={user.id}
           onClose={() => setShowWeekPicker(false)}
         />

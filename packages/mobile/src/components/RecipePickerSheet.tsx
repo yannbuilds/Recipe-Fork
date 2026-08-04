@@ -23,7 +23,12 @@ import useRecipeFilters from '@/lib/useRecipeFilters';
 const RECIPE_SELECT =
   'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
 
-type Item = Pick<Recipe, 'id' | 'title' | 'image_url' | 'prep_time' | 'cook_time' | 'servings'>;
+// `ingredients` rides along so callers can check for linked sub-recipes without
+// a second fetch — RECIPE_SELECT already pulls it.
+type Item = Pick<
+  Recipe,
+  'id' | 'title' | 'image_url' | 'prep_time' | 'cook_time' | 'servings' | 'ingredients'
+>;
 
 type SortOption = 'a-z' | 'z-a' | 'newest' | 'oldest';
 
@@ -38,11 +43,14 @@ interface Props {
   open: boolean;
   title?: string;
   existingIds: Set<string>;
+  /** Recipes to leave out of the list entirely — used to stop a recipe linking
+   *  to itself. `existingIds` only hints; this hides. */
+  excludeIds?: Set<string>;
   onPick: (recipe: Item) => void;
   onClose: () => void;
 }
 
-export default function RecipePickerSheet({ open, title = 'Add a recipe', existingIds, onPick, onClose }: Props) {
+export default function RecipePickerSheet({ open, title = 'Add a recipe', existingIds, excludeIds, onPick, onClose }: Props) {
   const t = useTheme();
   const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
@@ -94,7 +102,7 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
   const visible = useMemo(
     () =>
       [...filters.filteredRecipes]
-        .filter((r) => !added.has(r.id))
+        .filter((r) => !added.has(r.id) && !excludeIds?.has(r.id))
         .sort((a, b) => {
           switch (sortBy) {
             case 'z-a':
@@ -107,7 +115,7 @@ export default function RecipePickerSheet({ open, title = 'Add a recipe', existi
               return a.title.localeCompare(b.title);
           }
         }),
-    [filters.filteredRecipes, added, sortBy],
+    [filters.filteredRecipes, added, excludeIds, sortBy],
   );
 
   const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'a-z';

@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { subRecipeIdsIn } from '@recipe-aggregator/shared';
 import type { Ingredient, Recipe, Step, Tag } from '@recipe-aggregator/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RecipePickerSheet from '@/components/RecipePickerSheet';
 import { Body, Button, Divider, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
@@ -15,12 +17,18 @@ interface Props {
   recipeId?: string;
 }
 
+// The picker wants a Set it can check; nothing is "already added" when linking.
+const emptyIdSet = new Set<string>();
+
 interface IngRow {
   quantity: string;
   unit: string;
   item: string;
   category?: string;
   original_text?: string;
+  // A linked sub-recipe. Rows are rebuilt field by field on save, so anything
+  // added here must also be carried through cleanIngredients() below.
+  recipe_id?: string | null;
 }
 
 export default function RecipeFormScreen({ recipeId }: Props) {
@@ -46,6 +54,10 @@ export default function RecipeFormScreen({ recipeId }: Props) {
   const [tagQuery, setTagQuery] = useState('');
   const [tagSaving, setTagSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which ingredient row is picking a recipe to link, and the titles of the ones
+  // already linked (ingredients only store the id).
+  const [linkTarget, setLinkTarget] = useState<number | null>(null);
+  const [linkedTitles, setLinkedTitles] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -90,6 +102,29 @@ export default function RecipeFormScreen({ recipeId }: Props) {
       setLoading(false);
     })();
   }, [recipeId]);
+
+  // Resolve the titles of linked recipes so the chips can name them. A link that
+  // doesn't come back — deleted recipe, or one belonging to someone outside the
+  // family group — just stays unnamed rather than breaking the form.
+  const linkedIdKey = subRecipeIdsIn(ingredients).sort().join(',');
+  useEffect(() => {
+    const missing = subRecipeIdsIn(ingredients).filter((rid) => !linkedTitles[rid]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('recipes').select('id, title').in('id', missing);
+      if (cancelled || !data) return;
+      setLinkedTitles((prev) => {
+        const next = { ...prev };
+        for (const row of data as { id: string; title: string }[]) next[row.id] = row.title;
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedIdKey]);
 
   async function addTag(tagToAdd?: Tag) {
     if (tagToAdd) {
@@ -178,6 +213,7 @@ export default function RecipeFormScreen({ recipeId }: Props) {
           item: i.item.trim(),
         };
         if (i.category?.trim()) ingredient.category = i.category.trim();
+        if (i.recipe_id) ingredient.recipe_id = i.recipe_id;
         ingredient.original_text =
           i.original_text?.trim() || [i.quantity, i.unit, i.item].filter(Boolean).join(' ');
         return ingredient;
@@ -434,6 +470,22 @@ export default function RecipeFormScreen({ recipeId }: Props) {
                 style={[inputStyle, { flex: 1 }]}
               />
               <Pressable
+                onPress={() => {
+                  haptics.select();
+                  setLinkTarget(i);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  ing.recipe_id
+                    ? `Change the recipe linked to ingredient ${i + 1}`
+                    : `Link a recipe to ingredient ${i + 1}`
+                }
+                style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="link" size={21} color={ing.recipe_id ? t.green : t.muted} />
+              </Pressable>
+              <Pressable
                 onPress={() => setIngredients((prev) => prev.filter((_, xi) => xi !== i))}
                 hitSlop={8}
                 accessibilityRole="button"
@@ -443,6 +495,38 @@ export default function RecipeFormScreen({ recipeId }: Props) {
                 <Ionicons name="close-circle" size={24} color={t.muted} />
               </Pressable>
             </View>
+            {!!ing.recipe_id && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                  marginTop: 8,
+                  paddingVertical: 5,
+                  paddingLeft: 10,
+                  paddingRight: 6,
+                  borderRadius: 999,
+                  backgroundColor: t.greenLight,
+                }}
+              >
+                <Ionicons name="link" size={12} color={t.green} />
+                <Body size={12} color={t.green}>
+                  {linkedTitles[ing.recipe_id] ?? 'Linked recipe'}
+                </Body>
+                <Pressable
+                  onPress={() => {
+                    haptics.light();
+                    setIngredients((prev) => prev.map((x, xi) => (xi === i ? { ...x, recipe_id: null } : x)));
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Unlink the recipe from ingredient ${i + 1}`}
+                >
+                  <Ionicons name="close" size={14} color={t.green} />
+                </Pressable>
+              </View>
+            )}
           </View>
         ))}
         <Pressable
@@ -504,6 +588,23 @@ export default function RecipeFormScreen({ recipeId }: Props) {
           </Body>
         )}
       </ScrollView>
+
+      <RecipePickerSheet
+        open={linkTarget !== null}
+        title="Use another recipe"
+        existingIds={emptyIdSet}
+        // A recipe can't be an ingredient of itself.
+        excludeIds={recipeId ? new Set([recipeId]) : undefined}
+        onPick={(picked) => {
+          setIngredients((prev) =>
+            prev.map((x, xi) => (xi === linkTarget ? { ...x, recipe_id: picked.id } : x)),
+          );
+          setLinkedTitles((prev) => ({ ...prev, [picked.id]: picked.title }));
+          setLinkTarget(null);
+          haptics.success();
+        }}
+        onClose={() => setLinkTarget(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -1,14 +1,25 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@recipe-aggregator/shared';
+import { hasSubRecipes, supabase } from '@recipe-aggregator/shared';
+import type { Ingredient } from '@recipe-aggregator/shared';
+import { SubRecipePromptBody } from './SubRecipePrompt';
 import { getWeekOptions } from '../utils/weekHelpers';
 
-type ModalStep = 'pick' | 'adding' | 'done' | 'confirm-remove' | 'removing' | 'removed';
+type ModalStep =
+  | 'pick'
+  | 'components'
+  | 'adding'
+  | 'done'
+  | 'confirm-remove'
+  | 'removing'
+  | 'removed';
 
 interface WeekPickerModalProps {
   open: boolean;
   recipeId: string;
   recipeTitle: string;
+  /** Needed to spot linked sub-recipes and ask about them before adding. */
+  ingredients: Ingredient[];
   userId: string;
   onClose: () => void;
 }
@@ -17,6 +28,7 @@ export default function WeekPickerModal({
   open,
   recipeId,
   recipeTitle,
+  ingredients,
   userId,
   onClose,
 }: WeekPickerModalProps) {
@@ -26,6 +38,10 @@ export default function WeekPickerModal({
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [selectedLabel, setSelectedLabel] = useState<string>('');
   const [addedWeeks, setAddedWeeks] = useState<Set<string>>(new Set());
+  // Set while the sub-recipe question is on screen: the plan we're about to
+  // write to, and what's already being cooked in it.
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
+  const [plannedInWeek, setPlannedInWeek] = useState<Set<string>>(new Set());
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // Reset state and fetch added weeks when modal opens
@@ -110,9 +126,42 @@ export default function WeekPickerModal({
       return;
     }
 
+    // Uses another recipe as an ingredient? Ask whether we're making that or
+    // buying it before writing the row — the answer decides what the shopping
+    // list does. Only ever fires for the handful of recipes with a link.
+    if (hasSubRecipes({ ingredients })) {
+      const { data: existing } = await supabase
+        .from('meal_plan_recipes')
+        .select('recipe_id')
+        .eq('meal_plan_id', plan.id)
+        .eq('entry_type', 'cook')
+        .eq('is_cooked', false);
+      setPlannedInWeek(
+        new Set(((existing ?? []) as { recipe_id: string | null }[])
+          .map((r) => r.recipe_id)
+          .filter((rid): rid is string => !!rid)),
+      );
+      setPendingPlanId(plan.id);
+      setStep('components');
+      return;
+    }
+
+    await insertEntry(plan.id, weekStart, null);
+  }
+
+  async function insertEntry(
+    planId: string,
+    weekStart: string,
+    makeComponents: boolean | null,
+  ) {
+    setStep('adding');
     const { error } = await supabase
       .from('meal_plan_recipes')
-      .insert({ meal_plan_id: plan.id, recipe_id: recipeId });
+      .insert({
+        meal_plan_id: planId,
+        recipe_id: recipeId,
+        ...(makeComponents === null ? {} : { make_components: makeComponents }),
+      });
 
     if (error) {
       setStep('pick');
@@ -169,13 +218,15 @@ export default function WeekPickerModal({
   }
 
   const heading =
-    displayStep === 'pick' || displayStep === 'adding'
-      ? 'Add to Meal Plan'
-      : displayStep === 'done'
-        ? 'Added!'
-        : displayStep === 'confirm-remove' || displayStep === 'removing'
-          ? 'Remove from Meal Plan?'
-          : 'Removed';
+    displayStep === 'components'
+      ? 'Making it or buying it?'
+      : displayStep === 'pick' || displayStep === 'adding'
+        ? 'Add to Meal Plan'
+        : displayStep === 'done'
+          ? 'Added!'
+          : displayStep === 'confirm-remove' || displayStep === 'removing'
+            ? 'Remove from Meal Plan?'
+            : 'Removed';
 
   return (
     <div
@@ -298,6 +349,18 @@ export default function WeekPickerModal({
                 );
               })}
             </div>
+          )}
+
+          {/* ── Sub-recipe question ── */}
+          {displayStep === 'components' && (
+            <SubRecipePromptBody
+              recipeTitle={recipeTitle}
+              ingredients={ingredients}
+              alreadyPlannedIds={plannedInWeek}
+              onAnswer={(makeComponents) => {
+                if (pendingPlanId) insertEntry(pendingPlanId, selectedWeek, makeComponents);
+              }}
+            />
           )}
 
           {/* ── Done state ── */}

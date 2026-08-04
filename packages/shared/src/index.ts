@@ -5,6 +5,21 @@ export {
   normalizeRecipeSourceUrl,
   recipeSourceKey,
 } from './recipeSource.js';
+export {
+  parseFraction,
+  formatQuantity,
+  scaleQuantity,
+  scaleIngredientsForServings,
+} from './scaling.js';
+export {
+  SUB_RECIPE_SELECT,
+  subRecipeIdsIn,
+  hasSubRecipes,
+  resolveSubRecipe,
+  makesComponents,
+  expandIngredientsForEntry,
+} from './ingredients.js';
+export type { SubRecipe, SubRecipeMap, TaggedIngredient } from './ingredients.js';
 export type {
   Recipe,
   RecipeInsert,

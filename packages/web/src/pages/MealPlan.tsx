@@ -24,17 +24,30 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe, MealPlan as MealPlanType, MealPlanEntry } from '@recipe-aggregator/shared';
+import {
+  SUB_RECIPE_SELECT,
+  expandIngredientsForEntry,
+  hasSubRecipes,
+  makesComponents,
+  subRecipeIdsIn,
+  supabase,
+} from '@recipe-aggregator/shared';
+import type {
+  Recipe,
+  MealPlan as MealPlanType,
+  MealPlanEntry,
+  SubRecipe,
+  SubRecipeMap,
+} from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import AddRecipeModal from '../components/AddRecipeModal';
+import SubRecipePrompt from '../components/SubRecipePrompt';
 import RateCookModal from '../components/RateCookModal';
 import DayOptionsModal from '../components/DayOptionsModal';
 import PlanWeekModal, { type PlanPrefs, type PlanPick } from '../components/PlanWeekModal';
 import { DraggableMealRow, MealDropZone, dayFromDropId, dropId } from '../components/MealPlanDnd';
 import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
-import { scaleIngredientsForServings } from '../utils/scaleQuantity';
 import { getSunday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import {
   DAY_SHORT,
@@ -94,6 +107,10 @@ export default function MealPlan() {
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
+  // Recipes used as an ingredient of something in the week, and the recipe
+  // waiting on a "making it or buying it?" answer before it gets added.
+  const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
+  const [pendingAdd, setPendingAdd] = useState<{ recipe: Recipe; dayIndex: number | null } | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
@@ -174,9 +191,28 @@ export default function MealPlan() {
       .select('*, recipe:recipes(*)')
       .eq('meal_plan_id', existing.id);
 
-    setEntries((mprData as MealPlanEntry[]) || []);
+    const loaded = (mprData as MealPlanEntry[]) || [];
+    setEntries(loaded);
+    await loadSubRecipes(loaded);
     setLoading(false);
   }, [user, weekStart]);
+
+  // Recipes used as an ingredient of something in the week. The shopping list
+  // needs their own ingredients to swap in; anything that doesn't come back
+  // leaves the parent's line alone.
+  async function loadSubRecipes(forEntries: MealPlanEntry[]) {
+    const ids = [
+      ...new Set(forEntries.flatMap((e) => subRecipeIdsIn(e.recipe?.ingredients))),
+    ];
+    if (ids.length === 0) {
+      setSubRecipes({});
+      return;
+    }
+    const { data } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', ids);
+    setSubRecipes(
+      data ? Object.fromEntries((data as SubRecipe[]).map((r) => [r.id, r])) : {},
+    );
+  }
 
   useEffect(() => {
     loadPlan();
@@ -186,17 +222,10 @@ export default function MealPlan() {
   const today = todayIndex(weekStart);
 
   // Only cooks buy ingredients; eating out and legacy batch rows buy nothing.
+  // A linked sub-recipe you're making swaps its line for its own ingredients.
   const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
   const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
-    scaleIngredientsForServings(
-      e.recipe?.ingredients || [],
-      e.recipe?.servings,
-      entryServings(e),
-    ).map((ing) => ({
-      ...ing,
-      _recipeTitle: e.recipe?.title || 'Unknown',
-      _recipeId: e.recipe?.id || '',
-    }))
+    expandIngredientsForEntry(e, entryServings(e), subRecipes),
   );
   const combined = combineIngredients(allIngredients);
 
@@ -282,7 +311,12 @@ export default function MealPlan() {
   }
 
   // ── Entry mutations ─────────────────────────────────
-  async function addCook(recipe: Recipe, dayIndex: number | null, servings?: number) {
+  async function addCook(
+    recipe: Recipe,
+    dayIndex: number | null,
+    servings?: number,
+    makeComponents?: boolean,
+  ) {
     if (!plan) return;
     const { data, error } = await supabase
       .from('meal_plan_recipes')
@@ -293,11 +327,26 @@ export default function MealPlan() {
         entry_type: 'cook',
         servings: servings ?? null,
         planned_nights: 1,
+        ...(makeComponents === undefined ? {} : { make_components: makeComponents }),
       })
       .select('*, recipe:recipes(*)')
       .single();
 
-    if (!error && data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+    if (!error && data) {
+      const entry = data as MealPlanEntry;
+      setEntries((prev) => [...prev, entry]);
+      // The new meal may bring linked recipes the list hasn't fetched yet.
+      if (hasSubRecipes(entry.recipe)) loadSubRecipes([...entries, entry]);
+    }
+  }
+
+  /** Picked a recipe to cook. Ask about its sub-recipes first, if it has any. */
+  function startAddCook(recipe: Recipe, dayIndex: number | null) {
+    if (hasSubRecipes(recipe)) {
+      setPendingAdd({ recipe, dayIndex });
+      return;
+    }
+    addCook(recipe, dayIndex, prefs?.servings);
   }
 
   /** Update how many meals one cook covers without scheduling leftover days. */
@@ -426,6 +475,10 @@ export default function MealPlan() {
           entry_type: 'cook',
           servings: planServings(pick.recipe, servingsPerMeal, pick.nights),
           planned_nights: pick.nights,
+          // Planning a whole week doesn't stop to ask about each sub-recipe —
+          // it assumes you're cooking them, which is why you linked them. Flip
+          // any of them afterwards from the meal's menu.
+          make_components: true,
         })
         .select('*, recipe:recipes(*)')
         .single();
@@ -435,6 +488,21 @@ export default function MealPlan() {
     }
 
     setEntries((prev) => [...prev, ...created]);
+    if (created.some((e) => hasSubRecipes(e.recipe))) loadSubRecipes([...entries, ...created]);
+  }
+
+  /** Flip a planned meal between cooking its sub-recipes and buying them. */
+  async function setMakeComponents(entryId: string, next: boolean) {
+    const { error } = await supabase
+      .from('meal_plan_recipes')
+      .update({ make_components: next })
+      .eq('id', entryId);
+    if (error) {
+      console.error('Failed to update sub-recipe choice:', JSON.stringify(error));
+      return;
+    }
+    setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, make_components: next } : e)));
+    setEntryMenu((prev) => (prev?.id === entryId ? { ...prev, make_components: next } : prev));
   }
 
   // ── Week label ──────────────────────────────────────
@@ -1283,6 +1351,50 @@ export default function MealPlan() {
               </div>
             )}
 
+            {entryMenu.entry_type === 'cook' && hasSubRecipes(entryMenu.recipe) && (
+              <div className="flex items-center justify-between gap-3" style={{ padding: '13px 4px', borderTop: '1px solid var(--rule-hair)' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: fSerif, fontSize: 16, color: 'var(--text)' }}>
+                    {makesComponents(entryMenu) ? 'Making the sub-recipes' : 'Buying the sub-recipes'}
+                  </div>
+                  <div style={{ marginTop: 2, fontFamily: fSans, fontSize: 12, color: 'var(--muted)' }}>
+                    {makesComponents(entryMenu)
+                      ? 'Shopping for their ingredients'
+                      : 'Shopping for them ready made'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMakeComponents(entryMenu.id, !makesComponents(entryMenu))}
+                  aria-label={makesComponents(entryMenu) ? 'Buy the sub-recipes instead' : 'Make the sub-recipes instead'}
+                  style={{
+                    flexShrink: 0,
+                    width: 46,
+                    height: 26,
+                    borderRadius: 13,
+                    border: '1px solid var(--border)',
+                    background: makesComponents(entryMenu) ? 'var(--green)' : 'var(--warm)',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 2,
+                      left: makesComponents(entryMenu) ? 22 : 2,
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: 'var(--card)',
+                      boxShadow: 'var(--shadow-sm)',
+                      transition: 'left 0.15s ease',
+                    }}
+                  />
+                </button>
+              </div>
+            )}
+
             {[
               canCook(entryMenu)
                 ? { label: 'Cook now', run: () => { setEntryMenu(null); startCooking(entryMenu); }, primary: true }
@@ -1361,10 +1473,30 @@ export default function MealPlan() {
         existingRecipeIds={existingRecipeIds}
         title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
         onAdd={(recipe) => {
-          addCook(recipe, addTarget, prefs?.servings);
+          startAddCook(recipe, addTarget);
           setShowAddModal(false);
         }}
         onClose={() => setShowAddModal(false)}
+      />
+
+      <SubRecipePrompt
+        open={pendingAdd !== null}
+        recipeTitle={pendingAdd?.recipe.title ?? ''}
+        ingredients={pendingAdd?.recipe.ingredients ?? []}
+        alreadyPlannedIds={
+          new Set(
+            uncookedCooks
+              .map((e) => e.recipe_id)
+              .filter((rid): rid is string => !!rid),
+          )
+        }
+        onAnswer={(makeComponents) => {
+          if (pendingAdd) {
+            addCook(pendingAdd.recipe, pendingAdd.dayIndex, prefs?.servings, makeComponents);
+          }
+          setPendingAdd(null);
+        }}
+        onClose={() => setPendingAdd(null)}
       />
 
       <RateCookModal

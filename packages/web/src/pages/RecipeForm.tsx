@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '@recipe-aggregator/shared';
+import { Link2 } from 'lucide-react';
+import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
+import AddRecipeModal from '../components/AddRecipeModal';
 import { useAuth } from '../context/AuthContext';
 
 export default function RecipeForm() {
@@ -32,6 +34,10 @@ export default function RecipeForm() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [error, setError] = useState<string | null>(null);
+  // Which ingredient row is picking a recipe to link, and the titles of the
+  // ones already linked (ingredients only store the id).
+  const [linkTarget, setLinkTarget] = useState<number | null>(null);
+  const [linkedTitles, setLinkedTitles] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function fetchData() {
@@ -82,6 +88,27 @@ export default function RecipeForm() {
 
     fetchData();
   }, [id]);
+
+  // Resolve the titles of linked recipes so the chips can name them. A link that
+  // doesn't come back — deleted recipe, or one belonging to someone outside the
+  // family group — just stays unnamed rather than breaking the form.
+  const linkedIdKey = subRecipeIdsIn(ingredients).sort().join(',');
+  useEffect(() => {
+    const missing = subRecipeIdsIn(ingredients).filter((rid) => !linkedTitles[rid]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('recipes').select('id, title').in('id', missing);
+      if (cancelled || !data) return;
+      setLinkedTitles((prev) => {
+        const next = { ...prev };
+        for (const row of data as { id: string; title: string }[]) next[row.id] = row.title;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedIdKey]);
 
   function removeTag(tagId: string) {
     setSelectedTagIds((prev) => {
@@ -148,13 +175,26 @@ export default function RecipeForm() {
     setIngredients(ingredients.filter((_, i) => i !== index));
   }
 
-  function updateIngredient(index: number, field: keyof Ingredient, value: string) {
+  function updateIngredient(
+    index: number,
+    field: 'item' | 'quantity' | 'unit' | 'category' | 'original_text',
+    value: string,
+  ) {
     const updated = [...ingredients];
     updated[index] = { ...updated[index], [field]: value };
     // Clear original_text when structured fields change so it regenerates on save
     if (field !== 'original_text' && field !== 'category') {
       updated[index].original_text = undefined;
     }
+    setIngredients(updated);
+  }
+
+  // Point an ingredient at another recipe, or clear the link. Kept separate from
+  // updateIngredient on purpose: linking doesn't change what the line says, so
+  // original_text must survive it.
+  function linkIngredient(index: number, recipeId: string | null) {
+    const updated = [...ingredients];
+    updated[index] = { ...updated[index], recipe_id: recipeId };
     setIngredients(updated);
   }
 
@@ -190,6 +230,9 @@ export default function RecipeForm() {
       .map((ing) => {
         const clean: Ingredient = { item: ing.item, quantity: ing.quantity, unit: ing.unit };
         if (ing.category?.trim()) clean.category = ing.category.trim();
+        // A linked sub-recipe. This row is rebuilt field by field, so the link
+        // has to be carried explicitly or saving silently drops it.
+        if (ing.recipe_id) clean.recipe_id = ing.recipe_id;
         // Preserve existing original_text or auto-generate from structured fields
         const parts = [ing.quantity, ing.unit, ing.item].filter(Boolean);
         clean.original_text = ing.original_text?.trim() || parts.join(' ');
@@ -485,52 +528,89 @@ export default function RecipeForm() {
           {/* Ingredients */}
           <fieldset className="space-y-3">
             <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Ingredients</legend>
-            {ingredients.map((ing, i) => (
-              <div key={i} className="rf-ingredient-edit-row">
-                <input
-                  type="text"
-                  value={ing.item}
-                  onChange={(e) => updateIngredient(i, 'item', e.target.value)}
-                  className="rf-input rf-ingredient-item"
-                  placeholder="Ingredient"
-                  aria-label={`Ingredient ${i + 1} name`}
-                />
-                <input
-                  type="text"
-                  value={ing.category ?? ''}
-                  onChange={(e) => updateIngredient(i, 'category', e.target.value)}
-                  className="rf-input rf-ingredient-category"
-                  placeholder="Category"
-                  aria-label={`Ingredient ${i + 1} category`}
-                />
-                <input
-                  type="text"
-                  value={ing.quantity}
-                  onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
-                  className="rf-input rf-ingredient-quantity"
-                  placeholder="Qty"
-                  aria-label={`Ingredient ${i + 1} quantity`}
-                />
-                <input
-                  type="text"
-                  value={ing.unit}
-                  onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
-                  className="rf-input rf-ingredient-unit"
-                  placeholder="Unit"
-                  aria-label={`Ingredient ${i + 1} unit`}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeIngredient(i)}
-                  className="rf-ingredient-remove text-sm transition-colors"
-                  style={{ color: 'var(--red)' }}
-                  aria-label="Remove ingredient"
-                >
-                  <span className="rf-ingredient-remove-label">Remove</span>
-                  <span className="rf-ingredient-remove-icon" aria-hidden="true">×</span>
-                </button>
-              </div>
-            ))}
+            {ingredients.map((ing, i) => {
+              const linkedTitle = ing.recipe_id ? linkedTitles[ing.recipe_id] : undefined;
+              return (
+                <div key={i}>
+                  <div className="rf-ingredient-edit-row">
+                    <input
+                      type="text"
+                      value={ing.item}
+                      onChange={(e) => updateIngredient(i, 'item', e.target.value)}
+                      className="rf-input rf-ingredient-item"
+                      placeholder="Ingredient"
+                      aria-label={`Ingredient ${i + 1} name`}
+                    />
+                    <input
+                      type="text"
+                      value={ing.category ?? ''}
+                      onChange={(e) => updateIngredient(i, 'category', e.target.value)}
+                      className="rf-input rf-ingredient-category"
+                      placeholder="Category"
+                      aria-label={`Ingredient ${i + 1} category`}
+                    />
+                    <input
+                      type="text"
+                      value={ing.quantity}
+                      onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
+                      className="rf-input rf-ingredient-quantity"
+                      placeholder="Qty"
+                      aria-label={`Ingredient ${i + 1} quantity`}
+                    />
+                    <input
+                      type="text"
+                      value={ing.unit}
+                      onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
+                      className="rf-input rf-ingredient-unit"
+                      placeholder="Unit"
+                      aria-label={`Ingredient ${i + 1} unit`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLinkTarget(i)}
+                      className="rf-ingredient-link transition-colors"
+                      style={{ color: ing.recipe_id ? 'var(--green)' : 'var(--muted)' }}
+                      title={ing.recipe_id ? 'Change the linked recipe' : 'Use another recipe for this ingredient'}
+                      aria-label={
+                        ing.recipe_id
+                          ? `Change the recipe linked to ingredient ${i + 1}`
+                          : `Link a recipe to ingredient ${i + 1}`
+                      }
+                    >
+                      <Link2 size={16} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(i)}
+                      className="rf-ingredient-remove text-sm transition-colors"
+                      style={{ color: 'var(--red)' }}
+                      aria-label="Remove ingredient"
+                    >
+                      <span className="rf-ingredient-remove-label">Remove</span>
+                      <span className="rf-ingredient-remove-icon" aria-hidden="true">×</span>
+                    </button>
+                  </div>
+                  {ing.recipe_id && (
+                    <div
+                      className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full w-fit text-xs"
+                      style={{ background: 'var(--green-light)', color: 'var(--green)' }}
+                    >
+                      <Link2 size={12} strokeWidth={2} />
+                      <span>{linkedTitle ?? 'Linked recipe'}</span>
+                      <button
+                        type="button"
+                        onClick={() => linkIngredient(i, null)}
+                        className="leading-none pl-0.5"
+                        style={{ color: 'inherit' }}
+                        aria-label={`Unlink the recipe from ingredient ${i + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <button
               type="button"
               onClick={addIngredient}
@@ -592,6 +672,20 @@ export default function RecipeForm() {
           </button>
         </form>
       </div>
+
+      <AddRecipeModal
+        open={linkTarget !== null}
+        title="Use another recipe for this ingredient"
+        existingRecipeIds={new Set()}
+        // A recipe can't be an ingredient of itself.
+        excludeRecipeIds={id ? new Set([id]) : undefined}
+        onAdd={(recipe) => {
+          if (linkTarget !== null) linkIngredient(linkTarget, recipe.id);
+          setLinkedTitles((prev) => ({ ...prev, [recipe.id]: recipe.title }));
+          setLinkTarget(null);
+        }}
+        onClose={() => setLinkTarget(null)}
+      />
     </div>
   );
 }

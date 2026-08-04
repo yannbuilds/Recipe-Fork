@@ -4,6 +4,21 @@ export interface Ingredient {
   unit: string;
   category?: string;
   original_text?: string;
+  /**
+   * Another recipe used as this ingredient — the pastry in a pie, the pesto in
+   * a pasta. Optional and only ever one level deep: a linked recipe's own links
+   * are never followed.
+   *
+   * There is no foreign key behind this (ingredients live in a jsonb array), so
+   * the id can point at a recipe that has since been deleted or that belongs to
+   * someone outside your family group. Always resolve it defensively and fall
+   * back to rendering the plain ingredient line.
+   *
+   * IMPORTANT: anything that rebuilds an Ingredient object field by field —
+   * both recipe edit forms do — must carry this through, or saving silently
+   * drops the link.
+   */
+  recipe_id?: string | null;
 }
 
 export interface Step {
@@ -114,6 +129,12 @@ export interface MealPlanRecipe {
   planned_nights: number;
   // Free text for 'out' entries ("Thai place").
   note: string | null;
+  // Are we making this recipe's sub-recipes from scratch, or buying them ready
+  // made? True swaps each linked ingredient line ("500g shortcrust pastry") for
+  // that recipe's own ingredients on the shopping list; false leaves the line
+  // alone as something to buy. Null means nobody was ever asked — see
+  // `makesComponents()` for how that resolves.
+  make_components: boolean | null;
 }
 
 export interface MealPlanEntry extends MealPlanRecipe {

@@ -420,8 +420,8 @@
    metadata controls. */
 .rf-ingredient-edit-row {
   display: grid;
-  grid-template-columns: 7rem 4rem 5rem minmax(0, 1fr) auto;
-  grid-template-areas: "category quantity unit item remove";
+  grid-template-columns: 7rem 4rem 5rem minmax(0, 1fr) auto auto;
+  grid-template-areas: "category quantity unit item link remove";
   gap: 8px;
   align-items: start;
 }
@@ -430,6 +430,13 @@
 .rf-ingredient-category { grid-area: category; width: 100%; min-width: 0; }
 .rf-ingredient-quantity { grid-area: quantity; width: 100%; min-width: 0; }
 .rf-ingredient-unit { grid-area: unit; width: 100%; min-width: 0; }
+.rf-ingredient-link {
+  grid-area: link;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 6px;
+}
 .rf-ingredient-remove {
   grid-area: remove;
   padding: 10px 8px;
@@ -438,21 +445,22 @@
 
 @media (max-width: 640px) {
   .rf-ingredient-edit-row {
-    grid-template-columns: 4rem 4.5rem minmax(0, 1fr) 2.5rem;
+    grid-template-columns: 4rem 4.5rem minmax(0, 1fr) 2.5rem 2.5rem;
     grid-template-areas:
-      "item item item item"
-      "quantity unit category remove";
+      "item item item item item"
+      "quantity unit category link remove";
   }
 
+  .rf-ingredient-link,
   .rf-ingredient-remove {
     display: flex;
     min-height: 44px;
     align-items: center;
     justify-content: center;
     padding: 0;
-    font-size: 24px;
   }
 
+  .rf-ingredient-remove { font-size: 24px; }
   .rf-ingredient-remove-label { display: none; }
   .rf-ingredient-remove-icon { display: inline; }
 }

@@ -11,12 +11,15 @@ type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 interface AddRecipeModalProps {
   open: boolean;
   existingRecipeIds: Set<string>;
+  /** Recipes to leave out of the list entirely. `existingRecipeIds` only labels
+   *  a row; this one hides it — used to stop a recipe linking to itself. */
+  excludeRecipeIds?: Set<string>;
   onAdd: (recipe: Recipe) => void;
   onClose: () => void;
   title?: string;
 }
 
-export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan' }: AddRecipeModalProps) {
+export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan' }: AddRecipeModalProps) {
   const { user } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -84,14 +87,16 @@ export default function AddRecipeModal({ open, existingRecipeIds, onAdd, onClose
 
   if (!open) return null;
 
-  const sortedRecipes = [...filters.filteredRecipes].sort((a, b) => {
-    switch (sortBy) {
-      case 'z-a': return b.title.localeCompare(a.title);
-      case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      default: return a.title.localeCompare(b.title);
-    }
-  });
+  const sortedRecipes = [...filters.filteredRecipes]
+    .filter((r) => !excludeRecipeIds?.has(r.id))
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'z-a': return b.title.localeCompare(a.title);
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        default: return a.title.localeCompare(b.title);
+      }
+    });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>

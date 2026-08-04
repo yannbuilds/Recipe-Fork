@@ -1,6 +1,9 @@
+import { hasSubRecipes } from '@recipe-aggregator/shared';
+import type { Ingredient } from '@recipe-aggregator/shared';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
+import { SubRecipePromptBody } from '@/components/SubRecipePromptSheet';
 import { Body, Mono, Serif } from '@/components/ui';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
@@ -11,19 +14,33 @@ interface Props {
   open: boolean;
   recipeId: string;
   recipeTitle: string;
+  /** Needed to spot linked sub-recipes and ask about them before adding. */
+  ingredients: Ingredient[];
   userId: string;
   onClose: () => void;
 }
 
-export default function WeekPickerSheet({ open, recipeId, recipeTitle, userId, onClose }: Props) {
+export default function WeekPickerSheet({
+  open,
+  recipeId,
+  recipeTitle,
+  ingredients,
+  userId,
+  onClose,
+}: Props) {
   const t = useTheme();
   const [addedWeeks, setAddedWeeks] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Set while the sub-recipe question is on screen, in place of the week list.
+  const [pending, setPending] = useState<
+    { planId: string; weekStart: string; plannedIds: Set<string> } | null
+  >(null);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    setPending(null);
     (async () => {
       const { data } = await supabase
         .from('meal_plan_recipes')
@@ -73,14 +90,68 @@ export default function WeekPickerSheet({ open, recipeId, recipeTitle, userId, o
         next.delete(weekStart);
         return next;
       });
-    } else {
-      await supabase.from('meal_plan_recipes').insert({ meal_plan_id: plan.id, recipe_id: recipeId });
-      setAddedWeeks((prev) => new Set(prev).add(weekStart));
+      setBusy(null);
+      return;
     }
+
+    // Uses another recipe as an ingredient? Ask whether we're making that or
+    // buying it before writing the row — the answer decides what the shopping
+    // list does. Only ever fires for the handful of recipes with a link.
+    if (hasSubRecipes({ ingredients })) {
+      const { data: existing } = await supabase
+        .from('meal_plan_recipes')
+        .select('recipe_id')
+        .eq('meal_plan_id', plan.id)
+        .eq('entry_type', 'cook')
+        .eq('is_cooked', false);
+      setPending({
+        planId: plan.id,
+        weekStart,
+        plannedIds: new Set(
+          ((existing ?? []) as { recipe_id: string | null }[])
+            .map((r) => r.recipe_id)
+            .filter((rid): rid is string => !!rid),
+        ),
+      });
+      setBusy(null);
+      return;
+    }
+
+    await insertEntry(plan.id, weekStart, null);
+  }
+
+  async function insertEntry(
+    planId: string,
+    weekStart: string,
+    makeComponents: boolean | null,
+  ) {
+    setBusy(weekStart);
+    await supabase.from('meal_plan_recipes').insert({
+      meal_plan_id: planId,
+      recipe_id: recipeId,
+      ...(makeComponents === null ? {} : { make_components: makeComponents }),
+    });
+    setAddedWeeks((prev) => new Set(prev).add(weekStart));
+    setPending(null);
     setBusy(null);
   }
 
   const weeks = getWeekOptions(4);
+
+  if (pending) {
+    return (
+      <BottomSheet open={open} onClose={onClose}>
+        <SubRecipePromptBody
+          recipeTitle={recipeTitle}
+          ingredients={ingredients}
+          alreadyPlannedIds={pending.plannedIds}
+          onAnswer={(makeComponents) =>
+            insertEntry(pending.planId, pending.weekStart, makeComponents)
+          }
+        />
+      </BottomSheet>
+    );
+  }
 
   return (
     <BottomSheet open={open} onClose={onClose}>

@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe, Tag, Ingredient } from '@recipe-aggregator/shared';
+import {
+  SUB_RECIPE_SELECT,
+  resolveSubRecipe,
+  scaleIngredientsForServings,
+  subRecipeIdsIn,
+  supabase,
+} from '@recipe-aggregator/shared';
+import type { Recipe, SubRecipe, SubRecipeMap, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
@@ -360,6 +366,10 @@ export default function RecipeDetail() {
   const [currentServings, setCurrentServings] = useState<number>(1);
   const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  // Recipes used as an ingredient of this one, and which of those rows are
+  // expanded to show their ingredients inline.
+  const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [mobileTab, setMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
   const isMobile = useIsMobile();
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
@@ -463,6 +473,21 @@ export default function RecipeDetail() {
         const initialServings = data.custom_servings ?? data.servings ?? 1;
         setCurrentServings(initialServings);
         setSavedServings(initialServings);
+
+        // Recipes used as an ingredient here. Anything that doesn't come back —
+        // deleted, or outside the family group — simply renders as a plain line.
+        const subIds = subRecipeIdsIn(data.ingredients).filter((rid) => rid !== data.id);
+        if (subIds.length > 0) {
+          const { data: subs } = await supabase
+            .from('recipes')
+            .select(SUB_RECIPE_SELECT)
+            .in('id', subIds);
+          if (subs) {
+            setSubRecipes(
+              Object.fromEntries((subs as SubRecipe[]).map((r) => [r.id, r])),
+            );
+          }
+        }
       }
 
       if (!tagsResult.error && tagsResult.data) {
@@ -783,66 +808,252 @@ export default function RecipeDetail() {
             ing.quantity || ing.unit
               ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
               : '';
+          // This ingredient is another recipe — the pastry in a pie. Its own
+          // ingredients can be opened inline so you don't lose your check-offs
+          // walking off to a second page mid-cook.
+          const sub = resolveSubRecipe(ing, subRecipes, recipe.id);
+          const isExpanded = sub != null && expandedSubs.has(ingKey);
+          const subIngredients =
+            sub && isExpanded
+              ? scaleIngredientsForServings(
+                  sub.ingredients,
+                  sub.custom_servings ?? sub.servings,
+                  (sub.custom_servings ?? sub.servings ?? 0) *
+                    (recipe.servings ? currentServings / recipe.servings : 1),
+                )
+              : [];
           return (
             <div
               key={i}
-              className="select-none"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '12px 0',
                 borderBottom: i < group.items.length - 1 ? '1px solid var(--rule-hair)' : 'none',
-                cursor: 'pointer',
-              }}
-              onClick={() => {
-                setUsedIngredients((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(ingKey)) next.delete(ingKey);
-                  else next.add(ingKey);
-                  return next;
-                });
               }}
             >
-              <span
+              <div
+                className="select-none"
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 5,
-                  flexShrink: 0,
-                  border: `1.5px solid ${isUsed ? 'var(--green)' : 'var(--border)'}`,
-                  background: isUsed ? 'var(--green)' : 'transparent',
-                  display: 'grid',
-                  placeItems: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 0',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setUsedIngredients((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(ingKey)) next.delete(ingKey);
+                    else next.add(ingKey);
+                    return next;
+                  });
                 }}
               >
-                {isUsed && <Check size={13} strokeWidth={3} color="#fbf8f1" />}
-              </span>
-              <IngredientIcon item={ing.item || ''} />
-              <span
-                style={{
-                  flex: 1,
-                  fontFamily: '"Newsreader", Georgia, serif',
-                  fontSize: 16,
-                  letterSpacing: '-0.01em',
-                  color: isUsed ? 'var(--muted)' : 'var(--text)',
-                  textDecoration: isUsed ? 'line-through' : 'none',
-                }}
-              >
-                {name}
-              </span>
-              {qty && (
                 <span
                   style={{
-                    fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
-                    fontSize: 11,
-                    letterSpacing: '0.04em',
-                    color: 'var(--muted)',
+                    width: 22,
+                    height: 22,
+                    borderRadius: 5,
                     flexShrink: 0,
+                    border: `1.5px solid ${isUsed ? 'var(--green)' : 'var(--border)'}`,
+                    background: isUsed ? 'var(--green)' : 'transparent',
+                    display: 'grid',
+                    placeItems: 'center',
                   }}
                 >
-                  {qty}
+                  {isUsed && <Check size={13} strokeWidth={3} color="#fbf8f1" />}
                 </span>
+                {sub ? (
+                  sub.image_url ? (
+                    <img
+                      src={sub.image_url}
+                      alt=""
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 6,
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 6,
+                        flexShrink: 0,
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 16,
+                        background: 'var(--green-light)',
+                      }}
+                    >
+                      🍴
+                    </span>
+                  )
+                ) : (
+                  <IngredientIcon item={ing.item || ''} />
+                )}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontFamily: '"Newsreader", Georgia, serif',
+                      fontSize: 16,
+                      letterSpacing: '-0.01em',
+                      color: isUsed ? 'var(--muted)' : 'var(--text)',
+                      textDecoration: isUsed ? 'line-through' : 'none',
+                    }}
+                  >
+                    {name}
+                  </span>
+                  {sub && (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        padding: '1px 6px',
+                        borderRadius: 3,
+                        fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                        fontSize: 8,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        background: 'var(--green-light)',
+                        color: 'var(--green)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Recipe
+                    </span>
+                  )}
+                </span>
+                {qty && (
+                  <span
+                    style={{
+                      fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                      fontSize: 11,
+                      letterSpacing: '0.04em',
+                      color: 'var(--muted)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {qty}
+                  </span>
+                )}
+                {sub && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedSubs((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(ingKey)) next.delete(ingKey);
+                        else next.add(ingKey);
+                        return next;
+                      });
+                    }}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? `Hide ${sub.title} ingredients` : `Show ${sub.title} ingredients`}
+                    style={{
+                      flexShrink: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 26,
+                      height: 26,
+                      color: 'var(--green)',
+                      transform: isExpanded ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  >
+                    <ChevronDown size={16} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+              {sub && isExpanded && (
+                <div
+                  style={{
+                    paddingLeft: 34,
+                    paddingBottom: 12,
+                    borderLeft: '2px solid var(--green-light)',
+                    marginLeft: 10,
+                  }}
+                >
+                  {subIngredients.map((subIng, j) => {
+                    const subKey = `${ingKey}::sub::${j}`;
+                    const subUsed = usedIngredients.has(subKey);
+                    const subQty = [subIng.quantity, subIng.unit].filter(Boolean).join(' ').trim();
+                    return (
+                      <div
+                        key={j}
+                        className="select-none"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '7px 0',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => {
+                          setUsedIngredients((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(subKey)) next.delete(subKey);
+                            else next.add(subKey);
+                            return next;
+                          });
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: 4,
+                            flexShrink: 0,
+                            border: `1.5px solid ${subUsed ? 'var(--green)' : 'var(--border)'}`,
+                            background: subUsed ? 'var(--green)' : 'transparent',
+                            display: 'grid',
+                            placeItems: 'center',
+                          }}
+                        >
+                          {subUsed && <Check size={10} strokeWidth={3} color="#fbf8f1" />}
+                        </span>
+                        <span
+                          style={{
+                            flex: 1,
+                            fontFamily: '"Newsreader", Georgia, serif',
+                            fontSize: 14,
+                            color: subUsed ? 'var(--muted)' : 'var(--text)',
+                            textDecoration: subUsed ? 'line-through' : 'none',
+                          }}
+                        >
+                          {subIng.item || subIng.original_text || ''}
+                        </span>
+                        {subQty && (
+                          <span
+                            style={{
+                              fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                              fontSize: 10,
+                              letterSpacing: '0.04em',
+                              color: 'var(--muted)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {subQty}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <Link
+                    to={`/recipe/${sub.id}`}
+                    style={{
+                      display: 'inline-block',
+                      marginTop: 6,
+                      fontFamily: '"Newsreader", Georgia, serif',
+                      fontStyle: 'italic',
+                      fontSize: 14,
+                      color: 'var(--green)',
+                    }}
+                  >
+                    Open {sub.title} &rarr;
+                  </Link>
+                </div>
               )}
             </div>
           );
@@ -1687,6 +1898,7 @@ export default function RecipeDetail() {
           open={showWeekPicker}
           recipeId={id}
           recipeTitle={recipe.title}
+          ingredients={recipe.ingredients}
           userId={user.id}
           onClose={() => setShowWeekPicker(false)}
         />
