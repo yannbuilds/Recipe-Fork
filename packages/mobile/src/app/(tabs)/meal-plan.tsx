@@ -5,7 +5,7 @@ import {
   hasSubRecipes,
   makesComponents,
   subRecipeIdsIn,
-} from '@recipe-aggregator/shared';
+} from '@recipe-aggregator/shared/ingredients';
 import type {
   MealPlan,
   MealPlanEntry,
@@ -25,6 +25,7 @@ import IngredientIcon from '@/components/IngredientIcon';
 import PlanWeekSheet, { type PlanPick, type PlanPrefs } from '@/components/PlanWeekSheet';
 import RateCookSheet from '@/components/RateCookSheet';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
+import SettlingRow from '@/components/SettlingRow';
 import SubRecipePromptSheet from '@/components/SubRecipePromptSheet';
 import { Body, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -58,6 +59,14 @@ import { toRoman } from '@/lib/recipeFormat';
 
 type Tab = 'meals' | 'shopping';
 
+/** How a grocery line is identified in the plan's `checked_items`. */
+const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
+
+// A ticked item holds its struck-through place for a beat so the tick reads,
+// then collapses out of the list. Shopping is about what's left to buy.
+const SETTLE_HOLD_MS = 2000;
+const SETTLE_OUT_MS = 380;
+
 /** What the recipe picker hands back — enough to add a cook and to know whether
  *  the recipe has sub-recipes worth asking about. */
 type PickedRecipe = Pick<Recipe, 'id' | 'title' | 'ingredients'>;
@@ -74,6 +83,12 @@ export default function MealPlanScreen() {
   const [tab, setTab] = useState<Tab>('meals');
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
+  // Ticked groceries leave the list by default. `showCompleted` brings them
+  // back (Apple Reminders style); `settling` holds the ones ticked just now and
+  // still on screen — 'resting' struck through, 'leaving' while collapsing out.
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [settling, setSettling] = useState<Record<string, 'resting' | 'leaving'>>({});
+  const settleTimers = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
   const [showAdd, setShowAdd] = useState(false);
   // Which day the picker was opened for (null = into the week with no day).
   const [addTarget, setAddTarget] = useState<number | null>(null);
@@ -236,16 +251,63 @@ export default function MealPlanScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.id, combined.length]);
 
+  // What's still to buy — the number that matters when you're in the shop.
+  const remainingCount = useMemo(
+    () => combined.filter((ing) => !checkedItems.has(itemKey(ing))).length,
+    [combined, checkedItems],
+  );
+  const doneCount = combined.length - remainingCount;
+
+  // A ticked item stays rendered only while `showCompleted` is on or while it's
+  // still settling out; a category with nothing left to show goes with it.
   const grouped = useMemo(() => {
     const withCat = combined.map((ing) => ({
       ...ing,
       shoppingCategory: categoryMap[ing.item.toLowerCase().trim()] || 'Other',
     }));
-    return CATEGORY_ORDER.map((cat) => ({
-      category: cat,
-      items: withCat.filter((ing) => ing.shoppingCategory === cat),
-    })).filter((g) => g.items.length > 0);
-  }, [combined, categoryMap]);
+    return CATEGORY_ORDER.map((cat) => {
+      const items = withCat.filter((ing) => ing.shoppingCategory === cat);
+      return {
+        category: cat,
+        items,
+        remaining: items.filter((ing) => !checkedItems.has(itemKey(ing))).length,
+        visible: items.filter((ing) => {
+          const key = itemKey(ing);
+          return !checkedItems.has(key) || showCompleted || settling[key] !== undefined;
+        }),
+      };
+    }).filter((g) => g.visible.length > 0);
+  }, [combined, categoryMap, checkedItems, showCompleted, settling]);
+
+  // Timers are per item, so a second tick never cancels the first one's exit.
+  function clearSettleTimers(key: string) {
+    settleTimers.current[key]?.forEach(clearTimeout);
+    delete settleTimers.current[key];
+  }
+
+  // Nothing is mid-settle in a week you've just switched to, and nothing should
+  // be left ticking after the screen goes away.
+  useEffect(() => {
+    Object.values(settleTimers.current).flat().forEach(clearTimeout);
+    settleTimers.current = {};
+    setSettling({});
+  }, [plan?.id]);
+
+  useEffect(() => () => {
+    Object.values(settleTimers.current).flat().forEach(clearTimeout);
+  }, []);
+
+  function toggleShowCompleted() {
+    haptics.light();
+    const next = !showCompleted;
+    // Showing them again means nothing is on its way out any more.
+    if (next) {
+      Object.values(settleTimers.current).flat().forEach(clearTimeout);
+      settleTimers.current = {};
+      setSettling({});
+    }
+    setShowCompleted(next);
+  }
 
   function persistChecked(next: Set<string>) {
     if (!plan) return;
@@ -257,6 +319,7 @@ export default function MealPlanScreen() {
 
   function toggleShopping(key: string) {
     haptics.select();
+    const wasChecked = checkedItems.has(key);
     setCheckedItems((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -264,6 +327,38 @@ export default function MealPlanScreen() {
       persistChecked(next);
       return next;
     });
+
+    clearSettleTimers(key);
+
+    // Un-ticking, or ticking while completed items are on show: the row stays
+    // where it is either way, so there's nothing to settle.
+    if (wasChecked || showCompleted) {
+      setSettling((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+
+    // Just ticked: hold it struck through, then collapse it out of the list.
+    setSettling((prev) => ({ ...prev, [key]: 'resting' }));
+    settleTimers.current[key] = [
+      setTimeout(
+        () => setSettling((prev) => (key in prev ? { ...prev, [key]: 'leaving' } : prev)),
+        SETTLE_HOLD_MS,
+      ),
+      setTimeout(() => {
+        setSettling((prev) => {
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        delete settleTimers.current[key];
+      }, SETTLE_HOLD_MS + SETTLE_OUT_MS),
+    ];
   }
 
   // ── Entry mutations ─────────────────────────────────
@@ -847,7 +942,8 @@ export default function MealPlanScreen() {
           {(
             [
               ['meals', 'Meals', mealEntries.length],
-              ['shopping', 'Groceries', combined.length],
+              // The groceries count is what's left to buy, not the whole list.
+              ['shopping', 'Groceries', remainingCount],
             ] as const
           ).map(([key, label, count]) => {
             const active = tab === key;
@@ -1176,19 +1272,50 @@ export default function MealPlanScreen() {
               <View
                 style={{
                   flexDirection: 'row',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: 10,
                   paddingBottom: 14,
                   marginBottom: 18,
                   borderBottomWidth: 1,
                   borderBottomColor: t.border,
                 }}
               >
-                <Mono size={10} style={{ letterSpacing: 1.4 }}>
-                  SHOPPING LIST
+                <Mono size={10} style={{ flexShrink: 1, letterSpacing: 1.4 }}>
+                  SHOPPING LIST{' '}
+                  <Mono size={10} color={t.text} style={{ letterSpacing: 1.4 }}>
+                    · {remainingCount === 0 ? 'ALL TICKED' : `${remainingCount} TO BUY`}
+                  </Mono>
                 </Mono>
-                <Mono size={11}>
-                  {checkedItems.size}/{combined.length} TICKED
-                </Mono>
+                {doneCount > 0 && (
+                  <Pressable
+                    onPress={toggleShowCompleted}
+                    hitSlop={10}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                  >
+                    <Ionicons
+                      name={showCompleted ? 'eye-off-outline' : 'eye-outline'}
+                      size={13}
+                      color={t.green}
+                    />
+                    <Mono size={10} color={t.green} style={{ letterSpacing: 1 }}>
+                      {showCompleted ? 'HIDE' : 'SHOW'} DONE · {doneCount}
+                    </Mono>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {/* Everything ticked, and the completed rows are hidden. */}
+            {combined.length > 0 && grouped.length === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 34 }}>
+                <Ionicons name="checkmark-circle-outline" size={38} color={t.green} />
+                <Serif size={20} style={{ marginTop: 10 }}>
+                  That&apos;s the lot
+                </Serif>
+                <Body size={14} color={t.muted} style={{ marginTop: 4, textAlign: 'center' }}>
+                  All {combined.length} items ticked off.
+                </Body>
               </View>
             )}
 
@@ -1211,37 +1338,42 @@ export default function MealPlanScreen() {
                   <Serif size={18} style={{ flex: 1 }}>
                     {group.category}
                   </Serif>
-                  <Mono size={11}>{group.items.length}</Mono>
+                  <Mono size={11}>{showCompleted ? group.items.length : group.remaining}</Mono>
                 </View>
-                {group.items.map((ing, i) => {
-                  const key = `${ing.item}-${ing.unit}`;
+                {group.visible.map((ing, i) => {
+                  const key = itemKey(ing);
                   const checked = checkedItems.has(key);
                   const qty = `${ing.quantity}${ing.unit ? ` ${ing.unit}` : ''}`.trim();
                   return (
-                    <Pressable
+                    <SettlingRow
                       key={key}
-                      onPress={() => toggleShopping(key)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                        paddingVertical: 12,
-                        borderBottomWidth: i < group.items.length - 1 ? 1 : 0,
-                        borderBottomColor: t.ruleHair,
-                        opacity: checked ? 0.5 : 1,
-                      }}
+                      leaving={settling[key] === 'leaving'}
+                      duration={SETTLE_OUT_MS}
                     >
-                      <CheckSquare checked={checked} />
-                      <IngredientIcon item={ing.item} />
-                      <Serif
-                        size={16}
-                        style={{ flex: 1, textDecorationLine: checked ? 'line-through' : 'none' }}
-                        color={checked ? t.muted : t.text}
+                      <Pressable
+                        onPress={() => toggleShopping(key)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                          paddingVertical: 12,
+                          borderBottomWidth: i < group.visible.length - 1 ? 1 : 0,
+                          borderBottomColor: t.ruleHair,
+                          opacity: checked ? 0.5 : 1,
+                        }}
                       >
-                        {ing.item}
-                      </Serif>
-                      {qty ? <Mono size={11}>{qty}</Mono> : null}
-                    </Pressable>
+                        <CheckSquare checked={checked} />
+                        <IngredientIcon item={ing.item} />
+                        <Serif
+                          size={16}
+                          style={{ flex: 1, textDecorationLine: checked ? 'line-through' : 'none' }}
+                          color={checked ? t.muted : t.text}
+                        >
+                          {ing.item}
+                        </Serif>
+                        {qty ? <Mono size={11}>{qty}</Mono> : null}
+                      </Pressable>
+                    </SettlingRow>
                   );
                 })}
               </View>

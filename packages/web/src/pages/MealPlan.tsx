@@ -11,6 +11,8 @@ import {
   MoreHorizontal,
   Sparkles,
   CalendarDays,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
@@ -68,6 +70,14 @@ import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 type Tab = 'meals' | 'shopping';
 
+/** How a grocery line is identified in the plan's `checked_items`. */
+const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
+
+// A ticked item holds its struck-through place for a beat so the tick reads,
+// then collapses out of the list. Shopping is about what's left to buy.
+const SETTLE_HOLD_MS = 2000;
+const SETTLE_OUT_MS = 380;
+
 // Lowercase roman numeral for editorial group labels (i, ii, iii …).
 function toRoman(n: number): string {
   const map: [number, string][] = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
@@ -117,6 +127,12 @@ export default function MealPlan() {
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [categorising, setCategorising] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  // Ticked groceries leave the list by default. `showCompleted` brings them
+  // back (Apple Reminders style); `settling` holds the ones ticked just now and
+  // still on screen — 'resting' struck through, 'leaving' while collapsing out.
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [settling, setSettling] = useState<Record<string, 'resting' | 'leaving'>>({});
+  const settleTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorisedRef = useRef<string>('');
@@ -279,12 +295,59 @@ export default function MealPlan() {
     shoppingCategory: categoryMap[ing.item.toLowerCase().trim()] || 'Other',
   }));
 
+  // What's still to buy — the number that matters when you're in the shop.
+  const remainingCount = combined.filter((ing) => !checkedItems.has(itemKey(ing))).length;
+  const doneCount = combined.length - remainingCount;
+
+  // A ticked item stays rendered only while `showCompleted` is on or while it's
+  // still settling out; a category with nothing left to show goes with it.
   const groupedByCategory = CATEGORY_ORDER
-    .map((cat) => ({
-      category: cat,
-      items: categorisedIngredients.filter((ing) => ing.shoppingCategory === cat),
-    }))
-    .filter((group) => group.items.length > 0);
+    .map((cat) => {
+      const items = categorisedIngredients.filter((ing) => ing.shoppingCategory === cat);
+      return {
+        category: cat,
+        items,
+        remaining: items.filter((ing) => !checkedItems.has(itemKey(ing))).length,
+        visible: items.filter((ing) => {
+          const key = itemKey(ing);
+          return !checkedItems.has(key) || showCompleted || settling[key] !== undefined;
+        }),
+      };
+    })
+    .filter((group) => group.visible.length > 0);
+
+  // Timers are per item, so a second tick never cancels the first one's exit.
+  function clearSettleTimers(key: string) {
+    settleTimersRef.current[key]?.forEach(clearTimeout);
+    delete settleTimersRef.current[key];
+  }
+
+  function clearAllSettleTimers() {
+    Object.values(settleTimersRef.current).flat().forEach(clearTimeout);
+    settleTimersRef.current = {};
+  }
+
+  // Nothing is mid-settle in a week you've just switched to, and nothing should
+  // be left ticking after the screen goes away.
+  useEffect(() => {
+    Object.values(settleTimersRef.current).flat().forEach(clearTimeout);
+    settleTimersRef.current = {};
+    setSettling({});
+  }, [plan?.id]);
+
+  useEffect(() => () => {
+    Object.values(settleTimersRef.current).flat().forEach(clearTimeout);
+  }, []);
+
+  function toggleShowCompleted() {
+    const next = !showCompleted;
+    // Showing them again means nothing is on its way out any more.
+    if (next) {
+      clearAllSettleTimers();
+      setSettling({});
+    }
+    setShowCompleted(next);
+  }
 
   function persistCheckedItems(next: Set<string>) {
     if (!plan) return;
@@ -301,6 +364,7 @@ export default function MealPlan() {
   }
 
   function toggleShoppingItem(key: string) {
+    const wasChecked = checkedItems.has(key);
     setCheckedItems((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -308,6 +372,39 @@ export default function MealPlan() {
       persistCheckedItems(next);
       return next;
     });
+
+    clearSettleTimers(key);
+
+    // Un-ticking, or ticking while completed items are on show: the row stays
+    // where it is either way, so there's nothing to settle.
+    if (wasChecked || showCompleted) {
+      setSettling((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+
+    // Just ticked: hold it struck through, then collapse it out of the list.
+    setExpandedItem((cur) => (cur === key ? null : cur));
+    setSettling((prev) => ({ ...prev, [key]: 'resting' }));
+    settleTimersRef.current[key] = [
+      setTimeout(
+        () => setSettling((prev) => (key in prev ? { ...prev, [key]: 'leaving' } : prev)),
+        SETTLE_HOLD_MS,
+      ),
+      setTimeout(() => {
+        setSettling((prev) => {
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        delete settleTimersRef.current[key];
+      }, SETTLE_HOLD_MS + SETTLE_OUT_MS),
+    ];
   }
 
   // ── Entry mutations ─────────────────────────────────
@@ -862,7 +959,8 @@ export default function MealPlan() {
       >
         {([
           ['meals', 'Meals', mealEntries.length],
-          ['shopping', 'Groceries', combined.length],
+          // The groceries count is what's left to buy, not the whole list.
+          ['shopping', 'Groceries', remainingCount],
         ] as const).map(([key, label, count]) => {
           const active = tab === key;
           return (
@@ -1168,15 +1266,54 @@ export default function MealPlan() {
 
           {combined.length > 0 && (
             <div
-              className="flex items-baseline justify-between"
+              className="flex items-baseline justify-between gap-3"
               style={{ paddingBottom: 14, marginBottom: 22, borderBottom: '1px solid var(--border)', animation: 'fadeUp 0.4s ease 0.15s both' }}
             >
               <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
                 Shopping list
+                <span style={{ color: 'var(--text)' }}>
+                  {' · '}
+                  {remainingCount === 0 ? 'all ticked' : `${remainingCount} to buy`}
+                </span>
               </span>
-              <span style={{ fontFamily: fMono, fontSize: 11, letterSpacing: '0.04em', color: 'var(--muted)' }}>
-                {checkedItems.size}/{combined.length} ticked
-              </span>
+              {doneCount > 0 && (
+                <button
+                  onClick={toggleShowCompleted}
+                  className="shrink-0"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    fontFamily: fMono,
+                    fontSize: 10,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: 'var(--green)',
+                  }}
+                >
+                  {showCompleted ? <EyeOff size={12} strokeWidth={2} /> : <Eye size={12} strokeWidth={2} />}
+                  {showCompleted ? 'Hide' : 'Show'} completed · {doneCount}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Everything ticked, and the completed rows are hidden. */}
+          {combined.length > 0 && groupedByCategory.length === 0 && (
+            <div className="text-center py-10" style={{ animation: 'fadeUp 0.4s ease both' }}>
+              <div className="flex justify-center" style={{ color: 'var(--green)' }}>
+                <Check size={34} strokeWidth={1.4} />
+              </div>
+              <p className="mt-3" style={{ fontFamily: fSerif, fontSize: 20, letterSpacing: '-0.015em', color: 'var(--text)' }}>
+                That's the lot
+              </p>
+              <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
+                All {combined.length} items ticked off.
+              </p>
             </div>
           )}
 
@@ -1200,23 +1337,32 @@ export default function MealPlan() {
                 <h3 style={{ margin: 0, fontFamily: fSerif, fontSize: 18, fontWeight: 400, letterSpacing: '-0.015em', color: 'var(--text)', flex: 1 }}>
                   {group.category}
                 </h3>
-                <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>{group.items.length}</span>
+                <span style={{ fontFamily: fMono, fontSize: 11, color: 'var(--muted)' }}>
+                  {showCompleted ? group.items.length : group.remaining}
+                </span>
               </div>
 
-              {group.items.map((ing, i) => {
-                const key = `${ing.item}-${ing.unit}`;
+              {group.visible.map((ing, i) => {
+                const key = itemKey(ing);
                 const checked = checkedItems.has(key);
+                const leaving = settling[key] === 'leaving';
                 const isExpanded = expandedItem === key;
                 const qty = `${ing.quantity}${ing.unit ? ` ${ing.unit}` : ''}`.trim();
                 return (
                   <div
                     key={key}
                     style={{
-                      borderBottom: i < group.items.length - 1 ? '1px solid var(--rule-hair)' : 'none',
-                      opacity: checked ? 0.5 : 1,
-                      transition: 'opacity 0.3s',
+                      // 1fr → 0fr collapses the row to nothing without having to
+                      // measure it, so ticked items slide the list closed.
+                      display: 'grid',
+                      gridTemplateRows: leaving ? '0fr' : '1fr',
+                      opacity: leaving ? 0 : 1,
+                      borderBottom:
+                        leaving || i >= group.visible.length - 1 ? 'none' : '1px solid var(--rule-hair)',
+                      transition: `grid-template-rows ${SETTLE_OUT_MS}ms ease, opacity ${SETTLE_OUT_MS}ms ease`,
                     }}
                   >
+                    <div style={{ overflow: 'hidden', opacity: checked && !leaving ? 0.5 : 1, transition: 'opacity 0.3s' }}>
                     <div
                       className="flex items-center gap-3 select-none"
                       style={{ padding: '12px 0', cursor: 'pointer' }}
@@ -1306,6 +1452,7 @@ export default function MealPlan() {
                         ))}
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
