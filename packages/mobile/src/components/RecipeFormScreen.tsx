@@ -591,6 +591,7 @@ export default function RecipeFormScreen({ recipeId }: Props) {
 
       <RecipePickerSheet
         open={linkTarget !== null}
+        eyebrow="Link an ingredient"
         title="Use another recipe"
         // Here you're hunting a specific component recipe by name, not browsing
         // what you saved lately — alphabetical stays the better default.

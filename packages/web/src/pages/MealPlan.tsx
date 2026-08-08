@@ -1618,6 +1618,11 @@ export default function MealPlan() {
       <AddRecipeModal
         open={showAddModal}
         existingRecipeIds={existingRecipeIds}
+        existingLabel="In the week"
+        // Plan mode's order, because this is plan mode's job in miniature:
+        // what haven't I cooked in a while?
+        defaultSort="suggested"
+        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · one meal` : 'Add one meal'}
         title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
         onAdd={(recipe) => {
           startAddCook(recipe, addTarget);

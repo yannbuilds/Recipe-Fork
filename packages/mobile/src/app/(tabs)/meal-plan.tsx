@@ -105,8 +105,20 @@ export default function MealPlanScreen() {
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorised = useRef('');
   const scrollRef = useRef<ScrollView | null>(null);
+
+  /** Open the recipe picker once the bottom sheet above it has finished
+   *  sliding away — iOS silently drops a modal presented mid-dismissal. */
+  function openPickerAfterSheet() {
+    if (pickerTimer.current) clearTimeout(pickerTimer.current);
+    pickerTimer.current = setTimeout(() => setShowAdd(true), 300);
+  }
+
+  useEffect(() => () => {
+    if (pickerTimer.current) clearTimeout(pickerTimer.current);
+  }, []);
 
   // Drag a meal onto any day — or onto "not on a day yet" to unschedule it.
   const drag = useDragToDay({
@@ -1587,7 +1599,9 @@ export default function MealPlanScreen() {
         onCook={() => {
           setAddTarget(daySheet);
           setDaySheet(null);
-          setShowAdd(true);
+          // The picker is a full-screen modal now; iOS drops a presentation
+          // that starts while the day sheet is still animating out.
+          openPickerAfterSheet();
         }}
         onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
         onClose={() => setDaySheet(null)}
@@ -1605,8 +1619,13 @@ export default function MealPlanScreen() {
 
       <RecipePickerSheet
         open={showAdd}
+        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · ONE MEAL` : 'ADD ONE MEAL'}
         title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
         existingIds={existingIds}
+        existingLabel="In the week"
+        // Plan mode's order, because this is plan mode's job in miniature:
+        // what haven't I cooked in a while?
+        defaultSort="suggested"
         onPick={(r) => {
           startAddCook(r, addTarget);
           setShowAdd(false);

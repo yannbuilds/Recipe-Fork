@@ -229,8 +229,13 @@ export default function CookbookDetailScreen() {
           />
           <RecipePickerSheet
             open={showAdd}
+            eyebrow="Add to this cookbook"
             title={`Add to ${cookbook.name}`}
+            // Filling a shelf, you're usually reaching for something you just
+            // saved — not for whatever you haven't cooked lately.
+            defaultSort="newest"
             existingIds={new Set(recipes.map((r) => r.id))}
+            existingLabel="Already on the shelf"
             onPick={(r) => addRecipe(r.id)}
             onClose={() => setShowAdd(false)}
           />

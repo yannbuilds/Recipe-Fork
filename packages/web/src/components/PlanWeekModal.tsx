@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Minus, Plus, X as XIcon, Utensils, Wand2, Heart, SlidersHorizontal } from 'lucide-react';
-import { dedupeRecipesBySource, supabase } from '@recipe-aggregator/shared';
-import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
-import RecipeFilterBar from './RecipeFilterBar';
-import CookbookCard from './CookbookCard';
-import useRecipeFilters from '../hooks/useRecipeFilters';
-import { useAuth } from '../context/AuthContext';
-import type { RecipeTagRow } from '../constants/tagMeta';
+import { useEffect, useState } from 'react';
+import { Minus, Plus, X as XIcon, Utensils, Wand2 } from 'lucide-react';
+import type { Recipe } from '@recipe-aggregator/shared';
+import RecipeBrowser from './RecipeBrowser';
+import useRecipeBrowserData from '../hooks/useRecipeBrowserData';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex, planServings } from '../utils/mealPlanDays';
 
@@ -43,21 +39,6 @@ interface Props {
 }
 
 /**
- * Home's four sort options plus the one plan mode cares about most: what you
- * haven't cooked in a while. That's the default here — the whole point of the
- * picker is to get last month's recipes back in front of you.
- */
-type SortOption = 'suggested' | 'newest' | 'oldest' | 'a-z' | 'z-a';
-
-const SORT_LABELS: [SortOption, string][] = [
-  ['suggested', 'Not cooked lately'],
-  ['newest', 'Newest first'],
-  ['oldest', 'Oldest first'],
-  ['a-z', 'A – Z'],
-  ['z-a', 'Z – A'],
-];
-
-/**
  * Plan mode. Asks the setup questions once, remembers the answers, and from
  * then on opens straight at picking. Every step after the first is skippable —
  * you can bail at any point and the meals just land in the week unplaced.
@@ -71,50 +52,18 @@ export default function PlanWeekModal({
   onCommit,
   onClose,
 }: Props) {
-  const { user } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [meals, setMeals] = useState(3);
   const [servings, setServings] = useState(2);
   const [nights, setNights] = useState(2);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
-  const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
-  const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
-  const [cookbookRecipes, setCookbookRecipes] = useState<Record<string, Set<string>>>({});
-  const [loading, setLoading] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('suggested');
-  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
-  // Two ways to look at the same collection: the whole list, or your shelves.
-  // Not a filter — a mode. Cookbooks get the shelf treatment they have on the
-  // Cookbook page, because browsing them is half the reason they exist.
-  const [browse, setBrowse] = useState<'all' | 'cookbooks'>('all');
-  const [cookbookId, setCookbookId] = useState<string | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [search, setSearch] = useState('');
   const [picks, setPicks] = useState<PlanPick[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
 
-  // Importing the same page with a trailing slash or tracking link created a
-  // handful of distinct rows. The home page's newest-first order separates
-  // them; this alphabetical picker made the copies look like a render bug.
-  const uniqueRecipes = useMemo(
-    () => dedupeRecipesBySource(recipes, user?.id),
-    [recipes, user?.id],
-  );
-
-  // Same filtering the home page runs on: search across titles and ingredients,
-  // owner, and the tag-category facets.
-  const filters = useRecipeFilters({
-    recipes: showFavouritesOnly ? uniqueRecipes.filter((r) => r.is_favourite) : uniqueRecipes,
-    tags,
-    recipeTags,
-    userId: user?.id,
-    searchQuery: search,
-  });
+  // The collection, its cookbooks and the cooking history — the same data the
+  // add-a-recipe picker browses.
+  const data = useRecipeBrowserData(open);
 
   useEffect(() => {
     if (!open) return;
@@ -125,51 +74,6 @@ export default function PlanWeekModal({
     setPicks([]);
     setSlots([]);
     setActiveSlot(null);
-    setSearch('');
-    setSortBy('suggested');
-    setShowFavouritesOnly(false);
-    setBrowse('all');
-    setCookbookId(null);
-    setFilterOpen(false);
-    filters.resetFilters();
-    setLoading(true);
-    (async () => {
-      const [
-        { data: recipeData },
-        { data: cookData },
-        { data: cbData },
-        { data: cbRecipeData },
-        { data: tagData },
-        { data: recipeTagData },
-      ] = await Promise.all([
-        supabase.from('recipes').select('*').order('title'),
-        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
-        supabase
-          .from('cookbooks')
-          .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: false }),
-        supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
-        supabase.from('tags').select('*').order('name'),
-        supabase.from('recipe_tags').select('recipe_id, tag_id'),
-      ]);
-      setRecipes((recipeData as Recipe[]) ?? []);
-      const map: Record<string, string> = {};
-      for (const row of (cookData as { recipe_id: string; cooked_at: string }[]) ?? []) {
-        if (!map[row.recipe_id] || row.cooked_at > map[row.recipe_id]) map[row.recipe_id] = row.cooked_at;
-      }
-      setLastCooked(map);
-      setCookbooks((cbData as Cookbook[]) ?? []);
-      const members: Record<string, Set<string>> = {};
-      for (const row of (cbRecipeData as { cookbook_id: string; recipe_id: string }[]) ?? []) {
-        (members[row.cookbook_id] ??= new Set()).add(row.recipe_id);
-      }
-      setCookbookRecipes(members);
-      setTags((tagData as Tag[]) ?? []);
-      setRecipeTags((recipeTagData as RecipeTagRow[]) ?? []);
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefs]);
 
   useEffect(() => {
@@ -181,94 +85,13 @@ export default function PlanWeekModal({
     return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
-  // Close the filter dropdown on an outside click, same as the home page.
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
-    }
-    if (filterOpen) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [filterOpen]);
-
-  // Cookbooks you can actually pick from — an empty one is just noise here.
-  const pickableCookbooks = useMemo(
-    () => cookbooks.filter((c) => (cookbookRecipes[c.id]?.size ?? 0) > 0),
-    [cookbooks, cookbookRecipes],
-  );
-
-  const activeCookbook = cookbookId ? cookbooks.find((c) => c.id === cookbookId) : undefined;
-
-  // Four plates per shelf, newest first — the same cover strip the Cookbook
-  // page builds, derived from data this modal already has.
-  const cookbookCovers = useMemo(() => {
-    const byId = new Map(recipes.map((r) => [r.id, r]));
-    const out: Record<string, string[]> = {};
-    for (const cb of cookbooks) {
-      const ids = cookbookRecipes[cb.id];
-      out[cb.id] = !ids
-        ? []
-        : [...ids]
-            .map((id) => byId.get(id))
-            .filter((r): r is Recipe => !!r?.image_url)
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 4)
-            .map((r) => r.image_url as string);
-    }
-    return out;
-  }, [recipes, cookbooks, cookbookRecipes]);
-
-  // Everything that matches — no cap. If you have 200 recipes, plan mode shows
-  // 200; narrowing is the filters' job, not a silent truncation's.
-  const visible = useMemo(() => {
-    // Inside a shelf you get the shelf, least recently cooked first — the
-    // recipe filters belong to the all-recipes mode and are reset on the way in.
-    if (browse === 'cookbooks') {
-      if (!cookbookId) return [];
-      const ids = cookbookRecipes[cookbookId];
-      const list = ids ? recipes.filter((r) => ids.has(r.id)) : [];
-      return [...list].sort((a, b) => (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? ''));
-    }
-    return [...filters.filteredRecipes].sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        case 'oldest':
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case 'a-z':
-          return a.title.localeCompare(b.title);
-        case 'z-a':
-          return b.title.localeCompare(a.title);
-        default:
-          // Longest time since you last cooked it, never-cooked first.
-          return (lastCooked[a.id] ?? '').localeCompare(lastCooked[b.id] ?? '');
-      }
-    });
-  }, [browse, cookbookId, recipes, filters.filteredRecipes, cookbookRecipes, sortBy, lastCooked]);
-
-  const hasActiveFilters = showFavouritesOnly || filters.ownerFilter !== 'all' || sortBy !== 'suggested';
-  const isNarrowed = hasActiveFilters || filters.activeCategories.size > 0 || search.trim() !== '';
-
-  function resetAllFilters() {
-    filters.resetFilters();
-    setSearch('');
-    setShowFavouritesOnly(false);
-    setSortBy('suggested');
-  }
-
-  /** Switching mode is a clean slate — the other mode's controls don't linger. */
-  function setMode(next: 'all' | 'cookbooks') {
-    setBrowse(next);
-    setCookbookId(null);
-    setFilterOpen(false);
-    resetAllFilters();
-  }
-
   const totalMeals = picks.reduce((sum, p) => sum + p.nights, 0);
   // What the setup answers add up to: cooks × meals covered by each batch.
   const plannedMeals = meals * nights;
   // A pick can always be cycled past the default — the answer is a starting
   // point, not a cap.
   const maxNights = Math.max(3, nights);
+  const pickedIds = new Set(picks.map((p) => p.recipe.id));
 
   function togglePick(recipe: Recipe) {
     setPicks((prev) => {
@@ -337,12 +160,12 @@ export default function PlanWeekModal({
   }
 
   function minutesFor(recipeId: string): number {
-    const r = recipes.find((x) => x.id === recipeId);
+    const r = data.recipes.find((x) => x.id === recipeId);
     return (r?.prep_time ?? 0) + (r?.cook_time ?? 0);
   }
 
   function recipeFor(id: string): Recipe | undefined {
-    return recipes.find((r) => r.id === id);
+    return data.recipes.find((r) => r.id === id);
   }
 
   /**
@@ -455,6 +278,25 @@ export default function PlanWeekModal({
     );
   };
 
+  /** Prefs recap — sits above the browser's mode switch, so the answers you
+   *  gave are always in sight and always one click from being changed. */
+  const prefsRecap = (
+    <div
+      className="flex items-center justify-between"
+      style={{ border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', padding: '6px 8px 6px 14px', marginBottom: 14 }}
+    >
+      <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-soft)' }}>
+        {meals} cooks × {nights} meal{nights === 1 ? '' : 's'} · {servings} people
+      </span>
+      <button
+        onClick={() => setStep(1)}
+        style={{ fontFamily: fSans, fontSize: 12, color: 'var(--green)', border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', background: 'none', cursor: 'pointer' }}
+      >
+        Change
+      </button>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
@@ -518,312 +360,44 @@ export default function PlanWeekModal({
 
           {/* ── Step 2: pick the recipes ─────────────── */}
           {step === 2 && (
-            <div>
-              <div
-                className="flex items-center justify-between"
-                style={{ border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', padding: '6px 8px 6px 14px', marginBottom: 14 }}
-              >
-                <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-soft)' }}>
-                  {meals} cooks × {nights} meal{nights === 1 ? '' : 's'} · {servings} people
-                </span>
-                <button
-                  onClick={() => setStep(1)}
-                  style={{ fontFamily: fSans, fontSize: 12, color: 'var(--green)', border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', background: 'none', cursor: 'pointer' }}
-                >
-                  Change
-                </button>
-              </div>
-
-              {/* Two ways in: the whole collection, or your shelves. */}
-              <div
-                className="flex"
-                style={{ gap: 4, padding: 3, marginBottom: 14, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)' }}
-              >
-                {([
-                  ['all', 'All recipes', uniqueRecipes.length],
-                  ['cookbooks', 'Cookbooks', pickableCookbooks.length],
-                ] as const).map(([value, label, count]) => {
-                  const on = browse === value;
-                  return (
-                    <button
-                      key={value}
-                      onClick={() => setMode(value)}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 7,
-                        padding: '8px 0',
-                        borderRadius: 999,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: on ? 'var(--green-solid)' : 'transparent',
-                        color: on ? '#fff' : 'var(--muted)',
-                        fontFamily: fMono,
-                        fontSize: 9.5,
-                        letterSpacing: '0.13em',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {label}
-                      <span style={{ opacity: on ? 0.75 : 0.6 }}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* ── All recipes: search + the home page's filters ───── */}
-              {browse === 'all' && (
-              <div className="flex items-center gap-3 relative" style={{ marginBottom: 12 }}>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search recipes…"
-                  className="rf-input flex-1"
-                />
-                <div className="relative shrink-0" ref={filterRef}>
+            <RecipeBrowser
+              open={open}
+              data={data}
+              selectedIds={pickedIds}
+              onSelect={togglePick}
+              topSlot={prefsRecap}
+              renderCardExtra={(recipe) => {
+                // One cook can cover several flexible meals.
+                const pick = picks.find((p) => p.recipe.id === recipe.id);
+                if (!pick) return null;
+                const { total, asWritten } = servingsFor(pick);
+                return (
                   <button
-                    onClick={() => setFilterOpen((prev) => !prev)}
-                    className="flex items-center justify-center w-10 h-10 rounded-xl"
-                    style={
-                      filterOpen || hasActiveFilters
-                        ? { background: 'var(--green-light)', border: '1px solid var(--green)', color: 'var(--green)', cursor: 'pointer' }
-                        : { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }
+                    onClick={() => cycleNights(recipe.id)}
+                    title={
+                      asWritten
+                        ? `How many meals this cook covers. This recipe already makes ${total}, so it's planned as written rather than scaled down to ${servings * pick.nights}.`
+                        : 'How many meals this cook covers'
                     }
-                    aria-label="Filters"
-                    title="Filters"
+                    style={{
+                      marginTop: 5,
+                      fontFamily: fMono,
+                      fontSize: 9,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      padding: '4px 9px',
+                      borderRadius: 999,
+                      border: '1px solid var(--green)',
+                      background: 'var(--green-light)',
+                      color: 'var(--green)',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <SlidersHorizontal size={17} strokeWidth={1.8} />
+                    {pick.nights}× · {asWritten ? 'makes' : 'serves'} {total}
                   </button>
-
-                  {filterOpen && (
-                    <div className="rf-filter-dropdown">
-                      <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Show</p>
-                      {(['all', 'mine', 'shared'] as const).map((value) => {
-                        const label = value === 'all' ? 'All recipes' : value === 'mine' ? 'Mine' : 'Shared';
-                        return (
-                          <button
-                            key={value}
-                            onClick={() => filters.setOwnerFilter(value)}
-                            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm"
-                            style={
-                              filters.ownerFilter === value
-                                ? { background: 'var(--green-light)', color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }
-                                : { color: 'var(--text)', cursor: 'pointer' }
-                            }
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-
-                      <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-
-                      <button
-                        onClick={() => setShowFavouritesOnly((prev) => !prev)}
-                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm"
-                        style={
-                          showFavouritesOnly
-                            ? { background: 'var(--red-light)', color: 'var(--red)', cursor: 'pointer' }
-                            : { color: 'var(--text)', cursor: 'pointer' }
-                        }
-                      >
-                        <Heart size={15} strokeWidth={2} fill={showFavouritesOnly ? 'currentColor' : 'none'} />
-                        Favourites only
-                      </button>
-
-                      <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-
-                      <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Sort by</p>
-                      {SORT_LABELS.map(([value, label]) => (
-                        <button
-                          key={value}
-                          onClick={() => setSortBy(value)}
-                          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm"
-                          style={
-                            sortBy === value
-                              ? { background: 'var(--green-light)', color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }
-                              : { color: 'var(--text)', cursor: 'pointer' }
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))}
-
-                      {isNarrowed && (
-                        <>
-                          <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-                          <button
-                            onClick={resetAllFilters}
-                            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm"
-                            style={{ color: 'var(--red)', cursor: 'pointer' }}
-                          >
-                            Reset all filters
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )}
-
-              {browse === 'all' && <RecipeFilterBar {...filters} />}
-
-              {/* Always say how much of the collection you're looking at — the
-                  picker used to quietly stop at 60 and there was no way to tell. */}
-              {browse === 'all' && !loading && (
-                <p style={{ margin: '0 0 12px', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
-                  {isNarrowed ? (
-                    <>
-                      Showing <strong style={{ color: 'var(--text-soft)' }}>{visible.length}</strong> of {uniqueRecipes.length} recipe
-                      {uniqueRecipes.length === 1 ? '' : 's'}.{' '}
-                      <button
-                        onClick={resetAllFilters}
-                        style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        Show everything
-                      </button>
-                    </>
-                  ) : (
-                    `All ${uniqueRecipes.length} recipe${uniqueRecipes.length === 1 ? '' : 's'}, least recently cooked first.`
-                  )}
-                </p>
-              )}
-
-              {/* ── Cookbooks: the shelf, as it looks on the Cookbook page ───── */}
-              {browse === 'cookbooks' && !activeCookbook && !loading && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {pickableCookbooks.length === 0 ? (
-                    <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>
-                      No cookbooks with recipes in them yet.
-                    </p>
-                  ) : (
-                    pickableCookbooks.map((cb, i) => (
-                      <CookbookCard
-                        key={cb.id}
-                        cookbook={cb}
-                        recipeCount={cookbookRecipes[cb.id]?.size ?? 0}
-                        coverImages={cookbookCovers[cb.id] ?? []}
-                        index={i}
-                        onSelect={() => setCookbookId(cb.id)}
-                      />
-                    ))
-                  )}
-                </div>
-              )}
-
-              {/* Inside a shelf — back out the way you came in. */}
-              {browse === 'cookbooks' && activeCookbook && (
-                <div style={{ marginBottom: 14 }}>
-                  <button
-                    onClick={() => setCookbookId(null)}
-                    style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--green)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                  >
-                    ← Cookbooks
-                  </button>
-                  <h3 style={{ margin: '8px 0 0', fontFamily: fSerif, fontWeight: 400, fontSize: 22, letterSpacing: '-0.018em', color: 'var(--text)' }}>
-                    <span aria-hidden style={{ marginRight: 8 }}>{activeCookbook.emoji || '📗'}</span>
-                    {activeCookbook.name}
-                  </h3>
-                  <p style={{ margin: '5px 0 0', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>
-                    {visible.length} recipe{visible.length === 1 ? '' : 's'}, least recently cooked first
-                    {activeCookbook.description ? ` · ${activeCookbook.description}` : ''}
-                  </p>
-                </div>
-              )}
-
-              {loading && (
-                <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>Loading…</p>
-              )}
-
-              {!loading && visible.length === 0 && browse === 'all' && (
-                <p className="text-center py-6" style={{ fontFamily: fSerif, fontStyle: 'italic', color: 'var(--muted)' }}>
-                  {isNarrowed ? 'No recipes match those filters.' : 'Nothing to pick here yet.'}
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {visible.map((recipe) => {
-                  const pick = picks.find((p) => p.recipe.id === recipe.id);
-                  return (
-                    <div key={recipe.id} style={{ position: 'relative' }}>
-                      <button
-                        onClick={() => togglePick(recipe)}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                      >
-                        <div
-                          style={{
-                            position: 'relative',
-                            aspectRatio: '4 / 3',
-                            borderRadius: 4,
-                            overflow: 'hidden',
-                            background: 'var(--paper3)',
-                            boxShadow: pick ? '0 0 0 2px var(--green)' : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-                          }}
-                        >
-                          {recipe.image_url ? (
-                            <img src={recipe.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                          ) : (
-                            <div className="absolute inset-0 flex items-center justify-center" style={{ color: 'var(--muted)' }}>
-                              <Utensils size={22} strokeWidth={1.3} />
-                            </div>
-                          )}
-                          <span
-                            style={{
-                              position: 'absolute',
-                              top: 6,
-                              right: 6,
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              display: 'grid',
-                              placeItems: 'center',
-                              background: pick ? 'var(--green-solid)' : 'rgba(31,27,22,0.45)',
-                              color: '#fff',
-                            }}
-                          >
-                            {pick ? <Check size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={2.5} />}
-                          </span>
-                        </div>
-                        <p style={{ margin: '6px 0 0', fontFamily: fSerif, fontSize: 14, lineHeight: 1.2, letterSpacing: '-0.01em', color: 'var(--text)' }}>
-                          {recipe.title}
-                        </p>
-                      </button>
-
-                      {/* One cook can cover several flexible meals. */}
-                      {pick && (
-                        <button
-                          onClick={() => cycleNights(recipe.id)}
-                          title={
-                            servingsFor(pick).asWritten
-                              ? `How many meals this cook covers. This recipe already makes ${servingsFor(pick).total}, so it's planned as written rather than scaled down to ${servings * pick.nights}.`
-                              : 'How many meals this cook covers'
-                          }
-                          style={{
-                            marginTop: 5,
-                            fontFamily: fMono,
-                            fontSize: 9,
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase',
-                            padding: '4px 9px',
-                            borderRadius: 999,
-                            border: '1px solid var(--green)',
-                            background: 'var(--green-light)',
-                            color: 'var(--green)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {pick.nights}× ·{' '}
-                          {servingsFor(pick).asWritten ? 'makes' : 'serves'} {servingsFor(pick).total}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                );
+              }}
+            />
           )}
 
           {/* ── Step 3: place them ───────────────────── */}

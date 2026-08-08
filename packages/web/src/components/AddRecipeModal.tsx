@@ -1,89 +1,54 @@
-import { useEffect, useState, useRef } from 'react';
-import { supabase } from '@recipe-aggregator/shared';
-import type { Recipe, Tag } from '@recipe-aggregator/shared';
-import RecipeFilterBar from './RecipeFilterBar';
-import { useAuth } from '../context/AuthContext';
-import useRecipeFilters from '../hooks/useRecipeFilters';
-import type { RecipeTagRow } from '../constants/tagMeta';
-
-type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
+import { useEffect, useMemo, useState } from 'react';
+import { X as XIcon } from 'lucide-react';
+import type { Recipe } from '@recipe-aggregator/shared';
+import RecipeBrowser, { type BrowseSort } from './RecipeBrowser';
+import useRecipeBrowserData from '../hooks/useRecipeBrowserData';
+import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 
 interface AddRecipeModalProps {
   open: boolean;
+  /** Recipes already on the receiving side. Labelled, never blocked — you may
+   *  well want a second batch of something, or the same thing twice. */
   existingRecipeIds: Set<string>;
+  /** What that label says. */
+  existingLabel?: string;
   /** Recipes to leave out of the list entirely. `existingRecipeIds` only labels
-   *  a row; this one hides it — used to stop a recipe linking to itself. */
+   *  a card; this one hides it — used to stop a recipe linking to itself. */
   excludeRecipeIds?: Set<string>;
   onAdd: (recipe: Recipe) => void;
   onClose: () => void;
   title?: string;
-  /** Newest first by default, the same order the home page opens on — you're
-   *  usually reaching for something you just saved. Call sites where you're
-   *  hunting a known recipe by name (sub-recipe linking) pass 'a-z'. */
-  defaultSort?: SortOption;
+  /** Mono line above the title — says what this picker is for. */
+  eyebrow?: string;
+  /** Least recently cooked first, the order plan mode opens on. Call sites where
+   *  you're hunting a known recipe by name (sub-recipe linking) pass 'a-z'. */
+  defaultSort?: BrowseSort;
 }
 
-export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeIds, onAdd, onClose, title = 'Add Recipe to Meal Plan', defaultSort = 'newest' }: AddRecipeModalProps) {
-  const { user } = useAuth();
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>(defaultSort);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
-
-  const filters = useRecipeFilters({
-    recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
-    tags,
-    recipeTags,
-    userId: user?.id,
-    searchQuery: search,
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
-      }
-    }
-    if (filterOpen) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open, filterOpen]);
+/**
+ * Pick one recipe out of the collection. Deliberately the same screen as plan
+ * mode's picking step — same modal, same All-recipes / Cookbooks switch, same
+ * search, filters and plate grid — because it is the same job. The only
+ * difference is that one click here chooses and you're done.
+ */
+export default function AddRecipeModal({
+  open,
+  existingRecipeIds,
+  existingLabel = 'Already added',
+  excludeRecipeIds,
+  onAdd,
+  onClose,
+  title = 'Add a recipe',
+  eyebrow = 'Pick a recipe',
+  defaultSort = 'suggested',
+}: AddRecipeModalProps) {
+  const data = useRecipeBrowserData(open);
+  // Something you just added drops out of the list, so a picker you keep open
+  // (adding several to a cookbook) always shows what's left to add.
+  const [added, setAdded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!open) return;
-    setSearch('');
-    setShowFavouritesOnly(false);
-    setSortBy(defaultSort);
-    setFilterOpen(false);
-    filters.resetFilters();
-    setLoading(true);
-    Promise.all([
-      // Matches the home page's ordering so ties (same created_at) land the
-      // same way in both places.
-      supabase
-        .from('recipes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false }),
-      supabase.from('tags').select('*').order('name'),
-      supabase.from('recipe_tags').select('recipe_id, tag_id'),
-    ]).then(([recipesResult, tagsResult, recipeTagsResult]) => {
-      setRecipes((recipesResult.data as Recipe[]) || []);
-      if (!tagsResult.error && tagsResult.data) {
-        setTags(tagsResult.data as Tag[]);
-      }
-      if (!recipeTagsResult.error && recipeTagsResult.data) {
-        setRecipeTags(recipeTagsResult.data as RecipeTagRow[]);
-      }
-      setLoading(false);
-    });
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (open) setAdded(new Set());
   }, [open]);
 
   useEffect(() => {
@@ -95,155 +60,75 @@ export default function AddRecipeModal({ open, existingRecipeIds, excludeRecipeI
     return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  const hidden = useMemo(() => {
+    if (!excludeRecipeIds?.size) return added;
+    return new Set([...added, ...excludeRecipeIds]);
+  }, [added, excludeRecipeIds]);
 
-  const sortedRecipes = [...filters.filteredRecipes]
-    .filter((r) => !excludeRecipeIds?.has(r.id))
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'z-a': return b.title.localeCompare(a.title);
-        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        default: return a.title.localeCompare(b.title);
-      }
-    });
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="rf-card w-full max-w-[1100px] mx-3 sm:mx-4 flex flex-col max-h-[80vh]"
+        className="rf-card rf-modal-tall w-full max-w-[640px] mx-3 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 space-y-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between">
-            <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between" style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <span style={{ fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--green)' }}>
+              {added.size > 0 ? `${added.size} added · keep going` : eyebrow}
+            </span>
+            <h2 style={{ margin: '6px 0 0', fontFamily: fSerif, fontWeight: 400, fontSize: 23, letterSpacing: '-0.02em', color: 'var(--text)' }}>
               {title}
             </h2>
-            <button
-              onClick={onClose}
-              className="text-xl leading-none transition-colors"
-              style={{ color: 'var(--muted)' }}
-            >
-              &times;
-            </button>
           </div>
-          <div className="flex items-center gap-3 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search recipes..."
-              className="rf-input w-full"
-            />
-            <div className="relative shrink-0" ref={filterRef}>
-              <button
-                onClick={() => setFilterOpen((prev) => !prev)}
-                className="flex items-center justify-center w-10 h-10 rounded-xl transition-colors"
-                style={
-                  filterOpen || showFavouritesOnly || sortBy !== defaultSort
-                    ? { background: 'var(--green-light)', border: '1px solid var(--green)', color: 'var(--green)' }
-                    : { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', boxShadow: 'var(--shadow-sm)' }
-                }
-                aria-label="Filters"
-              >
-                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="8" y1="12" x2="20" y2="12" />
-                  <line x1="4" y1="18" x2="20" y2="18" />
-                  <circle cx="6" cy="6" r="2" fill="currentColor" />
-                  <circle cx="14" cy="12" r="2" fill="currentColor" />
-                  <circle cx="8" cy="18" r="2" fill="currentColor" />
-                </svg>
-              </button>
-              {filterOpen && (
-                <div className="rf-filter-dropdown">
-                  <button
-                    onClick={() => setShowFavouritesOnly((prev) => !prev)}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors"
-                    style={showFavouritesOnly ? { background: 'var(--red-light)', color: 'var(--red)' } : { color: 'var(--text)' }}
-                  >
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill={showFavouritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                    Favourites only
-                  </button>
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-                  <p className="px-3 py-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Sort by</p>
-                  {([
-                    ['newest', 'Newest first'],
-                    ['oldest', 'Oldest first'],
-                    ['a-z', 'A – Z'],
-                    ['z-a', 'Z – A'],
-                  ] as [SortOption, string][]).map(([value, label]) => (
-                    <button
-                      key={value}
-                      onClick={() => setSortBy(value)}
-                      className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
-                      style={sortBy === value ? { background: 'var(--green-light)', color: 'var(--green)', fontWeight: 600 } : { color: 'var(--text)' }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <RecipeFilterBar {...filters} />
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', lineHeight: 0, padding: 4 }}>
+            <XIcon size={19} strokeWidth={1.8} />
+          </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-2">
-          {loading && (
-            <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>Loading...</p>
-          )}
-          {!loading && sortedRecipes.length === 0 && (
-            <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>No recipes found.</p>
-          )}
-          {sortedRecipes.map((recipe) => {
-            // A recipe already in the week is only a hint, never a block — you
-            // may well want to cook the same thing twice, or on purpose plan a
-            // second batch of it.
-            const alreadyAdded = existingRecipeIds.has(recipe.id);
-            return (
-              <button
-                key={recipe.id}
-                onClick={() => onAdd(recipe)}
-                className="w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-colors cursor-pointer"
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = 'var(--warm)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = '';
-                }}
-              >
-                {recipe.image_url ? (
-                  <img src={recipe.image_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                ) : (
-                  <div
-                    className="w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-lg"
-                    style={{
-                      background: 'linear-gradient(135deg, var(--warm) 0%, var(--warm-dark) 100%)',
-                    }}
-                  >
-                    🍴
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="font-medium truncate" style={{ color: 'var(--text)' }}>{recipe.title}</p>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                    {[
-                      recipe.prep_time != null && `Prep: ${recipe.prep_time}m`,
-                      recipe.cook_time != null && `Cook: ${recipe.cook_time}m`,
-                      recipe.servings != null && `Serves ${recipe.servings}`,
-                    ].filter(Boolean).join(' · ') || 'No details'}
-                  </p>
-                </div>
-                {alreadyAdded && (
-                  <span className="ml-auto text-xs shrink-0" style={{ color: 'var(--green)' }}>In the week</span>
-                )}
-              </button>
-            );
-          })}
+        <div className="overflow-y-auto" style={{ padding: '20px 22px', flex: 1 }}>
+          <RecipeBrowser
+            open={open}
+            data={data}
+            excludeIds={hidden}
+            defaultSort={defaultSort}
+            emptyLabel="No recipes to add."
+            autoFocusSearch
+            onSelect={(recipe) => {
+              onAdd(recipe);
+              setAdded((prev) => new Set(prev).add(recipe.id));
+            }}
+            renderCardExtra={(recipe) =>
+              existingRecipeIds.has(recipe.id) ? (
+                <p style={{ margin: '4px 0 0', fontFamily: fMono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--green)' }}>
+                  {existingLabel}
+                </p>
+              ) : null
+            }
+          />
+        </div>
+
+        {/* Footer — one click picks and this closes, so all it needs is the way out. */}
+        <div className="flex gap-2" style={{ padding: '14px 22px 18px', borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: '11px 0',
+              borderRadius: 999,
+              border: added.size > 0 ? '1px solid var(--green)' : '1px solid var(--border)',
+              background: added.size > 0 ? 'var(--green-solid)' : 'var(--card)',
+              color: added.size > 0 ? '#fff' : 'var(--text)',
+              fontFamily: fSans,
+              fontSize: 14,
+              fontWeight: added.size > 0 ? 500 : 400,
+              cursor: 'pointer',
+            }}
+          >
+            {added.size > 0 ? `Done · ${added.size} added` : 'Cancel'}
+          </button>
         </div>
       </div>
     </div>

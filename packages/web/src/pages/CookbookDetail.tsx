@@ -289,6 +289,11 @@ export default function CookbookDetail() {
           handleAddRecipe(recipe);
         }}
         onClose={() => setShowAdd(false)}
+        eyebrow="Add to this cookbook"
+        existingLabel="Already on the shelf"
+        // Filling a shelf, you're usually reaching for something you just
+        // saved — not for whatever you haven't cooked lately.
+        defaultSort="newest"
         title={cookbook ? `Add recipe to ${cookbook.name}` : 'Add recipe'}
       />
 
