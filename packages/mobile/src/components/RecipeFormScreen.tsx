@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { subRecipeIdsIn } from '@recipe-aggregator/shared';
+import { subRecipeIdsIn } from '@recipe-aggregator/shared/ingredients';
 import type { Ingredient, Recipe, Step, Tag } from '@recipe-aggregator/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';

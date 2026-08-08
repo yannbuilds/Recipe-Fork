@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { dedupeRecipesBySource } from '@recipe-aggregator/shared';
+import { dedupeRecipesBySource } from '@recipe-aggregator/shared/recipeSource';
 import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';

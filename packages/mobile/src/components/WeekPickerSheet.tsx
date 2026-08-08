@@ -1,4 +1,4 @@
-import { hasSubRecipes } from '@recipe-aggregator/shared';
+import { hasSubRecipes } from '@recipe-aggregator/shared/ingredients';
 import type { Ingredient } from '@recipe-aggregator/shared';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';

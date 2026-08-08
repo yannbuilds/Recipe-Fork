@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { findRecipeWithSameSource, normalizeRecipeSourceUrl } from '@recipe-aggregator/shared';
+import { findRecipeWithSameSource, normalizeRecipeSourceUrl } from '@recipe-aggregator/shared/recipeSource';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';

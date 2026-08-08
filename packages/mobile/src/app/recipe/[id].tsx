@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   SUB_RECIPE_SELECT,
   resolveSubRecipe,
-  scaleIngredientsForServings,
   subRecipeIdsIn,
-} from '@recipe-aggregator/shared';
+} from '@recipe-aggregator/shared/ingredients';
+import { scaleIngredientsForServings } from '@recipe-aggregator/shared/scaling';
 import type { Recipe, SubRecipe, SubRecipeMap, Tag } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';

@@ -4,7 +4,7 @@
 // packages/shared/src/scaling.ts (the sub-recipe expansion needs it too) and is
 // re-exported here so existing imports keep working.
 
-export { scaleQuantity, scaleIngredientsForServings } from '@recipe-aggregator/shared';
+export { scaleQuantity, scaleIngredientsForServings } from '@recipe-aggregator/shared/scaling';
 
 export function formatTime(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;

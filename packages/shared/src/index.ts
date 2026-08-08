@@ -1,3 +1,10 @@
+/*
+ * The barrel is for web and the extension: it re-exports the browser Supabase
+ * client, which reads `import.meta.env` and so can't be parsed by Hermes.
+ * React Native must import the pure helpers from their subpaths instead
+ * (`@recipe-aggregator/shared/ingredients`, `/scaling`, `/recipeSource`) —
+ * type-only imports from here are fine, they're erased before bundling.
+ */
 export { supabase } from './supabase.js';
 export {
   dedupeRecipesBySource,

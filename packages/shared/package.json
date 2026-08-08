@@ -9,6 +9,22 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./ingredients": {
+      "import": "./dist/ingredients.js",
+      "types": "./dist/ingredients.d.ts"
+    },
+    "./recipeSource": {
+      "import": "./dist/recipeSource.js",
+      "types": "./dist/recipeSource.d.ts"
+    },
+    "./scaling": {
+      "import": "./dist/scaling.js",
+      "types": "./dist/scaling.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "types": "./dist/types.d.ts"
     }
   },
   "scripts": {
