@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext, createContext } from "react";
+import type { RefObject } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -22,6 +23,15 @@ import NewRecipeModal from "./components/NewRecipeModal";
 import PWAUpdateBanner from "./components/PWAUpdateBanner";
 import OfflineBanner from "./components/OfflineBanner";
 
+/**
+ * The signed-in app's scrolling element (see `.pk-shell-scroll` in index.css).
+ * The document itself no longer scrolls there, so anything that used to read
+ * `window.scrollY` or call `window.scrollTo` has to go through this instead.
+ * Null on the routes that keep normal document scrolling — login, invite,
+ * privacy, the landing pages — where the fallbacks to `window` still apply.
+ */
+const AppScrollContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
+
 function AppLayout() {
   const { user, loading } = useAuth();
 
@@ -35,7 +45,9 @@ function AppLayout() {
   return (
     <>
       <Header />
-      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px', paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+      {/* No nav-clearing bottom padding any more: the nav is a sibling of the
+          scroller, not a fixed bar painted over the end of the page. */}
+      <main className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 40px' }}>
         <Outlet />
       </main>
     </>
@@ -50,19 +62,24 @@ function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const navType = useNavigationType();
+  const scrollRef = useContext(AppScrollContext);
 
   const isTopLevel = TOP_LEVEL_ROUTES.includes(location.pathname);
   const showBack = !isTopLevel;
 
   useEffect(() => {
+    // Passive effects run after every ref in the commit is attached, so the
+    // shell's scroller is already there on the first pass.
+    const el = scrollRef?.current ?? null;
+    const target: HTMLElement | Window = el ?? window;
     function onScroll() {
-      const y = window.scrollY;
+      const y = el ? el.scrollTop : window.scrollY;
       setHidden(y > lastScrollY.current && y > 56);
       lastScrollY.current = y;
     }
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    target.addEventListener('scroll', onScroll, { passive: true });
+    return () => target.removeEventListener('scroll', onScroll);
+  }, [scrollRef]);
 
   function handleBack() {
     // If the user navigated here from within the app, go back in history
@@ -152,49 +169,80 @@ function MarketingShell() {
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  const scrollRef = useContext(AppScrollContext);
+  useEffect(() => {
+    if (scrollRef?.current) scrollRef.current.scrollTop = 0;
+    else window.scrollTo(0, 0);
+  }, [pathname, scrollRef]);
   return null;
 }
 
+const NAV_FREE_ROUTES = ['/login', '/invite', '/reset-password', '/privacy', '/support', '/landing', '/landing-old'];
+
 function AppShell() {
   const location = useLocation();
+  const scrollRef = useRef<HTMLDivElement>(null);
   useTheme();
+
+  const hideNav = NAV_FREE_ROUTES.includes(location.pathname);
+  const locked = !isMarketingSite && !hideNav;
+
+  // The shell owns the scrolling wherever the nav is on screen, so the document
+  // behind it must not scroll or rubber-band.
+  useEffect(() => {
+    if (!locked) return;
+    const root = document.documentElement;
+    root.classList.add('pk-locked');
+    return () => root.classList.remove('pk-locked');
+  }, [locked]);
 
   if (isMarketingSite) {
     return <MarketingShell />;
   }
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/invite' || location.pathname === '/reset-password' || location.pathname === '/privacy' || location.pathname === '/support' || location.pathname === '/landing' || location.pathname === '/landing-old';
+  const routes = (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/invite" element={<InvitePage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/support" element={<SupportPage />} />
+      {import.meta.env.DEV && <Route path="/landing" element={<LandingPageV2 />} />}
+      {import.meta.env.DEV && <Route path="/landing-old" element={<LandingPage />} />}
+      {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<RecipeList />} />
+        <Route path="/new" element={<RecipeForm />} />
+        <Route path="/recipe/:id" element={<RecipeDetail />} />
+        <Route path="/recipe/:id/edit" element={<RecipeForm />} />
+        <Route path="/cookbook/:id" element={<CookbookDetail />} />
+        <Route path="/meal-plan" element={<MealPlan />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/icon-compare" element={<IconCompare />} />
+      </Route>
+    </Routes>
+  );
 
   return (
     <NewRecipeModalProvider>
-      <ScrollToTop />
-      <div className="min-h-screen">
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/invite" element={<InvitePage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/support" element={<SupportPage />} />
-          {import.meta.env.DEV && <Route path="/landing" element={<LandingPageV2 />} />}
-          {import.meta.env.DEV && <Route path="/landing-old" element={<LandingPage />} />}
-          {import.meta.env.DEV && <Route path="/icon-compare" element={<div className="mx-auto" style={{ maxWidth: 1100, padding: '28px 24px 96px' }}><IconCompare /></div>} />}
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<RecipeList />} />
-            <Route path="/new" element={<RecipeForm />} />
-            <Route path="/recipe/:id" element={<RecipeDetail />} />
-            <Route path="/recipe/:id/edit" element={<RecipeForm />} />
-            <Route path="/cookbook/:id" element={<CookbookDetail />} />
-            <Route path="/meal-plan" element={<MealPlan />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/icon-compare" element={<IconCompare />} />
-          </Route>
-        </Routes>
-        {!hideNav && <BottomNav />}
+      <AppScrollContext.Provider value={locked ? scrollRef : null}>
+        <ScrollToTop />
+        {locked ? (
+          // Fixed-height column: one scrolling region, nav pinned as its last
+          // flex child. See `.pk-shell` in index.css for why it isn't fixed.
+          <div className="pk-shell">
+            <div className="pk-shell-scroll" ref={scrollRef}>
+              {routes}
+            </div>
+            <BottomNav />
+          </div>
+        ) : (
+          <div className="min-h-screen">{routes}</div>
+        )}
         <NewRecipeModal />
         <PWAUpdateBanner />
         <OfflineBanner />
-      </div>
+      </AppScrollContext.Provider>
     </NewRecipeModalProvider>
   );
 }

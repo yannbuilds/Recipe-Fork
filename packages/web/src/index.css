@@ -29,7 +29,7 @@
     --shadow-sm: 0 1px 2px rgba(31,27,22,0.06);
     --shadow-md: 0 4px 16px rgba(31,27,22,0.08), 0 1px 4px rgba(31,27,22,0.04);
     --glass-bg: rgba(251,248,241,0.9);
-    /* Opaque twin of --glass-bg, for the sticky header / fixed bottom nav.
+    /* Opaque twin of --glass-bg, for the sticky header and the bottom nav.
        Those two bars must NOT use backdrop-filter: on iOS a blurred layer
        pinned over the scroller forces WebKit onto main-thread scrolling, and
        every position:fixed element then drifts with the content mid-scroll
@@ -103,6 +103,44 @@
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
   }
+}
+
+/* ── App shell ─────────────────────────────────────────────────────
+   Wherever the bottom nav is on screen, the app is a fixed-height column: one
+   scrolling region, with the nav as the column's last child. The document
+   itself does not scroll.
+
+   The nav used to be `position: fixed; bottom: 0`, which iOS keeps un-pinning.
+   When WebKit drops a page off compositor scrolling it repositions fixed layers
+   on the main thread instead, and the bar visibly rides up the screen with the
+   content mid-scroll — iPad in July, iPhone in August. Removing the blur that
+   caused the first one didn't stop the second, because the trigger isn't one
+   piece of CSS: any full-viewport layer, or a fixed element WebKit declines to
+   promote, puts the page back on that path. A flex child in a column that never
+   scrolls has no position to lag behind, so the failure mode is gone rather
+   than tuned around. Don't reintroduce `position: fixed` here. */
+html.pk-locked,
+html.pk-locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;    /* no document rubber-band behind the shell */
+}
+
+.pk-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;               /* the *visible* viewport when Safari has chrome */
+  overflow: hidden;
+}
+
+.pk-shell-scroll {
+  flex: 1 1 auto;
+  min-height: 0;                /* let the column shrink instead of overflowing */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .rd-hero       { height: 500px; transition: height 0.3s ease; border-radius: var(--radius); }

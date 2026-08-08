@@ -16,16 +16,19 @@ export default function BottomNav() {
   const { openModal } = useNewRecipeModal();
 
   return (
-    // z-40 sits below the z-50 modal overlays on purpose. The nav renders after
-    // <Routes> in App, so at an equal z-index it painted over whatever modal was
-    // open and swallowed the buttons pinned to the bottom of it.
+    // NOT position:fixed — the nav is the last flex child of `.pk-shell`, which
+    // is why it can no longer drift up the screen on iOS. See the app-shell
+    // block in index.css before changing this.
+    //
+    // relative + z-40 only so the top border and shadow paint over the scroller
+    // above it; z-40 stays below the z-50 modal overlays, which render after the
+    // shell and must be able to cover the nav.
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40"
-      // Opaque background, no backdrop-filter and no will-change/translateZ on
-      // purpose — see --bar-bg in index.css. Any of those three keeps iOS from
-      // scrolling this page on the compositor, and the nav then rides up the
-      // screen with the content while you scroll instead of staying pinned. At
-      // the 0.9 alpha it used to sit at, the blur was barely visible anyway.
+      className="relative shrink-0 z-40"
+      // Opaque background, no backdrop-filter — see --bar-bg in index.css. A
+      // blurred bar over the scroller is one of the things that drops iOS onto
+      // main-thread scrolling. At the 0.9 alpha it used to sit at, the blur was
+      // barely visible anyway.
       style={{
         background: 'var(--bar-bg)',
         borderTop: '1px solid var(--border)',
