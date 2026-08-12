@@ -1,3 +1,5 @@
+import type { CustomShoppingItem } from './shoppingItems.js';
+
 export interface Ingredient {
   item: string;
   quantity: string;
@@ -97,6 +99,9 @@ export interface MealPlan {
   week_start: string;
   checked_items: string[];
   shopping_categories: Record<string, string>;
+  // Shopping-list lines added by hand for this week — the ones no recipe asked
+  // for. See `CustomShoppingItem` in shoppingItems.ts.
+  custom_items: CustomShoppingItem[];
   created_at: string;
 }
 

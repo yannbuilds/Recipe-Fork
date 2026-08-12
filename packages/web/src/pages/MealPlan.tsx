@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Eye,
   EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
@@ -28,13 +29,17 @@ import {
 } from '@dnd-kit/core';
 import {
   SUB_RECIPE_SELECT,
+  customItemKey,
   expandIngredientsForEntry,
   hasSubRecipes,
+  makeCustomItem,
   makesComponents,
+  parseShoppingLine,
   subRecipeIdsIn,
   supabase,
 } from '@recipe-aggregator/shared';
 import type {
+  CustomShoppingItem,
   Recipe,
   MealPlan as MealPlanType,
   MealPlanEntry,
@@ -48,7 +53,11 @@ import RateCookModal from '../components/RateCookModal';
 import DayOptionsModal from '../components/DayOptionsModal';
 import PlanWeekModal, { type PlanPrefs, type PlanPick } from '../components/PlanWeekModal';
 import { DraggableMealRow, MealDropZone, dayFromDropId, dropId } from '../components/MealPlanDnd';
-import { combineIngredients, type IngredientWithRecipe } from '../utils/combineIngredients';
+import {
+  combineIngredients,
+  type AggregatedIngredient,
+  type IngredientWithRecipe,
+} from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
 import { getSunday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import {
@@ -70,8 +79,25 @@ import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 type Tab = 'meals' | 'shopping';
 
-/** How a grocery line is identified in the plan's `checked_items`. */
+/** How a recipe-derived grocery line is identified in `checked_items`. */
 const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
+
+/*
+ * A line on the shopping list, whichever way it got there. `customId` is set
+ * only on the ones added by hand — it's what makes a line editable, deletable,
+ * and identified by id rather than by name, so renaming it keeps its tick.
+ */
+type ShoppingRow = AggregatedIngredient & { customId?: string };
+
+const rowKey = (row: ShoppingRow) =>
+  row.customId ? customItemKey(row.customId) : itemKey(row);
+
+/** A hand-added line as a single editable string, the way it was typed. */
+const rowText = (c: CustomShoppingItem) =>
+  [c.quantity, c.unit, c.item].filter(Boolean).join(' ');
+
+// How long a newly added item stays highlighted after it lands in its aisle.
+const LANDED_MS = 1600;
 
 // A ticked item holds its struck-through place for a beat so the tick reads,
 // then collapses out of the list. Shopping is about what's left to buy.
@@ -133,6 +159,18 @@ export default function MealPlan() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [settling, setSettling] = useState<Record<string, 'resting' | 'leaving'>>({});
   const settleTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
+
+  // Items you added yourself. `composerOpen` is the empty row at the foot of
+  // the list you type into; `editingCustom` is an existing one opened for
+  // editing in place. `landed` briefly marks the item that just flew up into
+  // its aisle, so you can see where it went.
+  const [customItems, setCustomItems] = useState<CustomShoppingItem[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [editingCustom, setEditingCustom] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [landed, setLanded] = useState<string | null>(null);
+  const landedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorisedRef = useRef<string>('');
@@ -201,6 +239,7 @@ export default function MealPlan() {
     setPlan(planData);
     setCheckedItems(new Set(planData.checked_items || []));
     setCategoryMap(planData.shopping_categories || {});
+    setCustomItems(planData.custom_items || []);
 
     const { data: mprData } = await supabase
       .from('meal_plan_recipes')
@@ -245,6 +284,20 @@ export default function MealPlan() {
   );
   const combined = combineIngredients(allIngredients);
 
+  // Recipe lines first, then the ones you added. Hand-added items stay in the
+  // order they were typed rather than sorting into the alphabetical run, so a
+  // new one lands where you'd look for it: the bottom of its aisle.
+  const shoppingRows: ShoppingRow[] = [
+    ...combined,
+    ...customItems.map((c) => ({
+      item: c.item,
+      quantity: c.quantity,
+      unit: c.unit,
+      sources: [],
+      customId: c.id,
+    })),
+  ];
+
   const mealEntries = entries.filter((e) => e.entry_type === 'cook');
   const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
   const unplaced = unplacedEntries(entries);
@@ -255,12 +308,12 @@ export default function MealPlan() {
 
   // Run categorisation when ingredients change
   useEffect(() => {
-    if (!plan || combined.length === 0) return;
+    if (!plan || shoppingRows.length === 0) return;
 
-    const fingerprint = `${plan.id}-${combined.map((c) => c.item).sort().join(',')}`;
+    const fingerprint = `${plan.id}-${shoppingRows.map((c) => c.item).sort().join(',')}`;
     if (fingerprint === lastCategorisedRef.current) return;
 
-    const hasUncategorised = combined.some(
+    const hasUncategorised = shoppingRows.some(
       (ing) => !categoryMap[ing.item.toLowerCase().trim()]
     );
     if (!hasUncategorised) {
@@ -273,7 +326,7 @@ export default function MealPlan() {
 
     async function runCategorise() {
       setCategorising(true);
-      const updated = await categoriseIngredients(combined, categoryMap);
+      const updated = await categoriseIngredients(shoppingRows, categoryMap);
       if (cancelled) return;
       setCategoryMap(updated);
       setCategorising(false);
@@ -288,16 +341,16 @@ export default function MealPlan() {
     runCategorise();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan?.id, combined.length, entries.length]);
+  }, [plan?.id, combined.length, customItems.length, entries.length]);
 
-  const categorisedIngredients = combined.map((ing) => ({
+  const categorisedIngredients = shoppingRows.map((ing) => ({
     ...ing,
     shoppingCategory: categoryMap[ing.item.toLowerCase().trim()] || 'Other',
   }));
 
   // What's still to buy — the number that matters when you're in the shop.
-  const remainingCount = combined.filter((ing) => !checkedItems.has(itemKey(ing))).length;
-  const doneCount = combined.length - remainingCount;
+  const remainingCount = shoppingRows.filter((ing) => !checkedItems.has(rowKey(ing))).length;
+  const doneCount = shoppingRows.length - remainingCount;
 
   // A ticked item stays rendered only while `showCompleted` is on or while it's
   // still settling out; a category with nothing left to show goes with it.
@@ -307,10 +360,17 @@ export default function MealPlan() {
       return {
         category: cat,
         items,
-        remaining: items.filter((ing) => !checkedItems.has(itemKey(ing))).length,
+        remaining: items.filter((ing) => !checkedItems.has(rowKey(ing))).length,
         visible: items.filter((ing) => {
-          const key = itemKey(ing);
-          return !checkedItems.has(key) || showCompleted || settling[key] !== undefined;
+          const key = rowKey(ing);
+          // The row being edited stays put even if it's ticked — losing it
+          // mid-keystroke would be its own kind of bug.
+          return (
+            !checkedItems.has(key) ||
+            showCompleted ||
+            settling[key] !== undefined ||
+            (ing.customId != null && editingCustom === ing.customId)
+          );
         }),
       };
     })
@@ -337,7 +397,16 @@ export default function MealPlan() {
 
   useEffect(() => () => {
     Object.values(settleTimersRef.current).flat().forEach(clearTimeout);
+    if (landedTimerRef.current) clearTimeout(landedTimerRef.current);
   }, []);
+
+  // A different week is a different list: close anything half-typed.
+  useEffect(() => {
+    setComposerOpen(false);
+    setDraft('');
+    setEditingCustom(null);
+    setLanded(null);
+  }, [plan?.id]);
 
   function toggleShowCompleted() {
     const next = !showCompleted;
@@ -405,6 +474,79 @@ export default function MealPlan() {
         delete settleTimersRef.current[key];
       }, SETTLE_HOLD_MS + SETTLE_OUT_MS),
     ];
+  }
+
+  // ── Your own items ──────────────────────────────────
+  // Written straight through rather than debounced like the tick state: adding,
+  // renaming and deleting are deliberate one-off acts, and a debounce here is
+  // just a window in which the last one can be lost.
+  function saveCustomItems(next: CustomShoppingItem[]) {
+    setCustomItems(next);
+    if (!plan) return;
+    supabase
+      .from('meal_plans')
+      .update({ custom_items: next })
+      .eq('id', plan.id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to persist custom items:', JSON.stringify(error));
+      });
+  }
+
+  /** Commit whatever's in the composer. Returns false for an empty line, which
+   *  is how blurring an untouched row closes it instead of adding nothing. */
+  function commitDraft(): boolean {
+    const created = makeCustomItem(draft);
+    setDraft('');
+    if (!created) return false;
+
+    saveCustomItems([...customItems, created]);
+
+    // It sorts itself into an aisle the moment it's added, so mark where it
+    // went for a beat.
+    const key = customItemKey(created.id);
+    if (landedTimerRef.current) clearTimeout(landedTimerRef.current);
+    setLanded(key);
+    landedTimerRef.current = setTimeout(
+      () => setLanded((cur) => (cur === key ? null : cur)),
+      LANDED_MS,
+    );
+    return true;
+  }
+
+  function removeCustomItem(id: string) {
+    const key = customItemKey(id);
+    saveCustomItems(customItems.filter((c) => c.id !== id));
+    setEditingCustom((cur) => (cur === id ? null : cur));
+    clearSettleTimers(key);
+    // Its tick would otherwise sit in checked_items forever with nothing to tick.
+    if (checkedItems.has(key)) {
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        persistCheckedItems(next);
+        return next;
+      });
+    }
+  }
+
+  function startEditingCustom(c: CustomShoppingItem) {
+    setComposerOpen(false);
+    setDraft('');
+    setEditingCustom(c.id);
+    setEditDraft(rowText(c));
+  }
+
+  /** Emptying an item deletes it — the same gesture Reminders uses. */
+  function commitEdit(id: string) {
+    setEditingCustom(null);
+    const { item, quantity, unit } = parseShoppingLine(editDraft);
+    if (!item) {
+      removeCustomItem(id);
+      return;
+    }
+    saveCustomItems(
+      customItems.map((c) => (c.id === id ? { ...c, item, quantity, unit } : c)),
+    );
   }
 
   // ── Entry mutations ─────────────────────────────────
@@ -1248,23 +1390,23 @@ export default function MealPlan() {
       {/* ── Shopping list tab ────────────────────────────── */}
       {!loading && tab === 'shopping' && (
         <div>
-          {combined.length === 0 && (
+          {shoppingRows.length === 0 && (
             <div className="text-center py-14" style={{ animation: 'fadeUp 0.4s ease 0.15s both' }}>
               <div className="flex justify-center" style={{ color: 'var(--muted)' }}>
                 <ShoppingCart size={40} strokeWidth={1.2} />
               </div>
               <p className="mt-4" style={{ fontFamily: fSerif, fontSize: 21, letterSpacing: '-0.015em', color: 'var(--text)' }}>
-                {mealEntries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
+                {mealEntries.length === 0 ? 'Nothing on the list' : 'All meals cooked'}
               </p>
               <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
                 {mealEntries.length === 0
-                  ? 'Add some meals to generate a shopping list.'
-                  : 'All meals are marked as cooked — nothing to shop for.'}
+                  ? 'Add some meals, or add what you need below.'
+                  : 'Nothing left to shop for — add your own below.'}
               </p>
             </div>
           )}
 
-          {combined.length > 0 && (
+          {shoppingRows.length > 0 && (
             <div
               className="flex items-baseline justify-between gap-3"
               style={{ paddingBottom: 14, marginBottom: 22, borderBottom: '1px solid var(--border)', animation: 'fadeUp 0.4s ease 0.15s both' }}
@@ -1303,7 +1445,7 @@ export default function MealPlan() {
           )}
 
           {/* Everything ticked, and the completed rows are hidden. */}
-          {combined.length > 0 && groupedByCategory.length === 0 && (
+          {shoppingRows.length > 0 && groupedByCategory.length === 0 && (
             <div className="text-center py-10" style={{ animation: 'fadeUp 0.4s ease both' }}>
               <div className="flex justify-center" style={{ color: 'var(--green)' }}>
                 <Check size={34} strokeWidth={1.4} />
@@ -1312,12 +1454,12 @@ export default function MealPlan() {
                 That's the lot
               </p>
               <p className="mt-1" style={{ fontFamily: fSans, fontSize: 14, color: 'var(--muted)' }}>
-                All {combined.length} items ticked off.
+                All {shoppingRows.length} items ticked off.
               </p>
             </div>
           )}
 
-          {categorising && combined.length > 0 && (
+          {categorising && shoppingRows.length > 0 && (
             <p className="text-center py-2 mb-2" style={{ fontFamily: fSerif, fontStyle: 'italic', fontSize: 14, color: 'var(--green)' }}>
               Categorising ingredients…
             </p>
@@ -1343,11 +1485,16 @@ export default function MealPlan() {
               </div>
 
               {group.visible.map((ing, i) => {
-                const key = itemKey(ing);
+                const key = rowKey(ing);
                 const checked = checkedItems.has(key);
                 const leaving = settling[key] === 'leaving';
                 const isExpanded = expandedItem === key;
                 const qty = `${ing.quantity}${ing.unit ? ` ${ing.unit}` : ''}`.trim();
+                const custom = ing.customId
+                  ? customItems.find((c) => c.id === ing.customId)
+                  : undefined;
+                const isEditing = custom != null && editingCustom === custom.id;
+                const justLanded = landed === key;
                 return (
                   <div
                     key={key}
@@ -1365,8 +1512,17 @@ export default function MealPlan() {
                     <div style={{ overflow: 'hidden', opacity: checked && !leaving ? 0.5 : 1, transition: 'opacity 0.3s' }}>
                     <div
                       className="flex items-center gap-3 select-none"
-                      style={{ padding: '12px 0', cursor: 'pointer' }}
-                      onClick={() => toggleShoppingItem(key)}
+                      style={{
+                        padding: '12px 0',
+                        cursor: isEditing ? 'default' : 'pointer',
+                        // A just-added item sorts straight into its aisle, so
+                        // it glows for a beat to show where it went. Background
+                        // only — the settling wrapper clips anything outside
+                        // the row's own box.
+                        background: justLanded ? 'var(--paper3)' : 'transparent',
+                        transition: 'background 0.45s ease',
+                      }}
+                      onClick={isEditing ? undefined : () => toggleShoppingItem(key)}
                     >
                       <span
                         className="shrink-0"
@@ -1386,20 +1542,61 @@ export default function MealPlan() {
 
                       <IngredientIcon item={ing.item} />
 
-                      <span
-                        className="flex-1"
-                        style={{
-                          fontFamily: fSerif,
-                          fontSize: 16,
-                          letterSpacing: '-0.01em',
-                          color: checked ? 'var(--muted)' : 'var(--text)',
-                          textDecoration: checked ? 'line-through' : 'none',
-                        }}
-                      >
-                        {ing.item}
-                      </span>
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitEdit(custom!.id);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setEditingCustom(null);
+                            }
+                          }}
+                          onBlur={() => commitEdit(custom!.id)}
+                          className="flex-1 min-w-0"
+                          style={{
+                            fontFamily: fSerif,
+                            fontSize: 16,
+                            letterSpacing: '-0.01em',
+                            color: 'var(--text)',
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            padding: 0,
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="flex-1"
+                          style={{
+                            fontFamily: fSerif,
+                            fontSize: 16,
+                            letterSpacing: '-0.01em',
+                            color: checked ? 'var(--muted)' : 'var(--text)',
+                            textDecoration: checked ? 'line-through' : 'none',
+                            cursor: custom ? 'text' : 'inherit',
+                          }}
+                          // Tapping the words of your own item edits it; tapping
+                          // anywhere else on the row still ticks it off.
+                          onClick={
+                            custom
+                              ? (e) => {
+                                  e.stopPropagation();
+                                  startEditingCustom(custom);
+                                }
+                              : undefined
+                          }
+                        >
+                          {ing.item}
+                        </span>
+                      )}
 
-                      {qty && (
+                      {qty && !isEditing && (
                         <span
                           style={{
                             fontFamily: fMono,
@@ -1414,21 +1611,38 @@ export default function MealPlan() {
                         </span>
                       )}
 
-                      <button
-                        style={{ padding: 4, margin: -4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}
-                        aria-label="Show recipes"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedItem(isExpanded ? null : key);
-                        }}
-                      >
-                        <ChevronDown
-                          size={15}
-                          strokeWidth={2}
-                          color="var(--muted)"
-                          style={{ transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'block' }}
-                        />
-                      </button>
+                      {isEditing && (
+                        <button
+                          style={{ padding: 4, margin: -4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}
+                          aria-label={`Delete ${ing.item}`}
+                          // Fires before the input's blur can commit the edit.
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeCustomItem(custom!.id);
+                          }}
+                        >
+                          <Trash2 size={15} strokeWidth={2} color="var(--muted)" style={{ display: 'block' }} />
+                        </button>
+                      )}
+
+                      {!custom && (
+                        <button
+                          style={{ padding: 4, margin: -4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}
+                          aria-label="Show recipes"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedItem(isExpanded ? null : key);
+                          }}
+                        >
+                          <ChevronDown
+                            size={15}
+                            strokeWidth={2}
+                            color="var(--muted)"
+                            style={{ transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'block' }}
+                          />
+                        </button>
+                      )}
                     </div>
 
                     {isExpanded && (
@@ -1458,6 +1672,84 @@ export default function MealPlan() {
               })}
             </div>
           ))}
+
+          {/* ── Your own items ───────────────────────────────
+              An always-there empty row at the foot of the list. Return banks
+              the line and leaves you on a fresh one, so a whole shop can be
+              typed without touching the mouse; an empty return closes it. */}
+          <div style={{ animation: 'fadeUp 0.4s ease 0.2s both' }}>
+            <div
+              className="flex items-center gap-3"
+              style={{
+                padding: '12px 0',
+                cursor: composerOpen ? 'default' : 'pointer',
+                borderTop: groupedByCategory.length > 0 ? '1px solid var(--rule-hair)' : 'none',
+              }}
+              onClick={() => {
+                if (composerOpen) return;
+                setEditingCustom(null);
+                setComposerOpen(true);
+              }}
+            >
+              <span
+                className="shrink-0"
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  border: '1.5px dashed var(--border)',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <Plus size={12} strokeWidth={2.5} color="var(--muted)" />
+              </span>
+
+              {/* Keeps the text on the same line as every other row's name. */}
+              <span className="shrink-0" style={{ width: 36 }} />
+
+              {composerOpen ? (
+                <input
+                  autoFocus
+                  value={draft}
+                  placeholder="Milk, 2 avocados, 500g pasta…"
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!commitDraft()) setComposerOpen(false);
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setDraft('');
+                      setComposerOpen(false);
+                    }
+                  }}
+                  onBlur={() => {
+                    commitDraft();
+                    setComposerOpen(false);
+                  }}
+                  className="flex-1 min-w-0"
+                  style={{
+                    fontFamily: fSerif,
+                    fontSize: 16,
+                    letterSpacing: '-0.01em',
+                    color: 'var(--text)',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    padding: 0,
+                  }}
+                />
+              ) : (
+                <span
+                  className="flex-1"
+                  style={{ fontFamily: fSerif, fontSize: 16, letterSpacing: '-0.01em', color: 'var(--muted)' }}
+                >
+                  Add item
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

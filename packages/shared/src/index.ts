@@ -27,6 +27,12 @@ export {
   expandIngredientsForEntry,
 } from './ingredients.js';
 export type { SubRecipe, SubRecipeMap, TaggedIngredient } from './ingredients.js';
+export {
+  customItemKey,
+  makeCustomItem,
+  parseShoppingLine,
+} from './shoppingItems.js';
+export type { CustomShoppingItem } from './shoppingItems.js';
 export type {
   Recipe,
   RecipeInsert,

@@ -6,7 +6,13 @@ import {
   makesComponents,
   subRecipeIdsIn,
 } from '@recipe-aggregator/shared/ingredients';
+import {
+  customItemKey,
+  makeCustomItem,
+  parseShoppingLine,
+} from '@recipe-aggregator/shared/shoppingItems';
 import type {
+  CustomShoppingItem,
   MealPlan,
   MealPlanEntry,
   Recipe,
@@ -16,7 +22,7 @@ import type {
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
 import DayOptionsSheet from '@/components/DayOptionsSheet';
@@ -30,7 +36,11 @@ import SubRecipePromptSheet from '@/components/SubRecipePromptSheet';
 import { Body, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { categoriseIngredients, CATEGORY_ORDER } from '@/lib/categoriseIngredients';
-import { combineIngredients, type IngredientWithRecipe } from '@/lib/combineIngredients';
+import {
+  combineIngredients,
+  type AggregatedIngredient,
+  type IngredientWithRecipe,
+} from '@/lib/combineIngredients';
 import { haptics } from '@/lib/haptics';
 import {
   DAY_INDEXES,
@@ -46,7 +56,7 @@ import {
   unplacedEntries,
 } from '@/lib/mealPlanDays';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/lib/theme';
+import { font, useTheme } from '@/lib/theme';
 import {
   formatWeekLabel,
   formatWeekStart,
@@ -59,8 +69,22 @@ import { toRoman } from '@/lib/recipeFormat';
 
 type Tab = 'meals' | 'shopping';
 
-/** How a grocery line is identified in the plan's `checked_items`. */
+/** How a recipe-derived grocery line is identified in `checked_items`. */
 const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
+
+/*
+ * A line on the shopping list, whichever way it got there. `customId` is set
+ * only on the ones added by hand — it's what makes a line editable, deletable,
+ * and identified by id rather than by name, so renaming it keeps its tick.
+ */
+type ShoppingRow = AggregatedIngredient & { customId?: string };
+
+const rowKey = (row: ShoppingRow) =>
+  row.customId ? customItemKey(row.customId) : itemKey(row);
+
+/** A hand-added line as a single editable string, the way it was typed. */
+const rowText = (c: CustomShoppingItem) =>
+  [c.quantity, c.unit, c.item].filter(Boolean).join(' ');
 
 // A ticked item holds its struck-through place for a beat so the tick reads,
 // then collapses out of the list. Shopping is about what's left to buy.
@@ -89,6 +113,14 @@ export default function MealPlanScreen() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [settling, setSettling] = useState<Record<string, 'resting' | 'leaving'>>({});
   const settleTimers = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
+  // Items you added yourself. `composerOpen` is the empty row at the foot of
+  // the list you type into; `editingCustom` is an existing one opened for
+  // editing in place.
+  const [customItems, setCustomItems] = useState<CustomShoppingItem[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [editingCustom, setEditingCustom] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   // Which day the picker was opened for (null = into the week with no day).
   const [addTarget, setAddTarget] = useState<number | null>(null);
@@ -174,6 +206,7 @@ export default function MealPlanScreen() {
     setPlan(planData);
     setCheckedItems(new Set(planData.checked_items || []));
     setCategoryMap(planData.shopping_categories || {});
+    setCustomItems(planData.custom_items || []);
     const { data: mpr } = await supabase
       .from('meal_plan_recipes')
       .select('*, recipe:recipes(*)')
@@ -236,6 +269,23 @@ export default function MealPlanScreen() {
   );
   const combined = useMemo(() => combineIngredients(allIngredients), [JSON.stringify(allIngredients)]);
 
+  // Recipe lines first, then the ones you added. Hand-added items stay in the
+  // order they were typed rather than sorting into the alphabetical run, so a
+  // new one lands where you'd look for it: the bottom of its aisle.
+  const shoppingRows: ShoppingRow[] = useMemo(
+    () => [
+      ...combined,
+      ...customItems.map((c) => ({
+        item: c.item,
+        quantity: c.quantity,
+        unit: c.unit,
+        sources: [],
+        customId: c.id,
+      })),
+    ],
+    [combined, customItems],
+  );
+
   const mealEntries = entries.filter((e) => e.entry_type === 'cook');
   const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
   const unplaced = unplacedEntries(entries);
@@ -246,34 +296,34 @@ export default function MealPlanScreen() {
 
   // Categorise ingredients when they change
   useEffect(() => {
-    if (!plan || combined.length === 0) return;
-    const fingerprint = `${plan.id}-${combined.map((c) => c.item).sort().join(',')}`;
+    if (!plan || shoppingRows.length === 0) return;
+    const fingerprint = `${plan.id}-${shoppingRows.map((c) => c.item).sort().join(',')}`;
     if (fingerprint === lastCategorised.current) return;
-    const hasUncategorised = combined.some((ing) => !categoryMap[ing.item.toLowerCase().trim()]);
+    const hasUncategorised = shoppingRows.some((ing) => !categoryMap[ing.item.toLowerCase().trim()]);
     if (!hasUncategorised) {
       lastCategorised.current = fingerprint;
       return;
     }
     lastCategorised.current = fingerprint;
     (async () => {
-      const updated = await categoriseIngredients(combined, categoryMap);
+      const updated = await categoriseIngredients(shoppingRows, categoryMap);
       setCategoryMap(updated);
       await supabase.from('meal_plans').update({ shopping_categories: updated }).eq('id', plan.id);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan?.id, combined.length]);
+  }, [plan?.id, combined.length, customItems.length]);
 
   // What's still to buy — the number that matters when you're in the shop.
   const remainingCount = useMemo(
-    () => combined.filter((ing) => !checkedItems.has(itemKey(ing))).length,
-    [combined, checkedItems],
+    () => shoppingRows.filter((ing) => !checkedItems.has(rowKey(ing))).length,
+    [shoppingRows, checkedItems],
   );
-  const doneCount = combined.length - remainingCount;
+  const doneCount = shoppingRows.length - remainingCount;
 
   // A ticked item stays rendered only while `showCompleted` is on or while it's
   // still settling out; a category with nothing left to show goes with it.
   const grouped = useMemo(() => {
-    const withCat = combined.map((ing) => ({
+    const withCat = shoppingRows.map((ing) => ({
       ...ing,
       shoppingCategory: categoryMap[ing.item.toLowerCase().trim()] || 'Other',
     }));
@@ -282,14 +332,21 @@ export default function MealPlanScreen() {
       return {
         category: cat,
         items,
-        remaining: items.filter((ing) => !checkedItems.has(itemKey(ing))).length,
+        remaining: items.filter((ing) => !checkedItems.has(rowKey(ing))).length,
         visible: items.filter((ing) => {
-          const key = itemKey(ing);
-          return !checkedItems.has(key) || showCompleted || settling[key] !== undefined;
+          const key = rowKey(ing);
+          // The row being edited stays put even if it's ticked — losing it
+          // mid-keystroke would be its own kind of bug.
+          return (
+            !checkedItems.has(key) ||
+            showCompleted ||
+            settling[key] !== undefined ||
+            (ing.customId != null && editingCustom === ing.customId)
+          );
         }),
       };
     }).filter((g) => g.visible.length > 0);
-  }, [combined, categoryMap, checkedItems, showCompleted, settling]);
+  }, [shoppingRows, categoryMap, checkedItems, showCompleted, settling, editingCustom]);
 
   // Timers are per item, so a second tick never cancels the first one's exit.
   function clearSettleTimers(key: string) {
@@ -303,6 +360,9 @@ export default function MealPlanScreen() {
     Object.values(settleTimers.current).flat().forEach(clearTimeout);
     settleTimers.current = {};
     setSettling({});
+    setComposerOpen(false);
+    setDraft('');
+    setEditingCustom(null);
   }, [plan?.id]);
 
   useEffect(() => () => {
@@ -371,6 +431,63 @@ export default function MealPlanScreen() {
         delete settleTimers.current[key];
       }, SETTLE_HOLD_MS + SETTLE_OUT_MS),
     ];
+  }
+
+  // ── Your own items ──────────────────────────────────
+  // Written straight through rather than debounced like the tick state: adding,
+  // renaming and deleting are deliberate one-off acts, and a debounce here is
+  // just a window in which the last one can be lost.
+  function saveCustomItems(next: CustomShoppingItem[]) {
+    setCustomItems(next);
+    if (!plan) return;
+    supabase.from('meal_plans').update({ custom_items: next }).eq('id', plan.id);
+  }
+
+  /** Commit whatever's in the composer. Returns false for an empty line, which
+   *  is how closing an untouched row adds nothing. */
+  function commitDraft(): boolean {
+    const created = makeCustomItem(draft);
+    setDraft('');
+    if (!created) return false;
+    haptics.success();
+    saveCustomItems([...customItems, created]);
+    return true;
+  }
+
+  function removeCustomItem(id: string) {
+    haptics.light();
+    const key = customItemKey(id);
+    saveCustomItems(customItems.filter((c) => c.id !== id));
+    setEditingCustom((cur) => (cur === id ? null : cur));
+    clearSettleTimers(key);
+    // Its tick would otherwise sit in checked_items forever with nothing to tick.
+    if (checkedItems.has(key)) {
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        persistChecked(next);
+        return next;
+      });
+    }
+  }
+
+  function startEditingCustom(c: CustomShoppingItem) {
+    haptics.light();
+    setComposerOpen(false);
+    setDraft('');
+    setEditingCustom(c.id);
+    setEditDraft(rowText(c));
+  }
+
+  /** Emptying an item deletes it — the same gesture Reminders uses. */
+  function commitEdit(id: string) {
+    setEditingCustom(null);
+    const { item, quantity, unit } = parseShoppingLine(editDraft);
+    if (!item) {
+      removeCustomItem(id);
+      return;
+    }
+    saveCustomItems(customItems.map((c) => (c.id === id ? { ...c, item, quantity, unit } : c)));
   }
 
   // ── Entry mutations ─────────────────────────────────
@@ -852,6 +969,11 @@ export default function MealPlanScreen() {
         scrollEnabled={!drag.dragging}
         scrollEventThrottle={16}
         onScroll={(e) => drag.handleScroll(e.nativeEvent.contentOffset.y)}
+        // The add-item row sits at the foot of the list, so the keyboard has to
+        // push it up rather than sit over it — and one tap has to be enough to
+        // move from the field to a row.
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 }}
       >
         {/* ── Masthead: one line, plus the week control ── */}
@@ -1266,21 +1388,21 @@ export default function MealPlanScreen() {
         {/* Shopping tab */}
         {tab === 'shopping' && (
           <View style={{ paddingHorizontal: 16 }}>
-            {combined.length === 0 && (
+            {shoppingRows.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="cart-outline" size={40} color={t.muted} />
                 <Serif size={21} style={{ marginTop: 14 }}>
-                  {mealEntries.length === 0 ? 'No meals added yet' : 'All meals cooked'}
+                  {mealEntries.length === 0 ? 'Nothing on the list' : 'All meals cooked'}
                 </Serif>
                 <Body size={14} color={t.muted} style={{ marginTop: 4, textAlign: 'center' }}>
                   {mealEntries.length === 0
-                    ? 'Add some meals to generate a shopping list.'
-                    : 'Nothing left to shop for.'}
+                    ? 'Add some meals, or add what you need below.'
+                    : 'Nothing left to shop for — add your own below.'}
                 </Body>
               </View>
             )}
 
-            {combined.length > 0 && (
+            {shoppingRows.length > 0 && (
               <View
                 style={{
                   flexDirection: 'row',
@@ -1319,14 +1441,14 @@ export default function MealPlanScreen() {
             )}
 
             {/* Everything ticked, and the completed rows are hidden. */}
-            {combined.length > 0 && grouped.length === 0 && (
+            {shoppingRows.length > 0 && grouped.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 34 }}>
                 <Ionicons name="checkmark-circle-outline" size={38} color={t.green} />
                 <Serif size={20} style={{ marginTop: 10 }}>
                   That&apos;s the lot
                 </Serif>
                 <Body size={14} color={t.muted} style={{ marginTop: 4, textAlign: 'center' }}>
-                  All {combined.length} items ticked off.
+                  All {shoppingRows.length} items ticked off.
                 </Body>
               </View>
             )}
@@ -1353,9 +1475,13 @@ export default function MealPlanScreen() {
                   <Mono size={11}>{showCompleted ? group.items.length : group.remaining}</Mono>
                 </View>
                 {group.visible.map((ing, i) => {
-                  const key = itemKey(ing);
+                  const key = rowKey(ing);
                   const checked = checkedItems.has(key);
                   const qty = `${ing.quantity}${ing.unit ? ` ${ing.unit}` : ''}`.trim();
+                  const custom = ing.customId
+                    ? customItems.find((c) => c.id === ing.customId)
+                    : undefined;
+                  const isEditing = custom != null && editingCustom === custom.id;
                   return (
                     <SettlingRow
                       key={key}
@@ -1363,7 +1489,7 @@ export default function MealPlanScreen() {
                       duration={SETTLE_OUT_MS}
                     >
                       <Pressable
-                        onPress={() => toggleShopping(key)}
+                        onPress={isEditing ? undefined : () => toggleShopping(key)}
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -1371,25 +1497,135 @@ export default function MealPlanScreen() {
                           paddingVertical: 12,
                           borderBottomWidth: i < group.visible.length - 1 ? 1 : 0,
                           borderBottomColor: t.ruleHair,
-                          opacity: checked ? 0.5 : 1,
+                          opacity: checked && !isEditing ? 0.5 : 1,
                         }}
                       >
                         <CheckSquare checked={checked} />
                         <IngredientIcon item={ing.item} />
-                        <Serif
-                          size={16}
-                          style={{ flex: 1, textDecorationLine: checked ? 'line-through' : 'none' }}
-                          color={checked ? t.muted : t.text}
-                        >
-                          {ing.item}
-                        </Serif>
-                        {qty ? <Mono size={11}>{qty}</Mono> : null}
+                        {isEditing ? (
+                          <>
+                            <TextInput
+                              autoFocus
+                              value={editDraft}
+                              onChangeText={setEditDraft}
+                              // Return blurs a single-line input, and the blur
+                              // is what commits — one path, not two.
+                              onBlur={() => commitEdit(custom!.id)}
+                              returnKeyType="done"
+                              selectTextOnFocus
+                              style={{
+                                flex: 1,
+                                fontFamily: font.serif,
+                                fontSize: 16,
+                                color: t.text,
+                                padding: 0,
+                              }}
+                            />
+                            <Pressable
+                              onPress={() => removeCustomItem(custom!.id)}
+                              hitSlop={10}
+                              accessibilityLabel={`Delete ${ing.item}`}
+                            >
+                              <Ionicons name="trash-outline" size={16} color={t.muted} />
+                            </Pressable>
+                          </>
+                        ) : (
+                          <>
+                            {/* Tapping the words of your own item edits it;
+                                tapping anywhere else on the row ticks it off. */}
+                            <Pressable
+                              style={{ flex: 1 }}
+                              onPress={
+                                custom ? () => startEditingCustom(custom) : () => toggleShopping(key)
+                              }
+                            >
+                              <Serif
+                                size={16}
+                                style={{ textDecorationLine: checked ? 'line-through' : 'none' }}
+                                color={checked ? t.muted : t.text}
+                              >
+                                {ing.item}
+                              </Serif>
+                            </Pressable>
+                            {qty ? <Mono size={11}>{qty}</Mono> : null}
+                          </>
+                        )}
                       </Pressable>
                     </SettlingRow>
                   );
                 })}
               </View>
             ))}
+
+            {/* ── Your own items ─────────────────────────────
+                An always-there empty row at the foot of the list. Return banks
+                the line and leaves you on a fresh one, so a whole shop can be
+                typed in one go; returning on an empty row closes it. */}
+            <Pressable
+              onPress={() => {
+                if (composerOpen) return;
+                haptics.light();
+                setEditingCustom(null);
+                setComposerOpen(true);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 12,
+                borderTopWidth: grouped.length > 0 ? 1 : 0,
+                borderTopColor: t.ruleHair,
+              }}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  borderWidth: 1.5,
+                  borderStyle: 'dashed',
+                  borderColor: t.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="add" size={13} color={t.muted} />
+              </View>
+
+              {/* Keeps the text on the same line as every other row's name. */}
+              <View style={{ width: 34 }} />
+
+              {composerOpen ? (
+                <TextInput
+                  autoFocus
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Milk, 2 avocados, 500g pasta…"
+                  placeholderTextColor={t.muted}
+                  // Keeps focus so return banks the line and starts the next.
+                  submitBehavior="submit"
+                  onSubmitEditing={() => {
+                    if (!commitDraft()) setComposerOpen(false);
+                  }}
+                  onBlur={() => {
+                    commitDraft();
+                    setComposerOpen(false);
+                  }}
+                  returnKeyType="next"
+                  style={{
+                    flex: 1,
+                    fontFamily: font.serif,
+                    fontSize: 16,
+                    color: t.text,
+                    padding: 0,
+                  }}
+                />
+              ) : (
+                <Serif size={16} color={t.muted} style={{ flex: 1 }}>
+                  Add item
+                </Serif>
+              )}
+            </Pressable>
           </View>
         )}
       </ScrollView>
