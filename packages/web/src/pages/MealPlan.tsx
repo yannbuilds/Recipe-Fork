@@ -657,6 +657,53 @@ export default function MealPlan() {
     await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
   }
 
+  /** Carry an unmade recipe into the following plan without shopping for it twice. */
+  async function moveToNextWeek(entryId: string) {
+    if (!user) return;
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry || entry.entry_type !== 'cook' || entry.is_cooked) return;
+
+    const nextWeekStart = formatWeekStart(shiftWeek(weekStart, 1));
+    const { data: existingPlans, error: lookupError } = await supabase
+      .from('meal_plans')
+      .select('id')
+      .eq('week_start', nextWeekStart)
+      .order('created_at', { ascending: true });
+    if (lookupError) {
+      console.error('Failed to find next week:', JSON.stringify(lookupError));
+      return;
+    }
+
+    let targetPlanId = existingPlans?.[0]?.id as string | undefined;
+    if (!targetPlanId) {
+      const { data: created, error: createError } = await supabase
+        .from('meal_plans')
+        .insert({ user_id: user.id, week_start: nextWeekStart })
+        .select('id')
+        .single();
+      if (createError || !created) {
+        console.error('Failed to create next week:', JSON.stringify(createError));
+        return;
+      }
+      targetPlanId = created.id;
+    }
+
+    const { error } = await supabase
+      .from('meal_plan_recipes')
+      .update({ meal_plan_id: targetPlanId, include_in_shopping: false })
+      .eq('id', entryId);
+    if (error) {
+      console.error('Failed to move meal to next week:', JSON.stringify(error));
+      return;
+    }
+
+    // planned_nights replaced these old leftover rows; don't strand one in the
+    // original week if this account still has pre-migration data.
+    await supabase.from('meal_plan_recipes').delete().eq('parent_id', entryId).eq('entry_type', 'batch');
+    setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
+    setEntryMenu(null);
+  }
+
   async function handleRemove(entryId: string) {
     const entry = entries.find((e) => e.id === entryId);
     // Removing a cook also clears any legacy batch children.
@@ -1874,6 +1921,9 @@ export default function MealPlan() {
                 : null,
               entryMenu.is_cooked
                 ? { label: 'Not cooked after all', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
+                : null,
+              entryMenu.entry_type === 'cook' && !entryMenu.is_cooked
+                ? { label: 'Move to next week', run: () => moveToNextWeek(entryMenu.id) }
                 : null,
               { label: 'Move to another day', run: () => { setMoving(entryMenu.id); setEntryMenu(null); setTab('meals'); } },
               entryMenu.day_index != null

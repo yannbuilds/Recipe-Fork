@@ -604,6 +604,43 @@ export default function MealPlanScreen() {
     await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
   }
 
+  /** Carry an unmade recipe into the following plan without shopping for it twice. */
+  async function moveToNextWeek(entryId: string) {
+    if (!user) return;
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry || entry.entry_type !== 'cook' || entry.is_cooked) return;
+
+    const nextWeekStart = formatWeekStart(shiftWeek(weekStart, 1));
+    const { data: existingPlans, error: lookupError } = await supabase
+      .from('meal_plans')
+      .select('id')
+      .eq('week_start', nextWeekStart)
+      .order('created_at', { ascending: true });
+    if (lookupError) return;
+
+    let targetPlanId = existingPlans?.[0]?.id as string | undefined;
+    if (!targetPlanId) {
+      const { data: created } = await supabase
+        .from('meal_plans')
+        .insert({ user_id: user.id, week_start: nextWeekStart })
+        .select('id')
+        .single();
+      if (!created) return;
+      targetPlanId = created.id;
+    }
+
+    const { error } = await supabase
+      .from('meal_plan_recipes')
+      .update({ meal_plan_id: targetPlanId, include_in_shopping: false })
+      .eq('id', entryId);
+    if (error) return;
+
+    await supabase.from('meal_plan_recipes').delete().eq('parent_id', entryId).eq('entry_type', 'batch');
+    haptics.success();
+    setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
+    setEntryMenu(null);
+  }
+
   async function removeEntry(entryId: string) {
     haptics.light();
     const entry = entries.find((e) => e.id === entryId);
@@ -956,6 +993,12 @@ export default function MealPlanScreen() {
                 toggleCooked(entryMenu.id);
                 setEntryMenu(null);
               },
+            }
+          : null,
+        entryMenu.entry_type === 'cook' && !entryMenu.is_cooked
+          ? {
+              label: 'Move to next week',
+              run: () => moveToNextWeek(entryMenu.id),
             }
           : null,
         {

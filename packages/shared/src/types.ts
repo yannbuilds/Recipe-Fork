@@ -141,6 +141,9 @@ export interface MealPlanRecipe {
   // alone as something to buy. Null means nobody was ever asked — see
   // `makesComponents()` for how that resolves.
   make_components: boolean | null;
+  // False when a meal is carried into a later week after its shopping has
+  // already been done. New meals include their ingredients by default.
+  include_in_shopping: boolean;
 }
 
 export interface MealPlanEntry extends MealPlanRecipe {

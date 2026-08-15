@@ -54,7 +54,7 @@ export function unplacedEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
  * buy nothing, and neither 'quick' nor 'out' buys anything at all.
  */
 export function shoppingSourceEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
-  return entries.filter((e) => e.entry_type === 'cook' && e.recipe);
+  return entries.filter((e) => e.entry_type === 'cook' && e.recipe && e.include_in_shopping !== false);
 }
 
 /** Servings this cook should be shopped for; falls back to the recipe's own. */
