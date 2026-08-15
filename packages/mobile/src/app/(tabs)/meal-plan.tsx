@@ -22,7 +22,7 @@ import type {
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Animated, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@/components/BottomSheet';
 import DayOptionsSheet from '@/components/DayOptionsSheet';
@@ -68,6 +68,7 @@ import {
 import { toRoman } from '@/lib/recipeFormat';
 
 type Tab = 'meals' | 'shopping';
+type MoveToast = { key: number; text: string; kind: 'success' | 'error' };
 
 /** How a recipe-derived grocery line is identified in `checked_items`. */
 const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
@@ -127,6 +128,8 @@ export default function MealPlanScreen() {
   const [daySheet, setDaySheet] = useState<number | null>(null);
   const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [moveToast, setMoveToast] = useState<MoveToast | null>(null);
+  const moveToastAnim = useRef(new Animated.Value(0)).current;
   const [weekMenu, setWeekMenu] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
@@ -151,6 +154,23 @@ export default function MealPlanScreen() {
   useEffect(() => () => {
     if (pickerTimer.current) clearTimeout(pickerTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!moveToast) return;
+    moveToastAnim.setValue(0);
+    Animated.spring(moveToastAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 300,
+    }).start();
+    const timer = setTimeout(() => {
+      Animated.timing(moveToastAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(
+        () => setMoveToast(null),
+      );
+    }, 2400);
+    return () => clearTimeout(timer);
+  }, [moveToast, moveToastAnim]);
 
   // Drag a meal onto any day — or onto "not on a day yet" to unschedule it.
   const drag = useDragToDay({
@@ -616,7 +636,10 @@ export default function MealPlanScreen() {
       .select('id')
       .eq('week_start', nextWeekStart)
       .order('created_at', { ascending: true });
-    if (lookupError) return;
+    if (lookupError) {
+      setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
+      return;
+    }
 
     let targetPlanId = existingPlans?.[0]?.id as string | undefined;
     if (!targetPlanId) {
@@ -625,7 +648,10 @@ export default function MealPlanScreen() {
         .insert({ user_id: user.id, week_start: nextWeekStart })
         .select('id')
         .single();
-      if (!created) return;
+      if (!created) {
+        setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
+        return;
+      }
       targetPlanId = created.id;
     }
 
@@ -633,12 +659,20 @@ export default function MealPlanScreen() {
       .from('meal_plan_recipes')
       .update({ meal_plan_id: targetPlanId, include_in_shopping: false })
       .eq('id', entryId);
-    if (error) return;
+    if (error) {
+      setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
+      return;
+    }
 
     await supabase.from('meal_plan_recipes').delete().eq('parent_id', entryId).eq('entry_type', 'batch');
     haptics.success();
     setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
     setEntryMenu(null);
+    setMoveToast({
+      key: Date.now(),
+      text: `${entry.recipe?.title ?? 'Recipe'} moved to next week`,
+      kind: 'success',
+    });
   }
 
   async function removeEntry(entryId: string) {
@@ -1972,6 +2006,54 @@ export default function MealPlanScreen() {
         }}
         onClose={() => setRateCook(null)}
       />
+
+      {moveToast && (
+        <Animated.View
+          key={moveToast.key}
+          pointerEvents="none"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={{
+            position: 'absolute',
+            left: 20,
+            right: 20,
+            bottom: insets.bottom + 76,
+            zIndex: 100,
+            elevation: 10,
+            alignItems: 'center',
+            opacity: moveToastAnim,
+            transform: [{
+              translateY: moveToastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }),
+            }],
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 7,
+              maxWidth: '100%',
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 999,
+              backgroundColor: moveToast.kind === 'success' ? t.greenSolid : t.red,
+              shadowColor: '#000',
+              shadowOpacity: 0.18,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 4 },
+            }}
+          >
+            <Ionicons
+              name={moveToast.kind === 'success' ? 'checkmark-circle' : 'alert-circle'}
+              size={16}
+              color="#fff"
+            />
+            <Body size={13} weight="semi" numberOfLines={1} color="#fff">
+              {moveToast.text}
+            </Body>
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }

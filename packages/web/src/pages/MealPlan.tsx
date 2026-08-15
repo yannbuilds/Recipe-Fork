@@ -79,6 +79,7 @@ import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { Eyebrow } from '../components/pieKeeper/PieKeeperBits';
 
 type Tab = 'meals' | 'shopping';
+type MoveToast = { key: number; text: string; kind: 'success' | 'error' };
 
 /** How a recipe-derived grocery line is identified in `checked_items`. */
 const itemKey = (ing: { item: string; unit: string }) => `${ing.item}-${ing.unit}`;
@@ -139,6 +140,7 @@ export default function MealPlan() {
   const [daySheet, setDaySheet] = useState<number | null>(null);
   const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [moveToast, setMoveToast] = useState<MoveToast | null>(null);
   // The meal currently being dragged onto a day.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
@@ -176,6 +178,12 @@ export default function MealPlan() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCategorisedRef = useRef<string>('');
   const weekMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!moveToast) return;
+    const timer = setTimeout(() => setMoveToast(null), 2600);
+    return () => clearTimeout(timer);
+  }, [moveToast]);
 
   // Plan-mode answers live on the profile, not in context — only this screen
   // needs them, and only when the user opens plan mode.
@@ -671,6 +679,7 @@ export default function MealPlan() {
       .order('created_at', { ascending: true });
     if (lookupError) {
       console.error('Failed to find next week:', JSON.stringify(lookupError));
+      setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
       return;
     }
 
@@ -683,6 +692,7 @@ export default function MealPlan() {
         .single();
       if (createError || !created) {
         console.error('Failed to create next week:', JSON.stringify(createError));
+        setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
         return;
       }
       targetPlanId = created.id;
@@ -694,6 +704,7 @@ export default function MealPlan() {
       .eq('id', entryId);
     if (error) {
       console.error('Failed to move meal to next week:', JSON.stringify(error));
+      setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
       return;
     }
 
@@ -702,6 +713,11 @@ export default function MealPlan() {
     await supabase.from('meal_plan_recipes').delete().eq('parent_id', entryId).eq('entry_type', 'batch');
     setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
     setEntryMenu(null);
+    setMoveToast({
+      key: Date.now(),
+      text: `${entry.recipe?.title ?? 'Recipe'} moved to next week`,
+      kind: 'success',
+    });
   }
 
   async function handleRemove(entryId: string) {
@@ -2040,6 +2056,41 @@ export default function MealPlan() {
         }}
         onClose={() => setRateCook(null)}
       />
+
+      {moveToast && (
+        <div
+          key={moveToast.key}
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)',
+            zIndex: 80,
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            maxWidth: 'min(88vw, 440px)',
+            padding: '10px 16px',
+            borderRadius: 999,
+            background: moveToast.kind === 'success' ? 'var(--green-solid)' : 'var(--red)',
+            color: '#fff',
+            boxShadow: 'var(--shadow-md)',
+            fontFamily: fSans,
+            fontSize: 13,
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            pointerEvents: 'none',
+            animation: 'fadeUp 0.25s ease both',
+          }}
+        >
+          {moveToast.kind === 'success' ? <Check size={16} aria-hidden /> : '⚠'}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{moveToast.text}</span>
+        </div>
+      )}
     </div>
   );
 }
