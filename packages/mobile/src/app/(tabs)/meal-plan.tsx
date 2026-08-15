@@ -624,11 +624,11 @@ export default function MealPlanScreen() {
     await supabase.from('meal_plan_recipes').update({ day_index: dayIndex }).eq('id', entryId);
   }
 
-  /** Carry an unmade recipe into the following plan without shopping for it twice. */
+  /** Carry an uncooked recipe or quick meal into the following plan. */
   async function moveToNextWeek(entryId: string) {
     if (!user) return;
     const entry = entries.find((e) => e.id === entryId);
-    if (!entry || entry.entry_type !== 'cook' || entry.is_cooked) return;
+    if (!entry || !['cook', 'quick'].includes(entry.entry_type) || entry.is_cooked) return;
 
     const nextWeekStart = formatWeekStart(shiftWeek(weekStart, 1));
     const { data: existingPlans, error: lookupError } = await supabase
@@ -670,7 +670,7 @@ export default function MealPlanScreen() {
     setEntryMenu(null);
     setMoveToast({
       key: Date.now(),
-      text: `${entry.recipe?.title ?? 'Recipe'} moved to next week`,
+      text: `${entry.recipe?.title ?? entry.note ?? 'Quick meal'} moved to next week`,
       kind: 'success',
     });
   }
@@ -1029,7 +1029,7 @@ export default function MealPlanScreen() {
               },
             }
           : null,
-        entryMenu.entry_type === 'cook' && !entryMenu.is_cooked
+        (entryMenu.entry_type === 'cook' || entryMenu.entry_type === 'quick') && !entryMenu.is_cooked
           ? {
               label: 'Move to next week',
               run: () => moveToNextWeek(entryMenu.id),
