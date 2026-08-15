@@ -700,7 +700,7 @@ export default function MealPlan() {
 
     const { error } = await supabase
       .from('meal_plan_recipes')
-      .update({ meal_plan_id: targetPlanId, include_in_shopping: false })
+      .update({ meal_plan_id: targetPlanId, day_index: null, include_in_shopping: false })
       .eq('id', entryId);
     if (error) {
       console.error('Failed to move meal to next week:', JSON.stringify(error));

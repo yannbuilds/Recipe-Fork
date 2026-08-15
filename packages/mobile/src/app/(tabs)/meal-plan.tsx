@@ -657,7 +657,7 @@ export default function MealPlanScreen() {
 
     const { error } = await supabase
       .from('meal_plan_recipes')
-      .update({ meal_plan_id: targetPlanId, include_in_shopping: false })
+      .update({ meal_plan_id: targetPlanId, day_index: null, include_in_shopping: false })
       .eq('id', entryId);
     if (error) {
       setMoveToast({ key: Date.now(), text: 'Couldn’t move recipe — try again', kind: 'error' });
