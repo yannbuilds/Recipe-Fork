@@ -12,6 +12,7 @@ interface Props {
   dayIndex: number | null;
   weekStart: Date;
   onCook: () => void;
+  onQuickMeal: (name: string) => void;
   onEatingOut: (note: string) => void;
   onClose: () => void;
 }
@@ -25,11 +26,12 @@ export default function DayOptionsSheet({
   dayIndex,
   weekStart,
   onCook,
+  onQuickMeal,
   onEatingOut,
   onClose,
 }: Props) {
   const t = useTheme();
-  const [mode, setMode] = useState<'menu' | 'out'>('menu');
+  const [mode, setMode] = useState<'menu' | 'quick' | 'out'>('menu');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function DayOptionsSheet({
     <BottomSheet open={open} onClose={onClose}>
       <View style={{ paddingHorizontal: 20 }}>
         <Serif size={22}>
-          {mode === 'out' ? 'Eating out' : DAY_FULL[dayIndex]}
+          {mode === 'out' ? 'Eating out' : mode === 'quick' ? 'Quick meal' : DAY_FULL[dayIndex]}
         </Serif>
         <Mono size={9.5} style={{ marginTop: 3, letterSpacing: 1.4 }}>
           {(mode === 'menu' ? dateLabel : `${DAY_FULL[dayIndex]} ${dateLabel}`).toUpperCase()}
@@ -90,6 +92,7 @@ export default function DayOptionsSheet({
         {mode === 'menu' && (
           <View style={{ marginTop: 14 }}>
             {row('restaurant-outline', 'Cook something', 'Pick from your recipes', onCook)}
+            {row('flash-outline', 'Quick meal', 'Just give the meal a name', () => setMode('quick'))}
             {row('storefront-outline', 'Eating out', 'Add a note if you like', () => setMode('out'))}
             {row('close-outline', 'Leave it open', 'Decide later — nothing will nag you', onClose)}
           </View>
@@ -128,6 +131,17 @@ export default function DayOptionsSheet({
                 }}
                 style={{ flex: 1 }}
               />
+            </View>
+          </View>
+        )}
+
+        {mode === 'quick' && (
+          <View style={{ marginTop: 16 }}>
+            <Mono size={9.5} style={{ letterSpacing: 1.4, marginBottom: 8 }}>MEAL NAME</Mono>
+            <TextInput value={note} onChangeText={setNote} autoFocus returnKeyType="done" onSubmitEditing={() => note.trim() && onQuickMeal(note.trim())} placeholder="Dad's chicken curry, tacos…" placeholderTextColor={t.muted} style={{ borderWidth: 1, borderColor: t.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, color: t.text, fontFamily: font.sans, fontSize: 15, backgroundColor: t.bg }} />
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              <Button label="Back" variant="secondary" onPress={() => setMode('menu')} style={{ flex: 1 }} />
+              <Button label="Add meal" disabled={!note.trim()} onPress={() => { haptics.success(); onQuickMeal(note.trim()); }} style={{ flex: 1 }} />
             </View>
           </View>
         )}

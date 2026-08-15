@@ -261,7 +261,8 @@ export default function MealPlanScreen() {
   // ── Derived ─────────────────────────────────────────
   const today = todayIndex(weekStart);
 
-  // Only cooks buy ingredients; eating out and legacy batch rows buy nothing.
+  // Only saved-recipe cooks buy ingredients; quick meals, eating out and
+  // legacy batch rows buy nothing.
   // A linked sub-recipe you're making swaps its line for its own ingredients.
   const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
   const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
@@ -286,7 +287,7 @@ export default function MealPlanScreen() {
     [combined, customItems],
   );
 
-  const mealEntries = entries.filter((e) => e.entry_type === 'cook');
+  const mealEntries = entries.filter((e) => e.entry_type === 'cook' || e.entry_type === 'quick');
   const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
   const unplaced = unplacedEntries(entries);
   const takenDays = useMemo(
@@ -584,6 +585,17 @@ export default function MealPlanScreen() {
     setDaySheet(null);
   }
 
+  async function addQuickMeal(dayIndex: number, name: string) {
+    if (!plan || !name.trim()) return;
+    const { data } = await supabase
+      .from('meal_plan_recipes')
+      .insert({ meal_plan_id: plan.id, recipe_id: null, day_index: dayIndex, entry_type: 'quick', note: name.trim() })
+      .select('*, recipe:recipes(*)')
+      .single();
+    if (data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+    setDaySheet(null);
+  }
+
   /** `quiet` skips the tick — a drag has already buzzed on landing. */
   async function moveEntry(entryId: string, dayIndex: number | null, quiet = false) {
     if (!quiet) haptics.select();
@@ -696,7 +708,7 @@ export default function MealPlanScreen() {
     ? 'Loading your week…'
     : mealEntries.length === 0
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
-      : `${mealEntries.length} cook${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked. Drag a meal to any day.`;
+      : `${mealEntries.length} meal${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked. Drag a meal to any day.`;
 
   const existingIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
@@ -755,6 +767,21 @@ export default function MealPlanScreen() {
               </Mono>
             ) : null}
           </View>
+        </View>
+      );
+    }
+
+    if (entry.entry_type === 'quick') {
+      return (
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 60, height: 60, borderRadius: 4, backgroundColor: t.greenLight, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="flash-outline" size={17} color={t.green} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Serif size={15} numberOfLines={1} color={cooked ? t.muted : t.text} style={{ textDecorationLine: cooked ? 'line-through' : 'none' }}>{entry.note}</Serif>
+            <Mono size={8.5} style={{ marginTop: 3, letterSpacing: 0.8 }}>QUICK MEAL</Mono>
+          </View>
+          {cooked ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: t.greenLight }}><Ionicons name="checkmark" size={10} color={t.green} /><Mono size={8.5} color={t.green} style={{ letterSpacing: 1 }}>COOKED</Mono></View> : null}
         </View>
       );
     }
@@ -913,7 +940,7 @@ export default function MealPlanScreen() {
               },
             }
           : null,
-        !entryMenu.is_cooked && entryMenu.entry_type === 'cook'
+        !entryMenu.is_cooked && (entryMenu.entry_type === 'cook' || entryMenu.entry_type === 'quick')
           ? {
               label: 'Mark cooked',
               run: () => {
@@ -1645,7 +1672,7 @@ export default function MealPlanScreen() {
             ) : (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons
-                  name={draggedEntry?.entry_type === 'out' ? 'storefront-outline' : 'restaurant-outline'}
+                  name={draggedEntry?.entry_type === 'out' ? 'storefront-outline' : draggedEntry?.entry_type === 'quick' ? 'flash-outline' : 'restaurant-outline'}
                   size={16}
                   color={t.muted}
                 />
@@ -1654,7 +1681,7 @@ export default function MealPlanScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Serif size={15} numberOfLines={1}>
-              {draggedEntry?.entry_type === 'out' ? 'Eating out' : draggedEntry?.recipe?.title}
+              {draggedEntry?.entry_type === 'out' ? 'Eating out' : draggedEntry?.entry_type === 'quick' ? draggedEntry.note : draggedEntry?.recipe?.title}
             </Serif>
             <Mono size={8.5} color={t.green} style={{ marginTop: 3, letterSpacing: 0.8 }}>
               {drag.hover === 'none'
@@ -1717,7 +1744,7 @@ export default function MealPlanScreen() {
       <BottomSheet open={entryMenu !== null} onClose={() => setEntryMenu(null)}>
         <View style={{ paddingHorizontal: 20 }}>
           <Serif size={20} numberOfLines={1}>
-            {entryMenu?.entry_type === 'out' ? 'Eating out' : entryMenu?.recipe?.title}
+            {entryMenu?.entry_type === 'out' ? 'Eating out' : entryMenu?.entry_type === 'quick' ? entryMenu.note : entryMenu?.recipe?.title}
           </Serif>
           <Mono size={9} style={{ marginTop: 3, letterSpacing: 1.4 }}>
             {entryMenu?.day_index != null ? DAY_SHORT[entryMenu.day_index].toUpperCase() : 'NO DAY YET'}
@@ -1840,6 +1867,7 @@ export default function MealPlanScreen() {
           openPickerAfterSheet();
         }}
         onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
+        onQuickMeal={(name) => daySheet !== null && addQuickMeal(daySheet, name)}
         onClose={() => setDaySheet(null)}
       />
 

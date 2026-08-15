@@ -110,13 +110,14 @@ export interface MealPlan {
 //            household of 2 eating the same thing twice shops for 4.
 //  'batch' – another night off that same cook (meal prep). Adds nothing to the
 //            shopping list, but ticks off on its own.
+//  'quick' – a named home-cooked meal with no saved recipe attached.
 //  'out'   – eating out. No recipe, no shopping, just a filled day.
-export type MealEntryType = 'cook' | 'batch' | 'out';
+export type MealEntryType = 'cook' | 'batch' | 'quick' | 'out';
 
 export interface MealPlanRecipe {
   id: string;
   meal_plan_id: string;
-  // Null only for 'out' entries.
+  // Null for 'quick' and 'out' entries.
   recipe_id: string | null;
   is_cooked: boolean;
   added_at: string;
@@ -132,7 +133,7 @@ export interface MealPlanRecipe {
   // eating dates: the planner schedules cooking, not every time leftovers are
   // eaten.
   planned_nights: number;
-  // Free text for 'out' entries ("Thai place").
+  // The meal name for 'quick', or an optional place/note for 'out'.
   note: string | null;
   // Are we making this recipe's sub-recipes from scratch, or buying them ready
   // made? True swaps each linked ingredient line ("500g shortcrust pastry") for

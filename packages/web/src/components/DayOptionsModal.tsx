@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Utensils, Store, X as XIcon } from 'lucide-react';
+import { Utensils, Store, Zap, X as XIcon } from 'lucide-react';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { DAY_FULL, dayDate } from '../utils/mealPlanDays';
 
@@ -8,6 +8,7 @@ interface Props {
   dayIndex: number | null;
   weekStart: Date;
   onCook: () => void;
+  onQuickMeal: (name: string) => void;
   onEatingOut: (note: string) => void;
   onClose: () => void;
 }
@@ -21,10 +22,11 @@ export default function DayOptionsModal({
   dayIndex,
   weekStart,
   onCook,
+  onQuickMeal,
   onEatingOut,
   onClose,
 }: Props) {
-  const [mode, setMode] = useState<'menu' | 'out'>('menu');
+  const [mode, setMode] = useState<'menu' | 'quick' | 'out'>('menu');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export default function DayOptionsModal({
         <div className="flex items-start justify-between" style={{ marginBottom: 14 }}>
           <div>
             <h2 style={{ margin: 0, fontFamily: fSerif, fontWeight: 400, fontSize: 22, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-              {mode === 'out' ? 'Eating out' : DAY_FULL[dayIndex]}
+              {mode === 'out' ? 'Eating out' : mode === 'quick' ? 'Quick meal' : DAY_FULL[dayIndex]}
             </h2>
             <p style={{ margin: '3px 0 0', fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
               {mode === 'menu' ? dateLabel : `${DAY_FULL[dayIndex]} ${dateLabel}`}
@@ -99,6 +101,15 @@ export default function DayOptionsModal({
                 <span style={{ display: 'block', fontFamily: fSerif, fontSize: 17, color: 'var(--text)' }}>Eating out</span>
                 <span style={{ display: 'block', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>Add a note if you like</span>
               </span>
+            </button>
+
+            <button style={rowStyle} onClick={() => setMode('quick')}>
+              <Zap size={19} strokeWidth={1.5} color="var(--green)" />
+              <span className="flex-1">
+                <span style={{ display: 'block', fontFamily: fSerif, fontSize: 17, color: 'var(--text)' }}>Quick meal</span>
+                <span style={{ display: 'block', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>Just give the meal a name</span>
+              </span>
+              <span style={{ color: 'var(--muted)' }}>›</span>
             </button>
 
             <button style={rowStyle} onClick={onClose}>
@@ -143,6 +154,19 @@ export default function DayOptionsModal({
               >
                 Set for {DAY_FULL[dayIndex]}
               </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'quick' && (
+          <div>
+            <label htmlFor="rf-quick-name" style={{ display: 'block', fontFamily: fMono, fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+              Meal name
+            </label>
+            <input id="rf-quick-name" autoFocus value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && note.trim()) onQuickMeal(note.trim()); }} placeholder="Dad's chicken curry, tacos…" className="rf-input w-full" />
+            <div className="flex gap-2" style={{ marginTop: 16 }}>
+              <button onClick={() => setMode('menu')} style={{ flex: 1, padding: '10px 0', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)', fontFamily: fSans, fontSize: 13.5, cursor: 'pointer' }}>Back</button>
+              <button disabled={!note.trim()} onClick={() => onQuickMeal(note.trim())} style={{ flex: 1, padding: '10px 0', borderRadius: 999, border: '1px solid var(--green-solid)', background: 'var(--green-solid)', color: '#fff', fontFamily: fSans, fontSize: 13.5, fontWeight: 500, cursor: note.trim() ? 'pointer' : 'default', opacity: note.trim() ? 1 : 0.45 }}>Add meal</button>
             </div>
           </div>
         )}

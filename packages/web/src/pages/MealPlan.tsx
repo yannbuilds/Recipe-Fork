@@ -8,6 +8,7 @@ import {
   Flame,
   ChevronDown,
   Store,
+  Zap,
   MoreHorizontal,
   Sparkles,
   CalendarDays,
@@ -276,7 +277,8 @@ export default function MealPlan() {
   // ── Derived ─────────────────────────────────────────
   const today = todayIndex(weekStart);
 
-  // Only cooks buy ingredients; eating out and legacy batch rows buy nothing.
+  // Only saved-recipe cooks buy ingredients; quick meals, eating out and
+  // legacy batch rows buy nothing.
   // A linked sub-recipe you're making swaps its line for its own ingredients.
   const uncookedCooks = shoppingSourceEntries(entries).filter((e) => !e.is_cooked);
   const allIngredients: IngredientWithRecipe[] = uncookedCooks.flatMap((e) =>
@@ -298,7 +300,7 @@ export default function MealPlan() {
     })),
   ];
 
-  const mealEntries = entries.filter((e) => e.entry_type === 'cook');
+  const mealEntries = entries.filter((e) => e.entry_type === 'cook' || e.entry_type === 'quick');
   const cookedCount = mealEntries.filter((e) => e.is_cooked).length;
   const unplaced = unplacedEntries(entries);
   const takenDays = useMemo(
@@ -638,6 +640,17 @@ export default function MealPlan() {
     setDaySheet(null);
   }
 
+  async function addQuickMeal(dayIndex: number, name: string) {
+    if (!plan || !name.trim()) return;
+    const { data, error } = await supabase
+      .from('meal_plan_recipes')
+      .insert({ meal_plan_id: plan.id, recipe_id: null, day_index: dayIndex, entry_type: 'quick', note: name.trim() })
+      .select('*, recipe:recipes(*)')
+      .single();
+    if (!error && data) setEntries((prev) => [...prev, data as MealPlanEntry]);
+    setDaySheet(null);
+  }
+
   async function moveEntry(entryId: string, dayIndex: number | null) {
     setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, day_index: dayIndex } : e)));
     setMoving(null);
@@ -761,7 +774,7 @@ export default function MealPlan() {
     ? 'Loading your week…'
     : mealEntries.length === 0
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
-      : `${mealEntries.length} cook${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
+      : `${mealEntries.length} meal${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
@@ -863,6 +876,21 @@ export default function MealPlan() {
               </div>
             )}
           </div>
+        </div>
+      );
+    }
+
+    if (entry.entry_type === 'quick') {
+      return (
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div style={{ width: 58, height: 58, borderRadius: 4, background: 'var(--green-light)', display: 'grid', placeItems: 'center', flexShrink: 0, color: 'var(--green)' }}>
+            <Zap size={16} strokeWidth={1.5} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div style={{ fontFamily: fSerif, fontSize: 15, color: cooked ? 'var(--muted)' : 'var(--text)', textDecoration: cooked ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.note}</div>
+            <div style={{ fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>Quick meal</div>
+          </div>
+          {cooked && <span className="inline-flex items-center gap-1" style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--green-light)', color: 'var(--green)', fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.1em', textTransform: 'uppercase', flexShrink: 0 }}><Check size={10} strokeWidth={3} />Cooked</span>}
         </div>
       );
     }
@@ -1758,7 +1786,7 @@ export default function MealPlan() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEntryMenu(null)}>
           <div className="rf-card w-full max-w-[380px] mx-3" style={{ padding: '20px 22px 22px' }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 2px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-              {entryMenu.entry_type === 'out' ? 'Eating out' : entryMenu.recipe?.title}
+              {entryMenu.entry_type === 'out' ? 'Eating out' : entryMenu.entry_type === 'quick' ? entryMenu.note : entryMenu.recipe?.title}
             </h2>
             <p style={{ margin: '0 0 8px', fontFamily: fMono, fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
               {entryMenu.day_index != null ? DAY_SHORT[entryMenu.day_index] : 'No day yet'}
@@ -1841,7 +1869,7 @@ export default function MealPlan() {
               entryMenu.recipe_id
                 ? { label: 'View recipe', run: () => { setEntryMenu(null); navigate(`/recipe/${entryMenu.recipe_id}`); } }
                 : null,
-              !entryMenu.is_cooked && entryMenu.entry_type === 'cook'
+              !entryMenu.is_cooked && (entryMenu.entry_type === 'cook' || entryMenu.entry_type === 'quick')
                 ? { label: 'Mark cooked', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
                 : null,
               entryMenu.is_cooked
@@ -1894,6 +1922,7 @@ export default function MealPlan() {
           setShowAddModal(true);
         }}
         onEatingOut={(note) => daySheet !== null && addEatingOut(daySheet, note)}
+        onQuickMeal={(name) => daySheet !== null && addQuickMeal(daySheet, name)}
         onClose={() => setDaySheet(null)}
       />
 

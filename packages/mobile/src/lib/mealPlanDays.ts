@@ -51,7 +51,7 @@ export function unplacedEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
 
 /**
  * Only 'cook' rows put ingredients on the shopping list. Legacy 'batch' rows
- * buy nothing, and 'out' buys nothing at all.
+ * buy nothing, and neither 'quick' nor 'out' buys anything at all.
  */
 export function shoppingSourceEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
   return entries.filter((e) => e.entry_type === 'cook' && e.recipe);
