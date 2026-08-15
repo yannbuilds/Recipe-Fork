@@ -2032,16 +2032,20 @@ export default function MealPlan() {
               </div>
             </div>
 
-            {weeksStartingInMonth(archiveMonth).map((sunday) => {
-              const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
-              return (
-                <button key={formatWeekStart(sunday)} onClick={() => { setWeekStart(sunday); setWeekArchiveOpen(false); }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 10px', border: 'none', borderTop: '1px solid var(--rule-hair)', borderRadius: 3, background: active ? 'var(--green-light)' : 'none', color: active ? 'var(--green)' : 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ width: 42, fontFamily: fMono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Sun</span>
-                  <span style={{ flex: 1, fontFamily: fSerif, fontSize: 16 }}>{weekRangeLabel(sunday)}</span>
-                  {active ? <Check size={15} /> : <ChevronRight size={14} color="var(--muted)" />}
-                </button>
-              );
-            })}
+            {/* Five Sundays is the tallest possible month. Reserving all five
+                rows keeps the arrow targets stationary while browsing. */}
+            <div style={{ minHeight: 245 }}>
+              {weeksStartingInMonth(archiveMonth).map((sunday) => {
+                const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
+                return (
+                  <button key={formatWeekStart(sunday)} onClick={() => { setWeekStart(sunday); setWeekArchiveOpen(false); }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 10px', border: 'none', borderTop: '1px solid var(--rule-hair)', borderRadius: 3, background: active ? 'var(--green-light)' : 'none', color: active ? 'var(--green)' : 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
+                    <span style={{ width: 42, fontFamily: fMono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Sun</span>
+                    <span style={{ flex: 1, fontFamily: fSerif, fontSize: 16 }}>{weekRangeLabel(sunday)}</span>
+                    {active ? <Check size={15} /> : <ChevronRight size={14} color="var(--muted)" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

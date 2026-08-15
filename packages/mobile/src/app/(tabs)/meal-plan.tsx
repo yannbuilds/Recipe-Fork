@@ -1865,24 +1865,27 @@ export default function MealPlanScreen() {
             </View>
           </View>
 
-          {weeksStartingInMonth(archiveMonth).map((sunday) => {
-            const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
-            return (
-              <Pressable
-                key={formatWeekStart(sunday)}
-                onPress={() => {
-                  haptics.select();
-                  setWeekStart(sunday);
-                  setWeekArchive(false);
-                }}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: t.ruleHair, borderRadius: 4, backgroundColor: active ? t.greenLight : 'transparent' }}
-              >
-                <Mono size={9} color={active ? t.green : t.muted} style={{ width: 42, letterSpacing: 0.8 }}>SUN</Mono>
-                <Serif size={16} color={active ? t.green : t.text} style={{ flex: 1 }}>{weekRangeLabel(sunday)}</Serif>
-                <Ionicons name={active ? 'checkmark' : 'chevron-forward'} size={16} color={active ? t.green : t.muted} />
-              </Pressable>
-            );
-          })}
+          {/* Keep room for five Sundays so the sheet and arrows never jump. */}
+          <View style={{ minHeight: 250 }}>
+            {weeksStartingInMonth(archiveMonth).map((sunday) => {
+              const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
+              return (
+                <Pressable
+                  key={formatWeekStart(sunday)}
+                  onPress={() => {
+                    haptics.select();
+                    setWeekStart(sunday);
+                    setWeekArchive(false);
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: t.ruleHair, borderRadius: 4, backgroundColor: active ? t.greenLight : 'transparent' }}
+                >
+                  <Mono size={9} color={active ? t.green : t.muted} style={{ width: 42, letterSpacing: 0.8 }}>SUN</Mono>
+                  <Serif size={16} color={active ? t.green : t.text} style={{ flex: 1 }}>{weekRangeLabel(sunday)}</Serif>
+                  <Ionicons name={active ? 'checkmark' : 'chevron-forward'} size={16} color={active ? t.green : t.muted} />
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </BottomSheet>
 
