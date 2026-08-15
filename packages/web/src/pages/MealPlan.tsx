@@ -7,6 +7,8 @@ import {
   Utensils,
   Flame,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Store,
   Zap,
   MoreHorizontal,
@@ -119,6 +121,24 @@ function toRoman(n: number): string {
   return out;
 }
 
+function weeksStartingInMonth(month: Date): Date[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const firstSunday = getSunday(first);
+  if (firstSunday.getMonth() !== month.getMonth()) firstSunday.setDate(firstSunday.getDate() + 7);
+  const weeks: Date[] = [];
+  for (let d = firstSunday; d.getMonth() === month.getMonth(); d = shiftWeek(d, 1)) weeks.push(new Date(d));
+  return weeks;
+}
+
+function shiftMonth(month: Date, amount: number): Date {
+  return new Date(month.getFullYear(), month.getMonth() + amount, 1);
+}
+
+function weekRangeLabel(sunday: Date): string {
+  const saturday = dayDate(sunday, 6);
+  return `${sunday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${saturday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+}
+
 export default function MealPlan() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -145,6 +165,8 @@ export default function MealPlan() {
   // The meal currently being dragged onto a day.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
+  const [weekArchiveOpen, setWeekArchiveOpen] = useState(false);
+  const [archiveMonth, setArchiveMonth] = useState(() => shiftMonth(getSunday(new Date()), -1));
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Recipes used as an ingredient of something in the week, and the recipe
@@ -1151,6 +1173,19 @@ export default function MealPlan() {
                   </button>
                 );
               })}
+              <button
+                onClick={() => {
+                  setArchiveMonth(shiftMonth(weekStart, 0));
+                  setWeekMenuOpen(false);
+                  setWeekArchiveOpen(true);
+                }}
+                className="flex items-center gap-2 w-full"
+                style={{ marginTop: 4, padding: '10px', borderRadius: 3, border: 'none', borderTop: '1px solid var(--rule-hair)', background: 'none', color: 'var(--green)', fontFamily: fSans, fontSize: 13.5, cursor: 'pointer', textAlign: 'left' }}
+              >
+                <CalendarDays size={15} strokeWidth={1.6} />
+                <span style={{ flex: 1 }}>Browse week archive…</span>
+                <span style={{ color: 'var(--muted)' }}>›</span>
+              </button>
             </div>
           )}
         </div>
@@ -1970,6 +2005,43 @@ export default function MealPlan() {
                   </button>
                 );
               })}
+          </div>
+        </div>
+      )}
+
+      {weekArchiveOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setWeekArchiveOpen(false)}>
+          <div className="rf-card w-full max-w-[420px] mx-3" style={{ padding: '20px 22px 24px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 style={{ margin: 0, fontFamily: fSerif, fontWeight: 400, fontSize: 22, color: 'var(--text)' }}>Week archive</h2>
+                <p style={{ margin: '3px 0 0', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)' }}>Choose a Sunday–Saturday week</p>
+              </div>
+              <button onClick={() => setWeekArchiveOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', lineHeight: 0, padding: 4 }}><X size={18} /></button>
+            </div>
+
+            <div className="flex items-center justify-between" style={{ margin: '18px 0 10px' }}>
+              <div className="flex gap-1">
+                <button onClick={() => setArchiveMonth((m) => shiftMonth(m, -12))} aria-label="Previous year" style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', color: 'var(--muted)', cursor: 'pointer' }}>«</button>
+                <button onClick={() => setArchiveMonth((m) => shiftMonth(m, -1))} aria-label="Previous month" style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', color: 'var(--muted)', cursor: 'pointer' }}><ChevronLeft size={15} style={{ margin: 'auto' }} /></button>
+              </div>
+              <span style={{ fontFamily: fMono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text)' }}>{archiveMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</span>
+              <div className="flex gap-1">
+                <button onClick={() => setArchiveMonth((m) => shiftMonth(m, 1))} aria-label="Next month" style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', color: 'var(--muted)', cursor: 'pointer' }}><ChevronRight size={15} style={{ margin: 'auto' }} /></button>
+                <button onClick={() => setArchiveMonth((m) => shiftMonth(m, 12))} aria-label="Next year" style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--card)', color: 'var(--muted)', cursor: 'pointer' }}>»</button>
+              </div>
+            </div>
+
+            {weeksStartingInMonth(archiveMonth).map((sunday) => {
+              const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
+              return (
+                <button key={formatWeekStart(sunday)} onClick={() => { setWeekStart(sunday); setWeekArchiveOpen(false); }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 10px', border: 'none', borderTop: '1px solid var(--rule-hair)', borderRadius: 3, background: active ? 'var(--green-light)' : 'none', color: active ? 'var(--green)' : 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ width: 42, fontFamily: fMono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Sun</span>
+                  <span style={{ flex: 1, fontFamily: fSerif, fontSize: 16 }}>{weekRangeLabel(sunday)}</span>
+                  {active ? <Check size={15} /> : <ChevronRight size={14} color="var(--muted)" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

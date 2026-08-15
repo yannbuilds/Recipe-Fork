@@ -96,6 +96,24 @@ const SETTLE_OUT_MS = 380;
  *  the recipe has sub-recipes worth asking about. */
 type PickedRecipe = Pick<Recipe, 'id' | 'title' | 'ingredients'>;
 
+function weeksStartingInMonth(month: Date): Date[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const firstSunday = getSunday(first);
+  if (firstSunday.getMonth() !== month.getMonth()) firstSunday.setDate(firstSunday.getDate() + 7);
+  const weeks: Date[] = [];
+  for (let d = firstSunday; d.getMonth() === month.getMonth(); d = shiftWeek(d, 1)) weeks.push(new Date(d));
+  return weeks;
+}
+
+function shiftMonth(month: Date, amount: number): Date {
+  return new Date(month.getFullYear(), month.getMonth() + amount, 1);
+}
+
+function weekRangeLabel(sunday: Date): string {
+  const saturday = dayDate(sunday, 6);
+  return `${sunday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${saturday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+}
+
 export default function MealPlanScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -132,6 +150,8 @@ export default function MealPlanScreen() {
   const [moveToast, setMoveToast] = useState<MoveToast | null>(null);
   const moveToastAnim = useRef(new Animated.Value(0)).current;
   const [weekMenu, setWeekMenu] = useState(false);
+  const [weekArchive, setWeekArchive] = useState(false);
+  const [archiveMonth, setArchiveMonth] = useState(() => shiftMonth(getSunday(new Date()), -1));
   const [planOpen, setPlanOpen] = useState(false);
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Recipes used as an ingredient of something in the week, and the recipe
@@ -155,6 +175,11 @@ export default function MealPlanScreen() {
   function openMovePickerAfterSheet(entry: MealPlanEntry) {
     if (pickerTimer.current) clearTimeout(pickerTimer.current);
     pickerTimer.current = setTimeout(() => setMovePicker(entry), 300);
+  }
+
+  function openWeekArchiveAfterSheet() {
+    if (pickerTimer.current) clearTimeout(pickerTimer.current);
+    pickerTimer.current = setTimeout(() => setWeekArchive(true), 300);
   }
 
   useEffect(() => () => {
@@ -1805,7 +1830,59 @@ export default function MealPlanScreen() {
                 </Pressable>
               );
             })}
+            <Pressable
+              onPress={() => {
+                haptics.select();
+                setArchiveMonth(shiftMonth(weekStart, 0));
+                setWeekMenu(false);
+                openWeekArchiveAfterSheet();
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, paddingVertical: 13, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: t.ruleHair }}
+            >
+              <Ionicons name="calendar-outline" size={17} color={t.green} />
+              <Serif size={16} color={t.green} style={{ flex: 1 }}>Browse week archive…</Serif>
+              <Ionicons name="chevron-forward" size={15} color={t.muted} />
+            </Pressable>
           </View>
+        </View>
+      </BottomSheet>
+
+      {/* ── Historical week archive ──────────────────── */}
+      <BottomSheet open={weekArchive} onClose={() => setWeekArchive(false)}>
+        <View style={{ paddingHorizontal: 20 }}>
+          <Serif size={22}>Week archive</Serif>
+          <Body size={12.5} color={t.muted} style={{ marginTop: 3 }}>Choose a Sunday–Saturday week</Body>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 5 }}>
+              <Pressable accessibilityLabel="Previous year" onPress={() => setArchiveMonth((m) => shiftMonth(m, -12))} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}><Mono size={13} color={t.muted}>«</Mono></Pressable>
+              <Pressable accessibilityLabel="Previous month" onPress={() => setArchiveMonth((m) => shiftMonth(m, -1))} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-back" size={16} color={t.muted} /></Pressable>
+            </View>
+            <Mono size={10} style={{ letterSpacing: 1 }}>{archiveMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }).toUpperCase()}</Mono>
+            <View style={{ flexDirection: 'row', gap: 5 }}>
+              <Pressable accessibilityLabel="Next month" onPress={() => setArchiveMonth((m) => shiftMonth(m, 1))} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-forward" size={16} color={t.muted} /></Pressable>
+              <Pressable accessibilityLabel="Next year" onPress={() => setArchiveMonth((m) => shiftMonth(m, 12))} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' }}><Mono size={13} color={t.muted}>»</Mono></Pressable>
+            </View>
+          </View>
+
+          {weeksStartingInMonth(archiveMonth).map((sunday) => {
+            const active = formatWeekStart(sunday) === formatWeekStart(weekStart);
+            return (
+              <Pressable
+                key={formatWeekStart(sunday)}
+                onPress={() => {
+                  haptics.select();
+                  setWeekStart(sunday);
+                  setWeekArchive(false);
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: t.ruleHair, borderRadius: 4, backgroundColor: active ? t.greenLight : 'transparent' }}
+              >
+                <Mono size={9} color={active ? t.green : t.muted} style={{ width: 42, letterSpacing: 0.8 }}>SUN</Mono>
+                <Serif size={16} color={active ? t.green : t.text} style={{ flex: 1 }}>{weekRangeLabel(sunday)}</Serif>
+                <Ionicons name={active ? 'checkmark' : 'chevron-forward'} size={16} color={active ? t.green : t.muted} />
+              </Pressable>
+            );
+          })}
         </View>
       </BottomSheet>
 
