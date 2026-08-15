@@ -139,6 +139,7 @@ export default function MealPlan() {
   const [addTarget, setAddTarget] = useState<number | null>(null);
   const [daySheet, setDaySheet] = useState<number | null>(null);
   const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
+  const [movePicker, setMovePicker] = useState<MealPlanEntry | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [moveToast, setMoveToast] = useState<MoveToast | null>(null);
   // The meal currently being dragged onto a day.
@@ -713,6 +714,7 @@ export default function MealPlan() {
     await supabase.from('meal_plan_recipes').delete().eq('parent_id', entryId).eq('entry_type', 'batch');
     setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
     setEntryMenu(null);
+    setMovePicker(null);
     setMoveToast({
       key: Date.now(),
       text: `${entry.recipe?.title ?? entry.note ?? 'Quick meal'} moved to next week`,
@@ -1938,13 +1940,7 @@ export default function MealPlan() {
               entryMenu.is_cooked
                 ? { label: 'Not cooked after all', run: () => { handleToggleCooked(entryMenu.id); setEntryMenu(null); } }
                 : null,
-              (entryMenu.entry_type === 'cook' || entryMenu.entry_type === 'quick') && !entryMenu.is_cooked
-                ? { label: 'Move to next week', run: () => moveToNextWeek(entryMenu.id) }
-                : null,
-              { label: 'Move to another day', run: () => { setMoving(entryMenu.id); setEntryMenu(null); setTab('meals'); } },
-              entryMenu.day_index != null
-                ? { label: 'Take off the day', run: () => { moveEntry(entryMenu.id, null); setEntryMenu(null); } }
-                : null,
+              { label: 'Move…', run: () => { setMovePicker(entryMenu); setEntryMenu(null); } },
               { label: 'Remove from the week', run: () => handleRemove(entryMenu.id), danger: true },
             ]
               .filter(Boolean)
@@ -1974,6 +1970,58 @@ export default function MealPlan() {
                   </button>
                 );
               })}
+          </div>
+        </div>
+      )}
+
+      {movePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setMovePicker(null)}>
+          <div className="rf-card w-full max-w-[440px] mx-3" style={{ padding: '20px 22px 24px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between" style={{ marginBottom: 16 }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontFamily: fSerif, fontWeight: 400, fontSize: 22, color: 'var(--text)' }}>Move meal</h2>
+                <p style={{ margin: '3px 0 0', fontFamily: fSans, fontSize: 12.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {movePicker.recipe?.title ?? movePicker.note ?? 'Meal'}
+                </p>
+              </div>
+              <button onClick={() => setMovePicker(null)} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', lineHeight: 0, padding: 4 }}>
+                <X size={18} strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+              {DAY_INDEXES.map((d) => {
+                const selected = movePicker.day_index === d;
+                return (
+                  <button
+                    key={d}
+                    onClick={() => { moveEntry(movePicker.id, d); setMovePicker(null); }}
+                    aria-label={`Move to ${DAY_SHORT[d]}`}
+                    style={{ padding: '9px 2px', borderRadius: 5, border: `1px solid ${selected ? 'var(--green)' : 'var(--border)'}`, background: selected ? 'var(--green-light)' : 'var(--card)', color: selected ? 'var(--green)' : 'var(--text)', cursor: 'pointer' }}
+                  >
+                    <span style={{ display: 'block', fontFamily: fMono, fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{DAY_SHORT[d].slice(0, 2)}</span>
+                    <span style={{ display: 'block', marginTop: 4, fontFamily: fSerif, fontSize: 17 }}>{dayDate(weekStart, d).getDate()}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button onClick={() => { moveEntry(movePicker.id, null); setMovePicker(null); }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', marginTop: 15, padding: '13px 4px', border: 'none', borderTop: '1px solid var(--rule-hair)', background: 'none', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
+              <CalendarDays size={18} strokeWidth={1.5} color="var(--muted)" />
+              <span style={{ flex: 1, fontFamily: fSerif, fontSize: 16 }}>No day yet</span>
+              {movePicker.day_index === null && <Check size={15} color="var(--green)" />}
+            </button>
+
+            {(movePicker.entry_type === 'cook' || movePicker.entry_type === 'quick') && !movePicker.is_cooked && (
+              <button onClick={() => moveToNextWeek(movePicker.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '13px 4px', border: 'none', borderTop: '1px solid var(--rule-hair)', background: 'none', color: 'var(--green)', cursor: 'pointer', textAlign: 'left' }}>
+                <CalendarDays size={18} strokeWidth={1.5} />
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontFamily: fSerif, fontSize: 16 }}>Next week</span>
+                  <span style={{ display: 'block', marginTop: 1, fontFamily: fSans, fontSize: 12, color: 'var(--muted)' }}>Move there with no day assigned</span>
+                </span>
+                <span style={{ color: 'var(--muted)' }}>›</span>
+              </button>
+            )}
           </div>
         </div>
       )}

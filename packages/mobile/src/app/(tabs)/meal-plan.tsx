@@ -127,6 +127,7 @@ export default function MealPlanScreen() {
   const [addTarget, setAddTarget] = useState<number | null>(null);
   const [daySheet, setDaySheet] = useState<number | null>(null);
   const [entryMenu, setEntryMenu] = useState<MealPlanEntry | null>(null);
+  const [movePicker, setMovePicker] = useState<MealPlanEntry | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [moveToast, setMoveToast] = useState<MoveToast | null>(null);
   const moveToastAnim = useRef(new Animated.Value(0)).current;
@@ -149,6 +150,11 @@ export default function MealPlanScreen() {
   function openPickerAfterSheet() {
     if (pickerTimer.current) clearTimeout(pickerTimer.current);
     pickerTimer.current = setTimeout(() => setShowAdd(true), 300);
+  }
+
+  function openMovePickerAfterSheet(entry: MealPlanEntry) {
+    if (pickerTimer.current) clearTimeout(pickerTimer.current);
+    pickerTimer.current = setTimeout(() => setMovePicker(entry), 300);
   }
 
   useEffect(() => () => {
@@ -668,6 +674,7 @@ export default function MealPlanScreen() {
     haptics.success();
     setEntries((prev) => prev.filter((e) => e.id !== entryId && e.parent_id !== entryId));
     setEntryMenu(null);
+    setMovePicker(null);
     setMoveToast({
       key: Date.now(),
       text: `${entry.recipe?.title ?? entry.note ?? 'Quick meal'} moved to next week`,
@@ -1029,29 +1036,14 @@ export default function MealPlanScreen() {
               },
             }
           : null,
-        (entryMenu.entry_type === 'cook' || entryMenu.entry_type === 'quick') && !entryMenu.is_cooked
-          ? {
-              label: 'Move to next week',
-              run: () => moveToNextWeek(entryMenu.id),
-            }
-          : null,
         {
-          label: 'Move to another day',
+          label: 'Move…',
           run: () => {
-            setMoving(entryMenu.id);
+            const entry = entryMenu;
             setEntryMenu(null);
-            setTab('meals');
+            openMovePickerAfterSheet(entry);
           },
         },
-        entryMenu.day_index != null
-          ? {
-              label: 'Take off the day',
-              run: () => {
-                moveEntry(entryMenu.id, null);
-                setEntryMenu(null);
-              },
-            }
-          : null,
         { label: 'Remove from the week', run: () => removeEntry(entryMenu.id), danger: true },
       ].filter(Boolean) as {
         label: string;
@@ -1815,6 +1807,76 @@ export default function MealPlanScreen() {
             })}
           </View>
         </View>
+      </BottomSheet>
+
+      {/* ── Compact move picker ──────────────────────── */}
+      <BottomSheet open={movePicker !== null} onClose={() => setMovePicker(null)}>
+        {movePicker ? (
+          <View style={{ paddingHorizontal: 20 }}>
+            <Serif size={22}>Move meal</Serif>
+            <Body size={12.5} color={t.muted} numberOfLines={1} style={{ marginTop: 3 }}>
+              {movePicker.recipe?.title ?? movePicker.note ?? 'Meal'}
+            </Body>
+
+            <View style={{ flexDirection: 'row', gap: 5, marginTop: 18 }}>
+              {DAY_INDEXES.map((d) => {
+                const selected = movePicker.day_index === d;
+                return (
+                  <Pressable
+                    key={d}
+                    accessibilityLabel={`Move to ${DAY_SHORT[d]}`}
+                    onPress={() => {
+                      moveEntry(movePicker.id, d);
+                      setMovePicker(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      paddingVertical: 9,
+                      borderRadius: 5,
+                      borderWidth: 1,
+                      borderColor: selected ? t.green : t.border,
+                      backgroundColor: selected ? t.greenLight : t.card,
+                    }}
+                  >
+                    <Mono size={8.5} color={selected ? t.green : t.muted} style={{ letterSpacing: 0.8 }}>
+                      {DAY_SHORT[d].slice(0, 2).toUpperCase()}
+                    </Mono>
+                    <Serif size={17} color={selected ? t.green : t.text} style={{ marginTop: 3 }}>
+                      {dayDate(weekStart, d).getDate()}
+                    </Serif>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Pressable
+              onPress={() => {
+                moveEntry(movePicker.id, null);
+                setMovePicker(null);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 15, paddingVertical: 13, borderTopWidth: 1, borderTopColor: t.ruleHair }}
+            >
+              <Ionicons name="calendar-outline" size={19} color={t.muted} />
+              <Serif size={16} style={{ flex: 1 }}>No day yet</Serif>
+              {movePicker.day_index === null ? <Ionicons name="checkmark" size={17} color={t.green} /> : null}
+            </Pressable>
+
+            {(movePicker.entry_type === 'cook' || movePicker.entry_type === 'quick') && !movePicker.is_cooked ? (
+              <Pressable
+                onPress={() => moveToNextWeek(movePicker.id)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderTopWidth: 1, borderTopColor: t.ruleHair }}
+              >
+                <Ionicons name="calendar-outline" size={19} color={t.green} />
+                <View style={{ flex: 1 }}>
+                  <Serif size={16} color={t.green}>Next week</Serif>
+                  <Body size={12} color={t.muted} style={{ marginTop: 1 }}>Move there with no day assigned</Body>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={t.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </BottomSheet>
 
       {/* ── Per-meal menu ────────────────────────────── */}
