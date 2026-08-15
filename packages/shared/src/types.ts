@@ -64,6 +64,8 @@ export interface Recipe {
   source_url: string;
   creator_name: string | null;
   author_notes: string | null;
+  /** Untouched text supplied to the paste-first manual recipe flow. */
+  original_paste?: string | null;
   user_notes: string | null;
   video_url: string | null;
   image_url: string | null;

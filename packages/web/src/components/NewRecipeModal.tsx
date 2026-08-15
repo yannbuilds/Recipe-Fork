@@ -471,7 +471,7 @@ export default function NewRecipeModal() {
                     Add Manually
                   </span>
                   <span className="block text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                    Type it in yourself
+                    Paste everything at once
                   </span>
                 </div>
               </button>

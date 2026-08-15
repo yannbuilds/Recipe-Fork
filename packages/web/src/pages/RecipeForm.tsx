@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Link2 } from 'lucide-react';
 import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
 import AddRecipeModal from '../components/AddRecipeModal';
 import { useAuth } from '../context/AuthContext';
+import ManualRecipeWizard from '../components/ManualRecipeWizard';
 
 export default function RecipeForm() {
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  if (!id && searchParams.get('mode') !== 'fields') return <ManualRecipeWizard />;
+  return <StructuredRecipeForm />;
+}
+
+function StructuredRecipeForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);

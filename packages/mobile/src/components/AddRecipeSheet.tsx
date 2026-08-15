@@ -253,7 +253,7 @@ export default function AddRecipeSheet({ open, onClose }: Props) {
               {[
                 { icon: 'share-social-outline' as const, title: 'From a link', sub: 'Web, Instagram, TikTok + more', onPress: () => setStep('url') },
                 { icon: 'images-outline' as const, title: 'From photos', sub: 'Scan pages or cards', onPress: () => setStep('photo') },
-                { icon: 'create-outline' as const, title: 'Add manually', sub: 'Type it in yourself', onPress: goManual },
+                { icon: 'create-outline' as const, title: 'Paste or type', sub: 'Drop everything in at once', onPress: goManual },
               ].map((opt) => (
                 <Pressable
                   key={opt.title}

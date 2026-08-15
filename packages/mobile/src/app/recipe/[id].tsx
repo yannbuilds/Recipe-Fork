@@ -207,6 +207,7 @@ export default function RecipeDetailScreen() {
   const [showDelete, setShowDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
+  const [showOriginalPaste, setShowOriginalPaste] = useState(false);
   const [showCookbook, setShowCookbook] = useState(false);
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [notesSaving, setNotesSaving] = useState(false);
@@ -1013,6 +1014,30 @@ export default function RecipeDetailScreen() {
             nutrition={recipe.nutrition}
             sourceLabel={recipe.source_url ? getDomain(recipe.source_url) : null}
           />
+
+          {recipe.original_paste && (
+            <Pressable
+              onPress={() => setShowOriginalPaste((value) => !value)}
+              style={{
+                marginTop: 22,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: t.border,
+                borderRadius: 10,
+                backgroundColor: t.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Body size={13} weight="semi">Original paste</Body>
+                <Ionicons name={showOriginalPaste ? 'chevron-up' : 'chevron-down'} size={17} color={t.muted} />
+              </View>
+              {showOriginalPaste && (
+                <Body size={13} color={t.muted} style={{ lineHeight: 20, marginTop: 12 }}>
+                  {recipe.original_paste}
+                </Body>
+              )}
+            </Pressable>
+          )}
 
           <Divider style={{ marginTop: 30 }} />
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>

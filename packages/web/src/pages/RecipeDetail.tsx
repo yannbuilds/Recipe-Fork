@@ -1777,6 +1777,23 @@ export default function RecipeDetail() {
         />
 
         {/* ── Edit / Delete ──────────────────────────────────────── */}
+        {recipe.original_paste && (
+          <details
+            className="rf-card"
+            style={{ padding: 18, marginTop: 28 }}
+          >
+            <summary className="cursor-pointer text-sm font-semibold" style={{ color: 'var(--text)' }}>
+              Original paste
+            </summary>
+            <pre
+              className="whitespace-pre-wrap mt-4 text-sm"
+              style={{ color: 'var(--muted)', fontFamily: 'inherit', lineHeight: 1.6 }}
+            >
+              {recipe.original_paste}
+            </pre>
+          </details>
+        )}
+
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 32 }} />
         <div
           className="rd-actions flex flex-wrap gap-3 mt-6"

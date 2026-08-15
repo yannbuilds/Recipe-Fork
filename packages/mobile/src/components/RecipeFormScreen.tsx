@@ -12,9 +12,11 @@ import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
+import ManualRecipeWizardScreen from '@/components/ManualRecipeWizardScreen';
 
 interface Props {
   recipeId?: string;
+  forceStructured?: boolean;
 }
 
 // The picker wants a Set it can check; nothing is "already added" when linking.
@@ -31,7 +33,12 @@ interface IngRow {
   recipe_id?: string | null;
 }
 
-export default function RecipeFormScreen({ recipeId }: Props) {
+export default function RecipeFormScreen({ recipeId, forceStructured = false }: Props) {
+  if (!recipeId && !forceStructured) return <ManualRecipeWizardScreen />;
+  return <StructuredRecipeFormScreen recipeId={recipeId} />;
+}
+
+function StructuredRecipeFormScreen({ recipeId }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
