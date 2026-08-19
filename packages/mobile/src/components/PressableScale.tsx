@@ -11,6 +11,10 @@ interface Props {
   children: ReactNode;
   onPress?: (e: GestureResponderEvent) => void;
   onLongPress?: (e: GestureResponderEvent) => void;
+  /** Fires on release *and* when a gesture higher up steals the touch. */
+  onPressOut?: (e: GestureResponderEvent) => void;
+  /** Shorten the hold that counts as a long press (RN defaults to 500ms). */
+  delayLongPress?: number;
   disabled?: boolean;
   /** How far to shrink on press. 0.96 is a gentle default. */
   scaleTo?: number;
@@ -24,6 +28,8 @@ export default function PressableScale({
   children,
   onPress,
   onLongPress,
+  onPressOut,
+  delayLongPress,
   disabled,
   scaleTo = 0.96,
   style,
@@ -42,9 +48,13 @@ export default function PressableScale({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      delayLongPress={delayLongPress}
       disabled={disabled}
       onPressIn={() => spring(scaleTo)}
-      onPressOut={() => spring(1)}
+      onPressOut={(e) => {
+        spring(1);
+        onPressOut?.(e);
+      }}
       style={style}
     >
       <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>

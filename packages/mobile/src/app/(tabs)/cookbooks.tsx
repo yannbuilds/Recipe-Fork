@@ -3,11 +3,11 @@ import type { Cookbook } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CookbookFormModal from '@/components/CookbookFormModal';
-import CookbookRow from '@/components/CookbookRow';
 import { CookbookListSkeleton } from '@/components/Skeleton';
+import SortableCookbookList from '@/components/SortableCookbookList';
 import { Body, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -68,6 +68,7 @@ export default function CookbooksScreen() {
   const queryClient = useQueryClient();
   const { profile, session } = useAuth();
   const [showCreate, setShowCreate] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const { data, isPending, error, refetch, isRefetching } = useQuery({
     queryKey: ['cookbooks'],
@@ -83,28 +84,65 @@ export default function CookbooksScreen() {
       ? 'No cookbooks yet — create one to start grouping recipes.'
       : total === 1
         ? '1 cookbook in your collection.'
-        : `${total} cookbooks in your collection.`;
+        : `${total} cookbooks in your collection · hold anywhere on a shelf to reorder.`;
+
+  // Drop lands: show the new order straight away, then write the positions.
+  async function saveOrder(next: CookbookListItem[]) {
+    const previous = queryClient.getQueryData<CookbookListItem[]>(['cookbooks']) ?? cookbooks;
+    const renumbered = next.map((cb, i) => ({ ...cb, sort_order: i }));
+    setOrderError(null);
+    queryClient.setQueryData(['cookbooks'], renumbered);
+
+    // Only the rows that actually moved need writing.
+    const updates = renumbered.filter((cb, i) => previous[i]?.id !== cb.id);
+    const results = await Promise.all(
+      updates.map((cb) =>
+        supabase.from('cookbooks').update({ sort_order: cb.sort_order }).eq('id', cb.id),
+      ),
+    );
+
+    if (results.some((r) => r.error)) {
+      queryClient.setQueryData(['cookbooks'], previous);
+      setOrderError('Could not save the new order. Please try again.');
+    }
+  }
 
   const header = (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
-      <Eyebrow>The shelves</Eyebrow>
-      <Serif size={34} style={{ marginTop: 10, lineHeight: 36 }}>
-        Cookbooks
-        {profile?.display_name ? (
-          <>
-            {', '}
-            <Serif size={34} italic color={t.green}>
-              {profile.display_name}
-            </Serif>
-          </>
-        ) : (
-          ''
+    <>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 20 }}>
+        <Eyebrow>The shelves</Eyebrow>
+        <Serif size={34} style={{ marginTop: 10, lineHeight: 36 }}>
+          Cookbooks
+          {profile?.display_name ? (
+            <>
+              {', '}
+              <Serif size={34} italic color={t.green}>
+                {profile.display_name}
+              </Serif>
+            </>
+          ) : (
+            ''
+          )}
+        </Serif>
+        <Body size={14.5} color={t.textSoft} style={{ marginTop: 10 }}>
+          {subtitle}
+        </Body>
+
+        {orderError && (
+          <Body color={t.red} size={13} style={{ marginTop: 12 }}>
+            {orderError}
+          </Body>
         )}
-      </Serif>
-      <Body size={14.5} color={t.textSoft} style={{ marginTop: 10 }}>
-        {subtitle}
-      </Body>
-    </View>
+      </View>
+
+      {/* Outside the masthead's gutter — both already carry their own. */}
+      {isPending && <CookbookListSkeleton count={4} />}
+      {error && (
+        <Body color={t.red} style={{ textAlign: 'center', paddingHorizontal: 16, paddingBottom: 24 }}>
+          {error.message}
+        </Body>
+      )}
+    </>
   );
 
   const newButton = (
@@ -132,31 +170,14 @@ export default function CookbooksScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <FlatList
-        data={cookbooks}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 24, gap: 20 }}
-        ListHeaderComponent={header}
-        ListFooterComponent={!isPending ? newButton : null}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={t.green} />}
-        ListEmptyComponent={
-          isPending ? (
-            <CookbookListSkeleton count={4} />
-          ) : error ? (
-            <Body color={t.red} style={{ textAlign: 'center', padding: 24 }}>
-              {error.message}
-            </Body>
-          ) : null
-        }
-        renderItem={({ item, index }) => (
-          <CookbookRow
-            cookbook={item}
-            recipeCount={item.recipeCount}
-            coverImages={item.coverImages}
-            index={index}
-            onPress={() => router.push({ pathname: '/cookbook/[id]', params: { id: item.id } })}
-          />
-        )}
+      <SortableCookbookList
+        cookbooks={cookbooks}
+        header={header}
+        footer={!isPending ? newButton : null}
+        refreshing={isRefetching}
+        onRefresh={refetch}
+        onOpen={(id) => router.push({ pathname: '/cookbook/[id]', params: { id } })}
+        onReorder={saveOrder}
       />
 
       <CookbookFormModal

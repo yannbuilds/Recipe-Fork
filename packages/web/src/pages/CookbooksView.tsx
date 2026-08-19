@@ -11,6 +11,7 @@ import {
   useSensors,
   closestCenter,
   type DragEndEvent,
+  type Modifier,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -35,6 +36,10 @@ interface RecipeImageRow {
   cookbook_id: string;
   recipes: { image_url: string | null; created_at: string } | null;
 }
+
+// A shelf only moves up and down, so pin the card to the column while it
+// travels — sideways drift makes a vertical list feel loose.
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 export default function CookbooksView({ authLoading }: CookbooksViewProps) {
   const { profile } = useAuth();
@@ -119,10 +124,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     };
   }, [authLoading]);
 
-  // Desktop: a small drag distance activates (taps still open a cookbook).
-  // Mobile: a short press-and-hold activates. The delay is kept under Chrome's
-  // ~500ms long-press so drag mode engages before its link-preview menu, while
-  // still being long enough that any finger movement (scrolling) cancels first.
+  // Either sensor picks the card up from anywhere on it — there is no handle.
+  // Desktop: a small drag distance activates (plain clicks still open a
+  // cookbook). Mobile: a short press-and-hold activates. The delay is kept
+  // under Chrome's ~500ms long-press so drag mode engages before its
+  // link-preview menu, while still being long enough that any finger movement
+  // (scrolling) cancels first.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -161,19 +168,20 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     const newIndex = cookbooks.findIndex((c) => c.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove(cookbooks, oldIndex, newIndex);
     const previous = cookbooks;
+    const reordered = arrayMove(cookbooks, oldIndex, newIndex).map((cb, i) => ({
+      ...cb,
+      sort_order: i,
+    }));
     // Optimistic UI: snap to the new order immediately.
     setCookbooks(reordered);
 
     // Persist only the rows whose position changed.
-    const updates = reordered
-      .map((cb, i) => ({ id: cb.id, sort_order: i }))
-      .filter((u, i) => previous[i]?.id !== u.id);
+    const updates = reordered.filter((cb, i) => previous[i]?.id !== cb.id);
 
     const results = await Promise.all(
-      updates.map((u) =>
-        supabase.from('cookbooks').update({ sort_order: u.sort_order }).eq('id', u.id)
+      updates.map((cb) =>
+        supabase.from('cookbooks').update({ sort_order: cb.sort_order }).eq('id', cb.id)
       )
     );
 
@@ -190,7 +198,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     if (loading) return 'Loading your cookbooks…';
     if (total === 0) return 'No cookbooks yet — create one to start grouping recipes.';
     if (total === 1) return '1 cookbook in your collection.';
-    return `${total} cookbooks in your collection · drag to reorder.`;
+    return `${total} cookbooks in your collection · hold anywhere on a shelf to reorder.`;
   }, [loading, total]);
 
   return (
@@ -285,8 +293,11 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              modifiers={[verticalOnly]}
               onDragStart={() => {
                 suppressNextClickRef.current = true;
+                // Confirm the long press landed, where the hardware allows it.
+                navigator.vibrate?.(12);
               }}
               onDragEnd={handleDragEnd}
             >

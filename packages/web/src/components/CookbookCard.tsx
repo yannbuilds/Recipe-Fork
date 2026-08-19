@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Utensils } from 'lucide-react';
 import type { Cookbook } from '@recipe-aggregator/shared';
@@ -13,10 +14,15 @@ interface CookbookCardProps {
    * mode browses cookbooks inside its own modal.
    */
   onSelect?: () => void;
+  /**
+   * Slot at the leading edge of the title row — where the reorder grip sits.
+   * It reads against the paper there, unlike over the photo strip.
+   */
+  leading?: ReactNode;
 }
 
 // Editorial "shelf" row — Pie Keeper design language (Screen 02 · CookbookEntry).
-export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0, onSelect }: CookbookCardProps) {
+export default function CookbookCard({ cookbook, recipeCount, coverImages, index = 0, onSelect, leading }: CookbookCardProps) {
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
 
   const shell: React.CSSProperties = {
@@ -28,8 +34,9 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
 
   const body = (
     <>
-      {/* Title row: index · name · count */}
+      {/* Title row: grip · index · name · count */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        {leading}
         <span style={{ fontFamily: fSerif, fontStyle: 'italic', color: PK.green, fontSize: 14 }}>
           {String(index + 1).padStart(2, '0')}.
         </span>
@@ -91,6 +98,9 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
                 alt=""
                 loading={index < 4 ? 'eager' : 'lazy'}
                 decoding="async"
+                // Native image dragging would otherwise swallow the pointer
+                // before the reorder gesture can start.
+                draggable={false}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -170,7 +180,9 @@ export default function CookbookCard({ cookbook, recipeCount, coverImages, index
   }
 
   return (
-    <Link to={`/cookbook/${cookbook.id}`} className="block" style={shell}>
+    // draggable={false}: a link is natively draggable, which would hijack the
+    // press-and-move that reorders the shelf.
+    <Link to={`/cookbook/${cookbook.id}`} className="block" style={shell} draggable={false}>
       {body}
     </Link>
   );

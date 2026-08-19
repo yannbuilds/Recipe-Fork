@@ -14,19 +14,62 @@ interface Props {
   onPress: () => void;
   /** Gutter to line the row up with whatever it's listed inside. */
   gutter?: number;
+  /** Show the reorder grip beside the entry number. */
+  reorderable?: boolean;
+  /** True while this row is the one being carried. */
+  lifted?: boolean;
+  onLongPress?: () => void;
+  onPressOut?: () => void;
+  delayLongPress?: number;
 }
 
 // Editorial "shelf" row — mirrors the web CookbookCard (Pie Keeper Screen 02).
 // Index · name · count, a 4-across photo strip under a hairline, then a
 // description · "Open →" footer.
-export default function CookbookRow({ cookbook, recipeCount, coverImages, index = 0, onPress, gutter = 16 }: Props) {
+export default function CookbookRow({
+  cookbook,
+  recipeCount,
+  coverImages,
+  index = 0,
+  onPress,
+  gutter = 16,
+  reorderable = false,
+  lifted = false,
+  onLongPress,
+  onPressOut,
+  delayLongPress,
+}: Props) {
   const t = useTheme();
   const slots = [0, 1, 2, 3].map((i) => coverImages[i] ?? null);
 
   return (
-    <PressableScale onPress={onPress} scaleTo={0.985} style={{ paddingHorizontal: gutter }}>
-      {/* Title row: index · name · count */}
+    <PressableScale
+      onPress={onPress}
+      onLongPress={onLongPress}
+      onPressOut={onPressOut}
+      delayLongPress={delayLongPress}
+      scaleTo={0.985}
+      style={{ paddingHorizontal: gutter }}
+    >
+      {/* Title row: grip · index · name · count */}
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        {reorderable && (
+          // On the paper beside the entry number, where it stays legible —
+          // over the photo strip it vanished into the pictures. Flush with the
+          // card's left spine, so the entry reads as indented behind it.
+          <View
+            pointerEvents="none"
+            style={{
+              alignSelf: 'center',
+              width: 14,
+              marginRight: -4,
+              alignItems: 'center',
+              opacity: lifted ? 1 : 0.4,
+            }}
+          >
+            <Ionicons name="reorder-two-outline" size={15} color={lifted ? t.green : t.muted} />
+          </View>
+        )}
         <Serif size={14} italic color={t.green}>
           {String(index + 1).padStart(2, '0')}.
         </Serif>
