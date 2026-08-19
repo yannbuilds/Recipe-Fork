@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Loader2, PenLine, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, Link2, Loader2, PenLine, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { Ingredient, Step } from '@recipe-aggregator/shared';
-import { supabase } from '@recipe-aggregator/shared';
+import type { Ingredient, Recipe, Step, Tag } from '@recipe-aggregator/shared';
+import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
-import { saveTags } from '../lib/saveTags';
+import { saveTags, syncTags } from '../lib/saveTags';
+import PhotoField from './PhotoField';
 
 type WizardStep = 'paste' | 'review' | 'look' | 'details' | 'finish';
 type SuggestedTag = { name: string; emoji: string };
@@ -22,8 +23,13 @@ interface Draft {
   sourceUrl: string;
 }
 
-const STEPS: WizardStep[] = ['paste', 'review', 'look', 'details', 'finish'];
-const STEP_LABELS = ['Paste', 'Review', 'Make it yours', 'Details', 'Save'];
+const CREATE_STEPS: WizardStep[] = ['paste', 'review', 'look', 'details', 'finish'];
+// Editing skips the paste step — the recipe is already organised. Re-pasting is
+// still available from the review step for a recipe worth redoing from scratch.
+const EDIT_STEPS: WizardStep[] = ['review', 'look', 'details', 'finish'];
+const STEP_LABELS: Record<WizardStep, string> = {
+  paste: 'Paste', review: 'Review', look: 'Make it yours', details: 'Details', finish: 'Save',
+};
 const EMPTY_DRAFT: Draft = {
   title: '', description: '', ingredients: [], steps: [], servings: '', prepTime: '', cookTime: '',
   creatorName: '', authorNotes: '', sourceUrl: '',
@@ -39,34 +45,114 @@ async function functionMessage(error: { context?: unknown; message?: string }, f
   } catch { return fallback; }
 }
 
-export default function ManualRecipeWizard() {
+export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const imageInput = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<WizardStep>('paste');
+  const editing = Boolean(recipeId);
+  const STEPS = editing ? EDIT_STEPS : CREATE_STEPS;
+
+  const [step, setStep] = useState<WizardStep>(editing ? 'review' : 'paste');
   const [paste, setPaste] = useState('');
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [suggestedTags, setSuggestedTags] = useState<SuggestedTag[]>([]);
+  const [tagOptions, setTagOptions] = useState<SuggestedTag[]>([]);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [tagLibrary, setTagLibrary] = useState<Tag[]>([]);
+  const [tagQuery, setTagQuery] = useState('');
   const [uncertain, setUncertain] = useState<string[]>([]);
   const [editingIngredient, setEditingIngredient] = useState<number | null>(null);
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [linkedTitles, setLinkedTitles] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(editing);
   const [busy, setBusy] = useState(false);
   const [draftingDescription, setDraftingDescription] = useState(false);
   const [error, setError] = useState('');
 
-  const currentIndex = STEPS.indexOf(step);
+  // Re-pasting lands on the paste step, which isn't part of the edit sequence —
+  // it gets its own header rather than a bogus position in the progress dots.
+  const repasting = editing && step === 'paste';
+  const currentIndex = Math.max(0, STEPS.indexOf(step));
   const valid = draft.title.trim() && draft.ingredients.some((i) => i.item.trim()) && draft.steps.some((s) => s.instruction.trim());
   const ingredientLine = (ingredient: Ingredient) =>
     ingredient.original_text?.trim() || [ingredient.quantity, ingredient.unit, ingredient.item].filter(Boolean).join(' ');
 
+  // Load the recipe being edited, plus the tag library the search box needs.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [tagsResult, recipeResult, recipeTagsResult] = await Promise.all([
+        supabase.from('tags').select('*').order('name'),
+        recipeId ? supabase.from('recipes').select('*').eq('id', recipeId).single() : null,
+        recipeId ? supabase.from('recipe_tags').select('tags(*)').eq('recipe_id', recipeId) : null,
+      ]);
+      if (cancelled) return;
+
+      if (tagsResult.data) setTagLibrary(tagsResult.data as Tag[]);
+
+      if (recipeResult?.error) setError(recipeResult.error.message);
+      if (recipeResult?.data) {
+        const recipe = recipeResult.data as Recipe;
+        setDraft({
+          title: recipe.title, description: recipe.description ?? '',
+          ingredients: recipe.ingredients ?? [],
+          steps: [...(recipe.steps ?? [])].sort((a, b) => a.order - b.order),
+          servings: recipe.servings != null ? String(recipe.servings) : '',
+          prepTime: recipe.prep_time != null ? String(recipe.prep_time) : '',
+          cookTime: recipe.cook_time != null ? String(recipe.cook_time) : '',
+          creatorName: recipe.creator_name ?? '', authorNotes: recipe.author_notes ?? '',
+          sourceUrl: recipe.source_url ?? '',
+        });
+        setImageUrl(recipe.image_url ?? '');
+        setPaste(recipe.original_paste ?? '');
+      }
+
+      const existing = (recipeTagsResult?.data ?? [])
+        .map((row: any) => row.tags)
+        .filter(Boolean)
+        .map((tag: Tag) => ({ name: tag.name, emoji: tag.emoji ?? '' }));
+      if (existing.length > 0) {
+        setTagOptions(existing);
+        setSelectedTags(new Set(existing.map((tag: SuggestedTag) => tag.name)));
+      }
+
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [recipeId]);
+
+  // Name the sub-recipes an ingredient points at, so a link is visible here
+  // instead of silently riding along. An unresolvable link just stays unnamed.
+  const linkedIdKey = subRecipeIdsIn(draft.ingredients).sort().join(',');
+  useEffect(() => {
+    const missing = subRecipeIdsIn(draft.ingredients).filter((id) => !linkedTitles[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('recipes').select('id, title').in('id', missing);
+      if (cancelled || !data) return;
+      setLinkedTitles((prev) => {
+        const next = { ...prev };
+        for (const row of data as { id: string; title: string }[]) next[row.id] = row.title;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedIdKey]);
+
   function go(next: WizardStep) {
     setError('');
     setStep(next);
+    setEditingIngredient(null);
+    setEditingStep(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function goBack() {
+    if (repasting) { go('review'); return; }
+    if (currentIndex > 0) { go(STEPS[currentIndex - 1]); return; }
+    navigate(-1);
   }
 
   async function organise() {
@@ -94,8 +180,8 @@ export default function ManualRecipeWizard() {
         cookTime: recipe.cook_time != null ? String(recipe.cook_time) : '',
         creatorName: recipe.creator_name ?? '', authorNotes: recipe.author_notes ?? '', sourceUrl: recipe.source_url ?? '',
       });
-      setSuggestedTags(data.tags ?? []);
-      setSelectedTags(new Set());
+      // Keep whatever was already chosen; the suggestions just widen the choice.
+      mergeTagOptions(data.tags ?? []);
       setUncertain(data.uncertain ?? []);
       go('review');
     } catch (organiseError) {
@@ -103,14 +189,27 @@ export default function ManualRecipeWizard() {
     } finally { setBusy(false); }
   }
 
-  function chooseImage(file?: File) {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { setError('Choose an image file.'); return; }
-    if (file.size > 20 * 1024 * 1024) { setError('Choose an image smaller than 20 MB.'); return; }
-    if (imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setImageUrl('');
+  function mergeTagOptions(incoming: SuggestedTag[]) {
+    setTagOptions((current) => {
+      const seen = new Set(current.map((tag) => tag.name.toLowerCase()));
+      return [...current, ...incoming.filter((tag) => !seen.has(tag.name.toLowerCase()))];
+    });
+  }
+
+  function toggleTag(name: string) {
+    setSelectedTags((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }
+
+  function addTagFromQuery(tag?: Tag) {
+    const name = (tag?.name ?? tagQuery).trim().toLowerCase();
+    if (!name) return;
+    mergeTagOptions([{ name, emoji: tag?.emoji ?? '' }]);
+    setSelectedTags((current) => new Set(current).add(name));
+    setTagQuery('');
   }
 
   async function draftDescription() {
@@ -147,47 +246,132 @@ export default function ManualRecipeWizard() {
     setError('');
     try {
       const savedImageUrl = await uploadImage();
+      // Spread the whole row: an ingredient's category and linked sub-recipe
+      // ride along untouched even though this screen doesn't edit them.
       const ingredients = draft.ingredients.filter((i) => i.item.trim()).map((i) => ({ ...i, item: i.item.trim() }));
       const steps = draft.steps.filter((s) => s.instruction.trim()).map((s, index) => ({ ...s, order: index + 1, instruction: s.instruction.trim() }));
-      const { data, error: saveError } = await supabase.from('recipes').insert({
-        user_id: user.id, title: draft.title.trim(), description: draft.description.trim() || null,
+      const chosenTags = tagOptions.filter((tag) => selectedTags.has(tag.name));
+      const payload = {
+        title: draft.title.trim(), description: draft.description.trim() || null,
         ingredients, steps, servings: draft.servings ? Number(draft.servings) : null,
         prep_time: draft.prepTime ? Number(draft.prepTime) : null, cook_time: draft.cookTime ? Number(draft.cookTime) : null,
         source_url: draft.sourceUrl.trim(), creator_name: draft.creatorName.trim() || null,
         author_notes: draft.authorNotes.trim() || null, image_url: savedImageUrl,
-        video_url: null, original_paste: paste, is_favourite: false,
+        original_paste: paste.trim() || null,
+      };
+
+      if (recipeId) {
+        // video_url, notes, favourite and nutrition are deliberately absent —
+        // an edit here must not wipe what this screen never showed.
+        const { error: saveError } = await supabase.from('recipes').update(payload).eq('id', recipeId);
+        if (saveError) throw new Error(saveError.message);
+        await syncTags(recipeId, chosenTags).catch(() => {});
+        navigate(`/recipe/${recipeId}`, { replace: true });
+        return;
+      }
+
+      const { data, error: saveError } = await supabase.from('recipes').insert({
+        ...payload, user_id: user.id, video_url: null, is_favourite: false,
       }).select('id').single();
       if (saveError || !data) throw new Error(saveError?.message ?? 'Could not save the recipe.');
-      await saveTags(data.id, suggestedTags.filter((tag) => selectedTags.has(tag.name))).catch(() => {});
+      await saveTags(data.id, chosenTags).catch(() => {});
       navigate(`/recipe/${data.id}`, { replace: true });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not save the recipe.');
     } finally { setBusy(false); }
   }
 
-  const previewImage = imagePreview || imageUrl.trim();
-  const screenTitle = useMemo(() => ({
-    paste: ['Start with everything', 'Paste the recipe exactly as you have it. We’ll organise it without rewriting a word.'],
-    review: ['Check the recipe', 'Tap any line to correct how it was classified.'],
-    look: ['Make it look good', 'Both are optional—you can skip this whole step.'],
-    details: ['A few useful details', 'Keep what was found, add anything missing, or skip ahead.'],
-    finish: ['Ready for your recipe box', 'One last look before it’s saved.'],
-  }[step]), [step]);
+  const screenTitle = useMemo<[string, string]>(() => {
+    if (repasting) return ['Start again from a paste', 'This replaces the title, ingredients and method below. Your photo and tags stay.'];
+    const copy: Record<WizardStep, [string, string]> = {
+      paste: ['Start with everything', 'Paste the recipe exactly as you have it. We’ll organise it without rewriting a word.'],
+      review: editing
+        ? ['Check the recipe', 'Tap any line to change it.']
+        : ['Check the recipe', 'Tap any line to correct how it was classified.'],
+      look: ['Make it look good', 'Both are optional—you can skip this whole step.'],
+      details: ['A few useful details', 'Keep what was found, add anything missing, or skip ahead.'],
+      finish: editing
+        ? ['Ready to save', 'One last look before your changes go in.']
+        : ['Ready for your recipe box', 'One last look before it’s saved.'],
+    };
+    return copy[step];
+  }, [step, editing, repasting]);
+
+  const normalisedTagQuery = tagQuery.trim().toLowerCase();
+  const knownTagNames = new Set(tagOptions.map((tag) => tag.name.toLowerCase()));
+  const matchingTags = normalisedTagQuery
+    ? tagLibrary.filter((tag) => !knownTagNames.has(tag.name.toLowerCase()) && tag.name.toLowerCase().includes(normalisedTagQuery)).slice(0, 6)
+    : [];
+
+  if (loading) {
+    return <p className="text-center text-sm py-12" style={{ color: 'var(--muted)' }}>Loading recipe…</p>;
+  }
+
+  const tagSection = (
+    <div className="mt-7">
+      <p className="text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>
+        Tags {tagOptions.length > 0 && <span className="font-normal">— tap to choose</span>}
+      </p>
+      {tagOptions.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {tagOptions.map((tag) => {
+            const selected = selectedTags.has(tag.name);
+            return (
+              <button key={tag.name} type="button" onClick={() => toggleTag(tag.name)} className={selected ? 'rf-tag rf-tag-active' : 'rf-tag'}>
+                {tag.emoji} {tag.name}{selected && ' ✓'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="rf-tag-search">
+        <div className="flex gap-2">
+          <input
+            className="rf-input w-full"
+            value={tagQuery}
+            onChange={(e) => setTagQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTagFromQuery(); } }}
+            placeholder="Search or create a tag"
+            role="combobox"
+            aria-expanded={matchingTags.length > 0}
+            aria-controls="wizard-tag-suggestions"
+          />
+          <button type="button" onClick={() => addTagFromQuery()} disabled={!normalisedTagQuery} className="rf-btn rf-btn-secondary shrink-0 disabled:opacity-50">
+            Add
+          </button>
+        </div>
+        {matchingTags.length > 0 && (
+          <div id="wizard-tag-suggestions" className="rf-tag-suggestions" role="listbox">
+            {matchingTags.map((tag) => (
+              <button key={tag.id} type="button" role="option" aria-selected="false" onClick={() => addTagFromQuery(tag)}>
+                <span>{tag.emoji} {tag.name}</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>Add</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <main className="mx-auto" style={{ maxWidth: 780, padding: '28px 20px 72px' }}>
       <div className="flex items-center justify-between gap-4 mb-7">
-        <button type="button" onClick={() => currentIndex ? go(STEPS[currentIndex - 1]) : navigate(-1)} className="inline-flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+        <button type="button" onClick={goBack} className="inline-flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
           <ArrowLeft size={17} /> Back
         </button>
-        <div className="flex items-center gap-1.5" aria-label={`Step ${currentIndex + 1} of ${STEPS.length}`}>
-          {STEPS.map((item, index) => <span key={item} style={{ width: index === currentIndex ? 28 : 8, height: 8, borderRadius: 99, background: index <= currentIndex ? 'var(--green)' : 'var(--border)', transition: 'all .28s ease' }} />)}
-        </div>
-        <span className="rf-eyebrow" style={{ minWidth: 58, textAlign: 'right' }}>{currentIndex + 1} / 5</span>
+        {!repasting && (
+          <div className="flex items-center gap-1.5" aria-label={`Step ${currentIndex + 1} of ${STEPS.length}`}>
+            {STEPS.map((item, index) => <span key={item} style={{ width: index === currentIndex ? 28 : 8, height: 8, borderRadius: 99, background: index <= currentIndex ? 'var(--green)' : 'var(--border)', transition: 'all .28s ease' }} />)}
+          </div>
+        )}
+        <span className="rf-eyebrow" style={{ minWidth: 58, textAlign: 'right' }}>
+          {repasting ? 'Redo' : `${currentIndex + 1} / ${STEPS.length}`}
+        </span>
       </div>
 
       <section key={step} style={{ animation: 'fadeUp .28s ease both' }}>
-        <div className="rf-eyebrow mb-2">{STEP_LABELS[currentIndex]}</div>
+        <div className="rf-eyebrow mb-2">{editing && !repasting ? `Editing · ${STEP_LABELS[step]}` : STEP_LABELS[step]}</div>
         <h1 className="rf-heading" style={{ fontSize: 'clamp(30px, 6vw, 42px)', color: 'var(--text)', lineHeight: 1.05 }}>{screenTitle[0]}</h1>
         <p className="mt-2 mb-7" style={{ color: 'var(--muted)', maxWidth: 600 }}>{screenTitle[1]}</p>
 
@@ -199,7 +383,11 @@ export default function ManualRecipeWizard() {
             <button type="button" onClick={organise} disabled={busy || paste.trim().length < 20} className="rf-btn rf-btn-primary flex-1 justify-center" style={{ minHeight: 50 }}>
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} {busy ? 'Organising…' : 'Organise recipe'}
             </button>
-            <button type="button" onClick={() => navigate('/new?mode=fields', { replace: true })} className="rf-btn rf-btn-secondary justify-center"><PenLine size={17} /> Enter field by field</button>
+            {!editing && (
+              <button type="button" onClick={() => navigate('/new?mode=fields', { replace: true })} className="rf-btn rf-btn-secondary justify-center">
+                <PenLine size={17} /> Enter field by field
+              </button>
+            )}
           </div>
         </>}
 
@@ -222,7 +410,13 @@ export default function ManualRecipeWizard() {
                   <input className="rf-input" value={ingredient.item} onChange={(e) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, i) => i === index ? { ...item, item: e.target.value } : item) }))} placeholder="Ingredient" />
                 </div>
                 <div className="flex justify-between"><button type="button" onClick={() => { setDraft((d) => ({ ...d, ingredients: d.ingredients.filter((_, i) => i !== index) })); setEditingIngredient(null); }} className="text-sm" style={{ color: 'var(--red)' }}>Remove</button><button type="button" onClick={() => setEditingIngredient(null)} className="rf-btn rf-btn-secondary"><Check size={15} /> Done</button></div>
-              </div> : <button type="button" onClick={() => setEditingIngredient(index)} className="w-full flex items-start justify-between gap-3 text-left"><span>{ingredientLine(ingredient) || 'Empty ingredient'}</span><PenLine size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} /></button>}
+              </div> : <button type="button" onClick={() => setEditingIngredient(index)} className="w-full flex items-start justify-between gap-3 text-left">
+                <span>
+                  {ingredientLine(ingredient) || 'Empty ingredient'}
+                  {ingredient.recipe_id && <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full text-xs align-middle" style={{ background: 'var(--green-light)', color: 'var(--green)' }}><Link2 size={11} strokeWidth={2.2} />{linkedTitles[ingredient.recipe_id] ?? 'Linked recipe'}</span>}
+                </span>
+                <PenLine size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              </button>}
             </div>)}
           </div>
 
@@ -232,16 +426,20 @@ export default function ManualRecipeWizard() {
               : <button type="button" onClick={() => setEditingStep(index)} className="w-full flex items-start gap-3 text-left"><span className="shrink-0 flex items-center justify-center rounded-full text-xs font-bold text-white" style={{ width: 26, height: 26, background: 'var(--green)' }}>{index + 1}</span><span className="flex-1 leading-relaxed">{recipeStep.instruction || 'Empty step'}</span><PenLine size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} /></button>}
           </div>)}</div>
           <button type="button" onClick={() => go('look')} disabled={!valid} className="rf-btn rf-btn-primary w-full justify-center mt-7" style={{ minHeight: 50 }}>Looks right <ArrowRight size={18} /></button>
+          {editing && (
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-5 text-sm">
+              <button type="button" onClick={() => go('paste')} className="inline-flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
+                <Sparkles size={14} /> Re-paste and reorganise
+              </button>
+              <button type="button" onClick={() => navigate(`/recipe/${recipeId}/edit?mode=fields`, { replace: true })} className="inline-flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
+                <PenLine size={14} /> Field-by-field editor
+              </button>
+            </div>
+          )}
         </>}
 
         {step === 'look' && <>
-          <div className="rf-card overflow-hidden" style={{ minHeight: 230 }}>
-            {previewImage ? <img src={previewImage} alt="Recipe preview" className="w-full object-cover" style={{ height: 260 }} /> : <button type="button" onClick={() => imageInput.current?.click()} className="w-full flex flex-col items-center justify-center gap-3" style={{ height: 230, color: 'var(--muted)', background: 'var(--warm)' }}><ImagePlus size={34} /><span>Add a photo</span></button>}
-          </div>
-          <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={(e) => chooseImage(e.target.files?.[0])} />
-          <div className="flex gap-2 mt-3"><button type="button" onClick={() => imageInput.current?.click()} className="rf-btn rf-btn-secondary flex-1 justify-center"><ImagePlus size={16} /> {previewImage ? 'Change photo' : 'Upload photo'}</button>{previewImage && <button type="button" onClick={() => { setImageFile(null); setImagePreview(''); setImageUrl(''); }} className="rf-btn rf-btn-secondary" aria-label="Remove photo"><X size={17} /></button>}</div>
-          <label className="block text-sm font-medium mt-6 mb-2" style={{ color: 'var(--muted)' }}>Or paste an image URL</label>
-          <input className="rf-input w-full" type="url" value={imageUrl} onChange={(e) => { setImageUrl(e.target.value); setImageFile(null); setImagePreview(''); }} placeholder="https://…" />
+          <PhotoField file={imageFile} url={imageUrl} onError={setError} onPick={(file) => { setError(''); setImageFile(file); setImageUrl(''); }} onRemove={() => { setImageFile(null); setImageUrl(''); }} />
           <div className="flex items-center justify-between mt-7 mb-2"><label className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Description</label><button type="button" onClick={draftDescription} disabled={draftingDescription} className="inline-flex items-center gap-1.5 text-sm" style={{ color: 'var(--green)' }}>{draftingDescription ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Draft description</button></div>
           <textarea className="rf-input w-full" rows={4} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Optional short description" />
           <div className="flex gap-3 mt-7"><button type="button" onClick={() => go('details')} className="rf-btn rf-btn-secondary flex-1 justify-center">Skip</button><button type="button" onClick={() => go('details')} className="rf-btn rf-btn-primary flex-1 justify-center">Next <ArrowRight size={18} /></button></div>
@@ -254,16 +452,30 @@ export default function ManualRecipeWizard() {
           <label className="block text-sm mt-6" style={{ color: 'var(--muted)' }}>Source URL<input type="url" className="rf-input w-full mt-2" value={draft.sourceUrl} onChange={(e) => setDraft((d) => ({ ...d, sourceUrl: e.target.value }))} placeholder="https://…" /></label>
           <label className="block text-sm mt-5" style={{ color: 'var(--muted)' }}>Original creator<input className="rf-input w-full mt-2" value={draft.creatorName} onChange={(e) => setDraft((d) => ({ ...d, creatorName: e.target.value }))} placeholder="Optional" /></label>
           <label className="block text-sm mt-5" style={{ color: 'var(--muted)' }}>Author’s notes<textarea className="rf-input w-full mt-2" rows={3} value={draft.authorNotes} onChange={(e) => setDraft((d) => ({ ...d, authorNotes: e.target.value }))} placeholder="Optional" /></label>
-          {suggestedTags.length > 0 && <div className="mt-6"><p className="text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>Suggested tags <span className="font-normal">— choose any you want</span></p><div className="flex flex-wrap gap-2">{suggestedTags.map((tag) => { const selected = selectedTags.has(tag.name); return <button key={tag.name} type="button" onClick={() => setSelectedTags((current) => { const next = new Set(current); selected ? next.delete(tag.name) : next.add(tag.name); return next; })} className={selected ? 'rf-tag rf-tag-active' : 'rf-tag'}>{tag.emoji} {tag.name}{selected && ' ✓'}</button>; })}</div></div>}
+          {tagSection}
           <div className="flex gap-3 mt-8"><button type="button" onClick={() => go('finish')} className="rf-btn rf-btn-secondary flex-1 justify-center">Skip</button><button type="button" onClick={() => go('finish')} className="rf-btn rf-btn-primary flex-1 justify-center">Review <ArrowRight size={18} /></button></div>
         </>}
 
         {step === 'finish' && <>
-          <div className="rf-card overflow-hidden">{previewImage && <img src={previewImage} alt="" className="w-full object-cover" style={{ height: 220 }} />}<div style={{ padding: 22 }}><div className="rf-eyebrow mb-2">{selectedTags.size ? [...selectedTags].join(' · ') : 'New recipe'}</div><h2 className="rf-heading text-3xl">{draft.title}</h2>{draft.description && <p className="mt-3" style={{ color: 'var(--text-soft)' }}>{draft.description}</p>}<div className="flex gap-4 mt-5 text-sm" style={{ color: 'var(--muted)' }}><span>{draft.ingredients.filter((i) => i.item.trim()).length} ingredients</span><span>{draft.steps.filter((s) => s.instruction.trim()).length} steps</span>{draft.servings && <span>Serves {draft.servings}</span>}</div></div></div>
-          <details className="mt-4 rf-card" style={{ padding: 16 }}><summary className="cursor-pointer text-sm font-medium">Original paste</summary><pre className="whitespace-pre-wrap text-sm mt-4" style={{ color: 'var(--muted)', fontFamily: 'inherit', lineHeight: 1.55 }}>{paste}</pre></details>
-          <button type="button" onClick={save} disabled={busy || !valid} className="rf-btn rf-btn-primary w-full justify-center mt-6" style={{ minHeight: 52 }}>{busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} {busy ? 'Saving…' : 'Save recipe'}</button>
+          <div className="rf-card overflow-hidden">{(imageFile || imageUrl) && <FinishImage file={imageFile} url={imageUrl} />}<div style={{ padding: 22 }}><div className="rf-eyebrow mb-2">{selectedTags.size ? [...selectedTags].join(' · ') : editing ? 'Updated recipe' : 'New recipe'}</div><h2 className="rf-heading text-3xl">{draft.title}</h2>{draft.description && <p className="mt-3" style={{ color: 'var(--text-soft)' }}>{draft.description}</p>}<div className="flex gap-4 mt-5 text-sm" style={{ color: 'var(--muted)' }}><span>{draft.ingredients.filter((i) => i.item.trim()).length} ingredients</span><span>{draft.steps.filter((s) => s.instruction.trim()).length} steps</span>{draft.servings && <span>Serves {draft.servings}</span>}</div></div></div>
+          {paste.trim() && <details className="mt-4 rf-card" style={{ padding: 16 }}><summary className="cursor-pointer text-sm font-medium">Original paste</summary><pre className="whitespace-pre-wrap text-sm mt-4" style={{ color: 'var(--muted)', fontFamily: 'inherit', lineHeight: 1.55 }}>{paste}</pre></details>}
+          <button type="button" onClick={save} disabled={busy || !valid} className="rf-btn rf-btn-primary w-full justify-center mt-6" style={{ minHeight: 52 }}>{busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} {busy ? 'Saving…' : editing ? 'Save changes' : 'Save recipe'}</button>
         </>}
       </section>
     </main>
   );
+}
+
+/** The finish card's photo — a picked file needs its own object URL. */
+function FinishImage({ file, url }: { file: File | null; url: string }) {
+  const [objectUrl, setObjectUrl] = useState('');
+  useEffect(() => {
+    if (!file) { setObjectUrl(''); return; }
+    const next = URL.createObjectURL(file);
+    setObjectUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [file]);
+  const src = objectUrl || url.trim();
+  if (!src) return null;
+  return <img src={src} alt="" className="w-full object-cover" style={{ height: 220 }} />;
 }

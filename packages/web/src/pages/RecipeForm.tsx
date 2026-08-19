@@ -4,13 +4,17 @@ import { Link2 } from 'lucide-react';
 import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
 import AddRecipeModal from '../components/AddRecipeModal';
+import PhotoField from '../components/PhotoField';
 import { useAuth } from '../context/AuthContext';
 import ManualRecipeWizard from '../components/ManualRecipeWizard';
 
 export default function RecipeForm() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  if (!id && searchParams.get('mode') !== 'fields') return <ManualRecipeWizard />;
+  // Creating and editing are the same experience now: the wizard. The
+  // field-by-field form stays reachable at ?mode=fields for the things it
+  // alone can do — ingredient categories and linked sub-recipes.
+  if (searchParams.get('mode') !== 'fields') return <ManualRecipeWizard key={id ?? 'new'} recipeId={id} />;
   return <StructuredRecipeForm />;
 }
 
@@ -27,6 +31,7 @@ function StructuredRecipeForm() {
   const [cookTime, setCookTime] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [creatorName, setCreatorName] = useState('');
   const [authorNotes, setAuthorNotes] = useState('');
@@ -233,6 +238,21 @@ function StructuredRecipeForm() {
 
     setSubmitting(true);
 
+    let savedImageUrl = imageUrl.trim() || null;
+    if (imageFile && user) {
+      const extension = imageFile.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'jpg';
+      const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from('recipe-images').upload(path, imageFile, {
+        contentType: imageFile.type || 'image/jpeg', upsert: false,
+      });
+      if (uploadError) {
+        setError(`Could not upload the photo: ${uploadError.message}`);
+        setSubmitting(false);
+        return;
+      }
+      savedImageUrl = supabase.storage.from('recipe-images').getPublicUrl(path).data.publicUrl;
+    }
+
     const filteredIngredients = ingredients
       .filter((ing) => ing.item.trim())
       .map((ing) => {
@@ -263,7 +283,7 @@ function StructuredRecipeForm() {
       source_url: sourceUrl.trim() || '',
       creator_name: creatorName.trim() || null,
       video_url: videoUrl.trim() || null,
-      image_url: imageUrl.trim() || null,
+      image_url: savedImageUrl,
       ingredients: filteredIngredients,
       steps: filteredSteps,
       author_notes: authorNotes.trim() || null,
@@ -435,24 +455,27 @@ function StructuredRecipeForm() {
             />
           </div>
 
+          {/* Photo */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>Photo</label>
+            <PhotoField
+              file={imageFile}
+              url={imageUrl}
+              height={220}
+              onError={setError}
+              onPick={(file) => { setError(null); setImageFile(file); setImageUrl(''); }}
+              onRemove={() => { setImageFile(null); setImageUrl(''); }}
+            />
+          </div>
+
           {/* URLs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Source URL</label>
               <input
                 type="url"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
-                className="rf-input w-full"
-                placeholder="https://..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Image URL</label>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
                 className="rf-input w-full"
                 placeholder="https://..."
               />

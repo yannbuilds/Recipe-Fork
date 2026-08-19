@@ -2,6 +2,6 @@ import { useLocalSearchParams } from 'expo-router';
 import RecipeFormScreen from '@/components/RecipeFormScreen';
 
 export default function EditRecipe() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  return <RecipeFormScreen recipeId={id} />;
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
+  return <RecipeFormScreen recipeId={id} forceStructured={mode === 'fields'} />;
 }

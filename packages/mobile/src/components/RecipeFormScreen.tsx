@@ -2,10 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { subRecipeIdsIn } from '@recipe-aggregator/shared/ingredients';
 import type { Ingredient, Recipe, Step, Tag } from '@recipe-aggregator/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PhotoField from '@/components/PhotoField';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
 import { Body, Button, Divider, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -34,7 +36,10 @@ interface IngRow {
 }
 
 export default function RecipeFormScreen({ recipeId, forceStructured = false }: Props) {
-  if (!recipeId && !forceStructured) return <ManualRecipeWizardScreen />;
+  // Creating and editing are the same experience now: the wizard. The
+  // field-by-field form stays reachable with mode=fields for the things it
+  // alone can do — ingredient categories and linked sub-recipes.
+  if (!forceStructured) return <ManualRecipeWizardScreen recipeId={recipeId} />;
   return <StructuredRecipeFormScreen recipeId={recipeId} />;
 }
 
@@ -50,6 +55,7 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageAsset, setImageAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [sourceUrl, setSourceUrl] = useState('');
   const [servings, setServings] = useState('');
   const [prep, setPrep] = useState('');
@@ -207,6 +213,23 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
     }
   }
 
+  /** Push a freshly picked photo to storage; otherwise keep whatever is set. */
+  async function uploadPhoto(): Promise<string | null> {
+    if (!imageAsset || !user) return imageUrl.trim() || null;
+    const bytes = await fetch(imageAsset.uri).then((response) => response.arrayBuffer());
+    const mime = imageAsset.mimeType || 'image/jpeg';
+    const extension =
+      imageAsset.fileName?.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() ||
+      mime.split('/')[1] ||
+      'jpg';
+    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from('recipe-images')
+      .upload(path, bytes, { contentType: mime, upsert: false });
+    if (uploadError) throw new Error(`Could not upload the photo: ${uploadError.message}`);
+    return supabase.storage.from('recipe-images').getPublicUrl(path).data.publicUrl;
+  }
+
   async function save() {
     if (!title.trim() || !user) return;
     setSaving(true);
@@ -229,10 +252,19 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
       .filter((s) => s.trim())
       .map((s, idx) => ({ order: idx + 1, instruction: s.trim() }));
 
+    let savedImageUrl: string | null;
+    try {
+      savedImageUrl = await uploadPhoto();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Could not upload the photo.');
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       title: title.trim(),
       description: description.trim() || null,
-      image_url: imageUrl.trim() || null,
+      image_url: savedImageUrl,
       source_url: sourceUrl.trim() || '',
       servings: servings ? Number(servings) : null,
       prep_time: prep ? Number(prep) : null,
@@ -336,8 +368,15 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
           style={[inputStyle, { minHeight: 64, textAlignVertical: 'top' }]}
         />
 
-        {label('Image URL')}
-        <TextInput value={imageUrl} onChangeText={setImageUrl} placeholder="https://…" placeholderTextColor={t.muted} autoCapitalize="none" style={inputStyle} />
+        {label('Photo')}
+        <PhotoField
+          asset={imageAsset}
+          url={imageUrl}
+          height={200}
+          onError={setError}
+          onPick={(asset) => { setError(null); setImageAsset(asset); setImageUrl(''); }}
+          onRemove={() => { setImageAsset(null); setImageUrl(''); }}
+        />
 
         {label('Source URL')}
         <TextInput value={sourceUrl} onChangeText={setSourceUrl} placeholder="https://…" placeholderTextColor={t.muted} autoCapitalize="none" style={inputStyle} />
