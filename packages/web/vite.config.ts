@@ -9,13 +9,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt',
-      includeAssets: [
-        'favicon.ico',
-        'favicon-32.png',
-        'apple-touch-icon-180.png',
-      ],
+      // Installed web apps do not always expose the update prompt reliably
+      // (Safari's Add to Dock is the main offender). Activate a new shell as
+      // soon as it is found during startup so an installed copy cannot remain
+      // pinned to an obsolete bundle.
+      registerType: 'autoUpdate',
       manifest: {
+        id: '/',
         name: 'Pie Keeper',
         short_name: 'Pie Keeper',
         description: 'Save and organise your favourite recipes',

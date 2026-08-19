@@ -20,7 +20,6 @@ import LandingPage from "./pages/LandingPage";
 import LandingPageV2 from "./pages/LandingPageV2";
 import BottomNav from "./components/BottomNav";
 import NewRecipeModal from "./components/NewRecipeModal";
-import PWAUpdateBanner from "./components/PWAUpdateBanner";
 import OfflineBanner from "./components/OfflineBanner";
 
 /**
@@ -240,7 +239,6 @@ function AppShell() {
           <div className="min-h-screen">{routes}</div>
         )}
         <NewRecipeModal />
-        <PWAUpdateBanner />
         <OfflineBanner />
       </AppScrollContext.Provider>
     </NewRecipeModalProvider>

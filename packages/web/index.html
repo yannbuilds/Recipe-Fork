@@ -15,9 +15,86 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,500&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>Pie Keeper</title>
+    <style>
+      #pk-boot {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        padding: 24px;
+        background: #e9ede4;
+        color: #2f5440;
+        font: 600 15px/1.4 system-ui, sans-serif;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="pk-boot" role="status">Opening Pie Keeper&hellip;</div>
+    </div>
+    <script>
+      // If an installed PWA has a partially evicted precache, its cached HTML
+      // can point at a JavaScript bundle that no longer exists and leave a
+      // permanently blank window. Recover once per launch by removing only
+      // Pie Keeper's application-shell worker/cache, then load from the network.
+      (() => {
+        const recoveryKey = 'pie-keeper:pwa-startup-recovered';
+
+        function hasRecovered() {
+          try {
+            return sessionStorage.getItem(recoveryKey) === 'true';
+          } catch {
+            return false;
+          }
+        }
+
+        function markRecovered() {
+          try {
+            sessionStorage.setItem(recoveryKey, 'true');
+          } catch {
+            // Safari can deny storage in restricted modes; the reload still
+            // gets a fresh shell, and the boot-screen guard prevents a loop.
+          }
+        }
+
+        async function recoverBrokenShell() {
+          if (!navigator.onLine || !document.getElementById('pk-boot') || hasRecovered()) return;
+
+          markRecovered();
+
+          try {
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(
+                registrations
+                  .filter((registration) => new URL(registration.scope).origin === location.origin)
+                  .map((registration) => registration.unregister()),
+              );
+            }
+
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              await Promise.all(
+                cacheNames
+                  .filter((name) => name.startsWith('workbox-precache'))
+                  .map((name) => caches.delete(name)),
+              );
+            }
+          } finally {
+            location.reload();
+          }
+        }
+
+        window.addEventListener(
+          'error',
+          (event) => {
+            if (event.target instanceof HTMLScriptElement) void recoverBrokenShell();
+          },
+          true,
+        );
+        window.addEventListener('load', () => window.setTimeout(recoverBrokenShell, 8000));
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
