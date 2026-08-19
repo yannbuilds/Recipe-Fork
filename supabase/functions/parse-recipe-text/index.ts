@@ -1,5 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  CLASSIFY_MAX_COMPLETION_TOKENS,
+  CLASSIFY_MIN_COMPLETION_TOKENS,
+  completionTokenBudget,
+  groqFailureMessage,
+} from "./groq.ts";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "openai/gpt-oss-120b";
@@ -136,7 +142,11 @@ function normaliseTags(value: unknown) {
   }).slice(0, 5);
 }
 
-async function askGroq(key: string, system: string, user: string, maxTokens: number) {
+async function askGroq(key: string, system: string, user: string, maxTokens: number, minTokens = 1) {
+  const completionTokens = completionTokenBudget(system, user, maxTokens);
+  if (completionTokens < minTokens) {
+    throw new Error("This recipe is too long to organise in one go. Try removing unrelated text or use Enter field by field.");
+  }
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -144,14 +154,15 @@ async function askGroq(key: string, system: string, user: string, maxTokens: num
       model: MODEL,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
       response_format: { type: "json_object" },
+      reasoning_effort: "low",
       temperature: 0,
-      max_completion_tokens: maxTokens,
+      max_completion_tokens: completionTokens,
     }),
   });
   if (!response.ok) {
     const details = await response.text().catch(() => "");
     console.error(`[parse-recipe-text] Groq ${response.status}: ${details}`);
-    throw new Error(response.status === 429 ? "AI limit reached – try again shortly." : "The recipe could not be organised");
+    throw new Error(groqFailureMessage(response.status, details));
   }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
@@ -193,7 +204,13 @@ Deno.serve(async (req) => {
     if (source.length < 20) return json({ error: "Paste a little more of the recipe first" }, 400);
     if (source.length > MAX_TEXT_LENGTH) return json({ error: "That paste is too long. Keep it under 50,000 characters." }, 413);
 
-    const parsed = await askGroq(groqKey, CLASSIFY_PROMPT, source, 7000);
+    const parsed = await askGroq(
+      groqKey,
+      CLASSIFY_PROMPT,
+      source,
+      CLASSIFY_MAX_COMPLETION_TOKENS,
+      CLASSIFY_MIN_COMPLETION_TOKENS,
+    );
     const title = cleanString(parsed.title);
     if (title && !isSourced(title, source)) throw new Error("The title was not copied faithfully from the pasted text");
     const description = nullableString(parsed.description);
