@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PhotoField from '@/components/PhotoField';
+import SortableRows, { useSortableScroll } from '@/components/SortableRows';
 import { Body, Button, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
@@ -172,6 +173,26 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
     borderWidth: 1, borderColor: t.border, backgroundColor: t.card, borderRadius: 11,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: t.text, fontFamily: font.sans,
   } as const;
+
+  // The form's own scroll position, so a drag can reach past the fold and the
+  // list holds still under a finger that is placing a row.
+  const { scroll, scrollProps } = useSortableScroll();
+
+  // Drag-to-reorder for the ingredient list. The wizard never shows ingredient
+  // categories, so a row dropped inside another section adopts that section's
+  // category — otherwise the recipe page would group it straight back where it
+  // came from and the order you just set wouldn't be the order you got.
+  function reorderIngredients(from: number, to: number) {
+    setEditingIngredient(null);
+    setDraft((d) => {
+      const ingredients = d.ingredients.slice();
+      const [moved] = ingredients.splice(from, 1);
+      ingredients.splice(to, 0, moved);
+      const neighbour = ingredients[to - 1] ?? ingredients[to + 1];
+      if (neighbour) ingredients[to] = { ...ingredients[to], category: neighbour.category };
+      return { ...d, ingredients };
+    });
+  }
 
   function go(next: WizardStep) {
     setError('');
@@ -356,7 +377,7 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
 
   return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <Stack.Screen options={{ title: editing ? 'Edit recipe' : 'Add a recipe', headerBackVisible: false }} />
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 44 }}>
+    <ScrollView {...scrollProps} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 44 }}>
       {header}
       <Animated.View style={{ opacity: animation, transform: [{ translateX: animation.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
         {step === 'paste' && <>
@@ -370,7 +391,16 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
           <Body size={12} color={t.muted} style={{ marginBottom: 6 }}>Title</Body>
           <TextInput value={draft.title} onChangeText={(title) => setDraft((d) => ({ ...d, title }))} placeholder="Recipe title" placeholderTextColor={t.muted} style={[input, { fontSize: 18 }]} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 9 }}><Serif size={21}>Ingredients</Serif><Pressable onPress={() => { setEditingIngredient(draft.ingredients.length); setDraft((d) => ({ ...d, ingredients: [...d.ingredients, { item: '', quantity: '', unit: '', original_text: '' }] })); }}><Body size={13} color={t.green}>+ Add</Body></Pressable></View>
-          {draft.ingredients.map((ingredient, i) => <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 13, marginBottom: 8 }}>
+          <SortableRows
+            count={draft.ingredients.length}
+            gap={8}
+            scroll={scroll}
+            isLocked={(i) => editingIngredient === i}
+            onDragStart={() => setEditingIngredient(null)}
+            onReorder={reorderIngredients}
+            renderItem={(i) => {
+              const ingredient = draft.ingredients[i];
+              return <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 13 }}>
             {editingIngredient === i ? <View style={{ gap: 8 }}><TextInput value={ingredient.original_text ?? ''} onChangeText={(value) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, x) => x === i ? { ...item, original_text: value } : item) }))} placeholder="Complete ingredient line" placeholderTextColor={t.muted} style={input} /><View style={{ flexDirection: 'row', gap: 7 }}><TextInput value={ingredient.quantity} onChangeText={(value) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, x) => x === i ? { ...item, quantity: value } : item) }))} placeholder="Qty" placeholderTextColor={t.muted} style={[input, { width: 68 }]} /><TextInput value={ingredient.unit} onChangeText={(value) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, x) => x === i ? { ...item, unit: value } : item) }))} placeholder="Unit" placeholderTextColor={t.muted} style={[input, { width: 82 }]} /><TextInput value={ingredient.item} onChangeText={(value) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, x) => x === i ? { ...item, item: value } : item) }))} placeholder="Ingredient" placeholderTextColor={t.muted} style={[input, { flex: 1 }]} /></View><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Pressable onPress={() => { setDraft((d) => ({ ...d, ingredients: d.ingredients.filter((_, x) => x !== i) })); setEditingIngredient(null); }}><Body size={12} color={t.red}>Remove</Body></Pressable><Button label="Done" variant="secondary" onPress={() => setEditingIngredient(null)} /></View></View>
               : <Pressable onPress={() => setEditingIngredient(i)} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
@@ -379,7 +409,9 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
                 </View>
                 <Ionicons name="create-outline" size={16} color={t.muted} />
               </Pressable>}
-          </View>)}
+              </View>;
+            }}
+          />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 9 }}><Serif size={21}>Steps</Serif><Pressable onPress={() => { setEditingStep(draft.steps.length); setDraft((d) => ({ ...d, steps: [...d.steps, { order: d.steps.length + 1, instruction: '' }] })); }}><Body size={13} color={t.green}>+ Add</Body></Pressable></View>
           {draft.steps.map((recipeStep, i) => <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 13, marginBottom: 8 }}>
             {editingStep === i ? <View style={{ gap: 8 }}><TextInput value={recipeStep.instruction} onChangeText={(instruction) => setDraft((d) => ({ ...d, steps: d.steps.map((item, x) => x === i ? { ...item, instruction } : item) }))} multiline textAlignVertical="top" style={[input, { minHeight: 90 }]} /><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Pressable onPress={() => { setDraft((d) => ({ ...d, steps: d.steps.filter((_, x) => x !== i).map((s, x) => ({ ...s, order: x + 1 })) })); setEditingStep(null); }}><Body size={12} color={t.red}>Remove</Body></Pressable><Button label="Done" variant="secondary" onPress={() => setEditingStep(null)} /></View></View>

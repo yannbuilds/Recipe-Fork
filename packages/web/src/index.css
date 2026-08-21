@@ -486,7 +486,27 @@ html.pk-locked body {
 }
 .rf-ingredient-remove-icon { display: none; }
 
+/* Drag handle for the reorderable rows inside a form (ingredients). */
+.rf-grip {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--muted);
+  opacity: 0.45;
+  transition: opacity 140ms ease, color 140ms ease;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.rf-grip:hover,
+.rf-sortable-row:hover .rf-grip {
+  opacity: 1;
+}
 @media (max-width: 640px) {
+  /* No hover on a phone — keep the affordance permanently legible instead. */
+  .rf-grip { opacity: 0.7; }
+
   .rf-ingredient-edit-row {
     grid-template-columns: 4rem 4.5rem minmax(0, 1fr) 2.5rem 2.5rem;
     grid-template-areas:

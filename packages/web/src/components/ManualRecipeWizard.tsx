@@ -6,6 +6,7 @@ import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import { saveTags, syncTags } from '../lib/saveTags';
 import PhotoField from './PhotoField';
+import { SortableRow, SortableRows, moveItem, rowIds } from './SortableRows';
 
 type WizardStep = 'paste' | 'review' | 'look' | 'details' | 'finish';
 type SuggestedTag = { name: string; emoji: string };
@@ -140,6 +141,20 @@ export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedIdKey]);
+
+  // Drag-to-reorder for the ingredient list. The wizard never shows ingredient
+  // categories, so a row dropped inside another section adopts that section's
+  // category — otherwise the recipe page would group it straight back where it
+  // came from and the order you just set wouldn't be the order you got.
+  function reorderIngredients(from: number, to: number) {
+    setEditingIngredient(null);
+    setDraft((d) => {
+      const ingredients = moveItem(d.ingredients, from, to);
+      const neighbour = ingredients[to - 1] ?? ingredients[to + 1];
+      if (neighbour) ingredients[to] = { ...ingredients[to], category: neighbour.category };
+      return { ...d, ingredients };
+    });
+  }
 
   function go(next: WizardStep) {
     setError('');
@@ -400,8 +415,12 @@ export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) 
           <input className="rf-input w-full text-lg" value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Recipe title" />
 
           <div className="flex items-center justify-between mt-7 mb-3"><h2 className="rf-heading text-xl">Ingredients</h2><button type="button" onClick={() => { setDraft((d) => ({ ...d, ingredients: [...d.ingredients, { item: '', quantity: '', unit: '', original_text: '' }] })); setEditingIngredient(draft.ingredients.length); }} className="text-sm" style={{ color: 'var(--green)' }}>+ Add</button></div>
-          <div className="space-y-2">
-            {draft.ingredients.map((ingredient, index) => <div key={index} className="rf-card" style={{ padding: 14 }}>
+          <SortableRows
+            ids={rowIds('ingredient', draft.ingredients.length)}
+            onDragStart={() => setEditingIngredient(null)}
+            onReorder={reorderIngredients}
+          >
+            {draft.ingredients.map((ingredient, index) => <SortableRow key={index} id={`ingredient-${index}`} disabled={editingIngredient === index} className="rf-card" style={{ padding: 14 }}>
               {editingIngredient === index ? <div className="space-y-3">
                 <input className="rf-input w-full" value={ingredient.original_text ?? ''} onChange={(e) => setDraft((d) => ({ ...d, ingredients: d.ingredients.map((item, i) => i === index ? { ...item, original_text: e.target.value } : item) }))} placeholder="Complete ingredient line" autoFocus />
                 <div className="grid grid-cols-3 gap-2">
@@ -417,8 +436,8 @@ export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) 
                 </span>
                 <PenLine size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} />
               </button>}
-            </div>)}
-          </div>
+            </SortableRow>)}
+          </SortableRows>
 
           <div className="flex items-center justify-between mt-8 mb-3"><h2 className="rf-heading text-xl">Steps</h2><button type="button" onClick={() => { setDraft((d) => ({ ...d, steps: [...d.steps, { order: d.steps.length + 1, instruction: '' }] })); setEditingStep(draft.steps.length); }} className="text-sm" style={{ color: 'var(--green)' }}>+ Add</button></div>
           <div className="space-y-2">{draft.steps.map((recipeStep, index) => <div key={index} className="rf-card" style={{ padding: 14 }}>

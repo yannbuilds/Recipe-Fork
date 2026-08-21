@@ -68,17 +68,20 @@ function toRoman(n: number): string {
   return out;
 }
 
-// Group ingredients/steps by their category, preserving order and each item's
-// original index (check-off state stays keyed by that index). Items without a
-// category all land in a single '' group, mirroring the web app.
+// Headings break the list into runs rather than collecting every item of a
+// category together: the saved order is the order arranged in the editor, and
+// the page must show that back rather than quietly regrouping it. Categories
+// are contiguous in practice, so a normal recipe renders identically. Each
+// item keeps its original index — check-off state stays keyed by that, and it
+// stays unique even when a category heading appears twice. Mirrors the web app.
 function groupByCategory<T extends { category?: string | null }>(
   items: T[],
 ): { category: string; items: { value: T; index: number }[] }[] {
   const groups: { category: string; items: { value: T; index: number }[] }[] = [];
   items.forEach((value, index) => {
     const category = value.category || '';
-    const existing = groups.find((g) => g.category === category);
-    if (existing) existing.items.push({ value, index });
+    const last = groups[groups.length - 1];
+    if (last && last.category === category) last.items.push({ value, index });
     else groups.push({ category, items: [{ value, index }] });
   });
   return groups;
@@ -799,7 +802,7 @@ export default function RecipeDetailScreen() {
           >
             {tab === 'ingredients'
               ? groupByCategory(recipe.ingredients).map((group, gi) => (
-                  <View key={group.category || `group-${gi}`} style={{ marginTop: gi > 0 ? 20 : 0 }}>
+                  <View key={`group-${gi}`} style={{ marginTop: gi > 0 ? 20 : 0 }}>
                     {group.category ? (
                       <View
                         style={{
@@ -1008,7 +1011,7 @@ export default function RecipeDetailScreen() {
                   </View>
                 ))
               : groupByCategory(steps).map((group, gi) => (
-                  <View key={group.category || `group-${gi}`} style={{ marginTop: gi > 0 ? 8 : 0 }}>
+                  <View key={`group-${gi}`} style={{ marginTop: gi > 0 ? 8 : 0 }}>
                     {group.category ? (
                       <Eyebrow style={{ marginBottom: 12 }}>{group.category}</Eyebrow>
                     ) : null}

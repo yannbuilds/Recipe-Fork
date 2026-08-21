@@ -9,6 +9,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PhotoField from '@/components/PhotoField';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
+import SortableRows, { useSortableScroll } from '@/components/SortableRows';
 import { Body, Button, Divider, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
@@ -115,6 +116,21 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
       setLoading(false);
     })();
   }, [recipeId]);
+
+  // The form's own scroll position, so a drag can reach past the fold and the
+  // list holds still under a finger that is placing a row.
+  const { scroll, scrollProps } = useSortableScroll();
+
+  // Drag-to-reorder. Ingredient categories are carried through untouched here —
+  // the recipe page renders the list in exactly this order either way.
+  function reorderIngredient(from: number, to: number) {
+    setIngredients((prev) => {
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
 
   // Resolve the titles of linked recipes so the chips can name them. A link that
   // doesn't come back — deleted recipe, or one belonging to someone outside the
@@ -349,7 +365,7 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Stack.Screen options={{ title: recipeId ? 'Edit recipe' : 'New recipe' }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView {...scrollProps} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         <Eyebrow>{recipeId ? 'Editing' : 'New'}</Eyebrow>
         <Serif size={28} style={{ marginTop: 8, marginBottom: 4 }}>
           {recipeId ? 'Edit recipe' : 'Add a recipe'}
@@ -488,8 +504,16 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
         <Serif size={20} style={{ marginTop: 18, marginBottom: 4 }}>
           Ingredients
         </Serif>
-        {ingredients.map((ing, i) => (
-          <View key={i} style={{ marginTop: 12 }}>
+        <SortableRows
+          count={ingredients.length}
+          gap={12}
+          style={{ marginTop: 12 }}
+          scroll={scroll}
+          onReorder={reorderIngredient}
+          renderItem={(i) => {
+            const ing = ingredients[i];
+            return (
+          <View>
             <TextInput
               value={ing.item}
               onChangeText={(v) => setIngredients((prev) => prev.map((x, xi) => (xi === i ? { ...x, item: v, original_text: undefined } : x)))}
@@ -574,7 +598,9 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
               </View>
             )}
           </View>
-        ))}
+            );
+          }}
+        />
         <Pressable
           onPress={() => setIngredients((prev) => [...prev, { quantity: '', unit: '', item: '' }])}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}

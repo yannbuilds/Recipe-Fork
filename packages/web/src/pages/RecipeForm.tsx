@@ -7,6 +7,7 @@ import AddRecipeModal from '../components/AddRecipeModal';
 import PhotoField from '../components/PhotoField';
 import { useAuth } from '../context/AuthContext';
 import ManualRecipeWizard from '../components/ManualRecipeWizard';
+import { SortableRow, SortableRows, moveItem, rowIds } from '../components/SortableRows';
 
 export default function RecipeForm() {
   const { id } = useParams<{ id: string }>();
@@ -200,6 +201,13 @@ function StructuredRecipeForm() {
       updated[index].original_text = undefined;
     }
     setIngredients(updated);
+  }
+
+  // Drag-to-reorder. Categories are an editable field of their own here, so a
+  // dropped row keeps whatever category it had — the recipe page renders the
+  // list in exactly this order either way.
+  function reorderIngredient(from: number, to: number) {
+    setIngredients((prev) => moveItem(prev, from, to));
   }
 
   // Point an ingredient at another recipe, or clear the link. Kept separate from
@@ -559,10 +567,15 @@ function StructuredRecipeForm() {
           {/* Ingredients */}
           <fieldset className="space-y-3">
             <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Ingredients</legend>
+            <SortableRows
+              ids={rowIds('ingredient', ingredients.length)}
+              onReorder={reorderIngredient}
+              gap={12}
+            >
             {ingredients.map((ing, i) => {
               const linkedTitle = ing.recipe_id ? linkedTitles[ing.recipe_id] : undefined;
               return (
-                <div key={i}>
+                <SortableRow key={i} id={`ingredient-${i}`} handleOnly gripAlign="top">
                   <div className="rf-ingredient-edit-row">
                     <input
                       type="text"
@@ -639,9 +652,10 @@ function StructuredRecipeForm() {
                       </button>
                     </div>
                   )}
-                </div>
+                </SortableRow>
               );
             })}
+            </SortableRows>
             <button
               type="button"
               onClick={addIngredient}

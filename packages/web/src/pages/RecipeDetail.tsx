@@ -721,52 +721,44 @@ export default function RecipeDetail() {
     );
   }
 
-  /* Grouping logic (preserved) */
+  /* Grouping logic — category headings over the saved order. */
   const sortedSteps = [...recipe.steps].sort((a, b) => a.order - b.order);
 
-  const hasIngredientCategories = recipe.ingredients.some((ing) => ing.category);
-  const ingredientGroups: { category: string; items: typeof recipe.ingredients }[] = [];
-  if (hasIngredientCategories) {
-    for (const ing of recipe.ingredients) {
-      const cat = ing.category || '';
-      const existing = ingredientGroups.find((g) => g.category === cat);
-      if (existing) {
-        existing.items.push(ing);
-      } else {
-        ingredientGroups.push({ category: cat, items: [ing] });
-      }
-    }
+  // Headings break the list into runs rather than collecting every item of a
+  // category together: the saved order is the order you arranged in the editor,
+  // and the page must show that back, not quietly regroup it. Categories are
+  // contiguous in practice, so this renders identically for a normal recipe.
+  // `start` is the group's first position in the whole list, which keeps the
+  // check-off keys unique even when a category heading appears twice.
+  function groupRuns<T extends { category?: string | null }>(items: T[]) {
+    const groups: { category: string; start: number; items: T[] }[] = [];
+    items.forEach((item, index) => {
+      const category = item.category || '';
+      const last = groups[groups.length - 1];
+      if (last && last.category === category) last.items.push(item);
+      else groups.push({ category, start: index, items: [item] });
+    });
+    return groups;
   }
 
+  const hasIngredientCategories = recipe.ingredients.some((ing) => ing.category);
   const hasStepCategories = sortedSteps.some((s) => s.category);
-  const stepGroups: { category: string; items: typeof sortedSteps }[] = [];
-  if (hasStepCategories) {
-    for (const step of sortedSteps) {
-      const cat = step.category || '';
-      const existing = stepGroups.find((g) => g.category === cat);
-      if (existing) {
-        existing.items.push(step);
-      } else {
-        stepGroups.push({ category: cat, items: [step] });
-      }
-    }
-  }
 
   const allIngredients = hasIngredientCategories
-    ? ingredientGroups
-    : [{ category: '', items: recipe.ingredients }];
+    ? groupRuns(recipe.ingredients)
+    : [{ category: '', start: 0, items: recipe.ingredients }];
 
   const allSteps = hasStepCategories
-    ? stepGroups
-    : [{ category: '', items: sortedSteps }];
+    ? groupRuns(sortedSteps)
+    : [{ category: '', start: 0, items: sortedSteps }];
 
   const ingredientCount = recipe.ingredients.length;
   const stepCount = sortedSteps.length;
 
   /* Steps list — shared between the desktop column and the mobile "Steps" tab. */
   const renderStepGroups = () =>
-    allSteps.map((group) => (
-      <div key={group.category} className="mb-5 last:mb-0">
+    allSteps.map((group, gi) => (
+      <div key={gi} className="mb-5 last:mb-0">
         {group.category && (
           <h3
             className="uppercase tracking-wide text-xs font-bold mb-3"
@@ -878,7 +870,7 @@ export default function RecipeDetail() {
      headers + square checkboxes with right-aligned quantities. */
   const renderMobileIngredients = () =>
     allIngredients.map((group, gi) => (
-      <div key={group.category || gi} style={{ marginBottom: 24 }}>
+      <div key={gi} style={{ marginBottom: 24 }}>
         {group.category && (
           <div
             style={{
@@ -909,7 +901,7 @@ export default function RecipeDetail() {
           </div>
         )}
         {group.items.map((ing, i) => {
-          const ingKey = `${group.category}::${i}`;
+          const ingKey = `${group.category}::${group.start + i}`;
           const isUsed = usedIngredients.has(ingKey);
           const name = ing.item || ing.original_text || '';
           const qty =
