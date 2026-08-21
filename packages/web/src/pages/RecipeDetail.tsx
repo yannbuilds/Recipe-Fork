@@ -19,6 +19,8 @@ import MyNotesModal from '../components/MyNotesModal';
 import AddToCookbookSheet from '../components/AddToCookbookSheet';
 import NutritionPanel from '../components/NutritionPanel';
 import RateCookModal from '../components/RateCookModal';
+import StillCookingPrompt from '../components/StillCookingPrompt';
+import { useIdleScreenOff } from '../hooks/useIdleScreenOff';
 import { scaleQuantity } from '../utils/scaleQuantity';
 
 /* ------------------------------------------------------------------ */
@@ -391,6 +393,11 @@ export default function RecipeDetail() {
   const [isAwake, setIsAwake] = useState(cookMode && supportsWakeLock);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [showAwakeTooltip, setShowAwakeTooltip] = useState(false);
+
+  // Dead-man's switch: 15 minutes untouched with the screen held on, then a
+  // one-minute "still cooking?" prompt, then the lock is dropped. Without it a
+  // recipe left open on the counter drains the battery flat.
+  const idleGuard = useIdleScreenOff(isAwake, () => setIsAwake(false));
 
   // ── Description expand/collapse ─────────────────────────
   const [descExpanded, setDescExpanded] = useState(false);
@@ -1954,6 +1961,18 @@ export default function RecipeDetail() {
           </button>
         </div>
       )}
+
+      {/* Keep-awake idle guard: "still cooking?", then the switched-off notice.
+          Lifted clear of cook mode's floating "Mark as cooked" button. */}
+      <StillCookingPrompt
+        asking={idleGuard.asking}
+        secondsLeft={idleGuard.secondsLeft}
+        turnedOff={idleGuard.turnedOff}
+        onConfirm={idleGuard.confirm}
+        onTurnOff={idleGuard.turnOffNow}
+        onTurnBackOn={() => setIsAwake(true)}
+        bottomOffset={cookMode && !rateCookId ? 56 : 0}
+      />
 
       {/* Post-cook rating — closing (save or skip) returns to the plan. */}
       <RateCookModal

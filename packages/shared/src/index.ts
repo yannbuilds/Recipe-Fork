@@ -28,6 +28,13 @@ export {
 } from './ingredients.js';
 export type { SubRecipe, SubRecipeMap, TaggedIngredient } from './ingredients.js';
 export {
+  SCREEN_ON_IDLE_MS,
+  SCREEN_ON_NOTICE_MS,
+  SCREEN_ON_POLL_MS,
+  SCREEN_ON_PROMPT_MS,
+  SCREEN_ON_PROMPT_SECONDS,
+} from './keepAwake.js';
+export {
   customItemKey,
   makeCustomItem,
   parseShoppingLine,

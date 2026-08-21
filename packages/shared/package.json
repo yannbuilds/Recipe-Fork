@@ -22,6 +22,10 @@
       "import": "./dist/shoppingItems.js",
       "types": "./dist/shoppingItems.d.ts"
     },
+    "./keepAwake": {
+      "import": "./dist/keepAwake.js",
+      "types": "./dist/keepAwake.d.ts"
+    },
     "./scaling": {
       "import": "./dist/scaling.js",
       "types": "./dist/scaling.d.ts"

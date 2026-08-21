@@ -23,6 +23,8 @@ import MyNotesModal from '@/components/MyNotesModal';
 import NutritionPanel from '@/components/NutritionPanel';
 import RateCookSheet from '@/components/RateCookSheet';
 import { ScreenOnGlow } from '@/components/ScreenOnGlow';
+import StillCookingPrompt from '@/components/StillCookingPrompt';
+import { useIdleScreenOff } from '@/lib/useIdleScreenOff';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
@@ -256,6 +258,11 @@ export default function RecipeDetailScreen() {
     }, []),
   );
 
+  // Dead-man's switch: 15 minutes untouched with the screen held on, then a
+  // one-minute "still cooking?" prompt, then the lock is dropped. Without it a
+  // recipe left on the counter keeps the phone lit until the battery is flat.
+  const idleGuard = useIdleScreenOff(isAwake, () => setIsAwake(false));
+
   const steps = useMemo(
     () => (recipe ? [...recipe.steps].sort((a, b) => a.order - b.order) : []),
     [recipe],
@@ -339,7 +346,13 @@ export default function RecipeDetailScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
+    <>
+    {/* The screen body is what the idle guard watches. Its observer is a
+        *capture* handler, which fires before anything nested inside — so the
+        "still cooking?" prompt is a sibling below, not a child. Nested, its own
+        touch-down would register as activity and unmount it before the tap
+        could ever land on a button. */}
+    <View style={{ flex: 1, backgroundColor: t.bg }} {...idleGuard.activityHandlers}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + (cookMode ? 110 : 40) }}>
         {/* Hero */}
@@ -1156,5 +1169,18 @@ export default function RecipeDetailScreen() {
         }}
       />
     </View>
+
+    {/* Keep-awake idle guard: "still cooking?", then the switched-off notice.
+        Lifted clear of cook mode's floating "Mark as cooked" button. */}
+    <StillCookingPrompt
+      asking={idleGuard.asking}
+      secondsLeft={idleGuard.secondsLeft}
+      turnedOff={idleGuard.turnedOff}
+      onConfirm={idleGuard.confirm}
+      onTurnOff={idleGuard.turnOffNow}
+      onTurnBackOn={() => setIsAwake(true)}
+      bottom={insets.bottom + (cookMode && !rateCookId ? 78 : 20)}
+    />
+    </>
   );
 }
