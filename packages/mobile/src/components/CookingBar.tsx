@@ -10,19 +10,22 @@ import BottomSheet from '@/components/BottomSheet';
 import PressableScale from '@/components/PressableScale';
 import { Body, Button, Mono, Serif } from '@/components/ui';
 import { useCookSession } from '@/context/CookSessionContext';
+import { useCookBarVisible, useViewingRecipeId } from '@/lib/cookBar';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
 
 /*
  * "On the stove" — the persistent switcher, modelled on the iOS in-call bar.
  *
- * Floats above the tab bar on every screen, so a cook is never something you
- * can navigate away from by accident. One pill per recipe: tap one to jump
- * straight to it, exactly where you left off. The pill for the recipe you're
- * looking at is filled in; the others are outlined, so the bar reads as "tap
- * here to get back to the other thing" without needing a label.
+ * Floats above the tab bar, so a cook is never something you can navigate away
+ * from by accident. One pill per recipe: tap one to jump straight to it, exactly
+ * where you left off. The pill for the recipe you're looking at is filled in;
+ * the others are outlined, so the bar reads as "tap here to get back to the
+ * other thing" without needing a label.
  *
- * Renders nothing when nothing is cooking.
+ * Renders nothing when nothing is cooking — and nothing when a single cook is
+ * already the recipe on screen, where it would only repeat what you can see.
+ * `shouldShowCookBar` in shared holds that rule.
  */
 
 /** Routes that sit inside the bottom tabs, and so need the bar lifted above it. */
@@ -97,10 +100,14 @@ export default function CookingBar() {
   const router = useRouter();
   const pathname = usePathname();
   const { cooks, session, switchCook, endCook, clearSession } = useCookSession();
+  // Which recipe is actually on screen — not the same as the session's active
+  // cook, since you can be on the plan or browsing.
+  const viewingId = useViewingRecipeId();
+  const visible = useCookBarVisible();
   const [showAdd, setShowAdd] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  if (cooks.length === 0) return null;
+  if (!visible) return null;
 
   // The share and onboarding flows own the whole screen; a cooking bar over a
   // modal or the first-run carousel would just be in the way.
@@ -108,10 +115,6 @@ export default function CookingBar() {
 
   const onTabs = TAB_ROUTES.includes(pathname);
   const bottom = onTabs ? TAB_BAR_HEIGHT : insets.bottom;
-
-  // Which recipe is actually on screen — not the same as the session's active
-  // cook, since you can be on the plan or browsing.
-  const viewingId = pathname.startsWith('/recipe/') ? pathname.split('/')[2] : null;
 
   function goTo(recipeId: string) {
     haptics.select();
@@ -148,7 +151,7 @@ export default function CookingBar() {
             width: '100%',
             paddingHorizontal: 12,
             paddingVertical: 8,
-            backgroundColor: t.greenDeep,
+            backgroundColor: t.cookBar,
             shadowColor: '#000',
             shadowOpacity: 0.2,
             shadowRadius: 10,

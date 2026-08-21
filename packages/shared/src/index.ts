@@ -52,6 +52,7 @@ export {
   parseSession,
   serializeSession,
   setStepCount,
+  shouldShowCookBar,
   startCook,
   switchCook,
   toggleIngredient,

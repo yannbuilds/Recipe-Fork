@@ -23,6 +23,9 @@ const light = {
   greenDeep: '#2f5440',
   greenSolid: '#3d6b4e',
   greenLight: '#e5ecdf',
+  // Cooking bar — a lighter herb green than greenDeep, which read as
+  // near-black across a full-width strip. Still holds white text at AA.
+  cookBar: '#4a7a5a',
   warm: '#efe7d4',
   warmDark: '#e4dac4',
   border: 'rgba(31,27,22,0.14)',
@@ -49,6 +52,8 @@ const dark: typeof light = {
   greenDeep: '#6b9678',
   greenSolid: '#4f7d5f',
   greenLight: '#2c3a30',
+  // Deeper on night paper so the strip reads as lit rather than glaring.
+  cookBar: '#3f6b4f',
   warm: '#2e2926',
   warmDark: '#201c1a',
   border: 'rgba(245,239,226,0.14)',

@@ -254,3 +254,24 @@ export function parseSession(raw: string | null | undefined, now = Date.now()): 
 export function serializeSession(session: CookSession): string {
   return JSON.stringify(session);
 }
+
+/**
+ * Should the cooking bar be on screen right now?
+ *
+ * The bar exists to get you back to a pot you aren't looking at. With two or
+ * more going it's the switcher and always earns its place — but with a single
+ * cook, sitting on that recipe's own screen, it says nothing you can't already
+ * see and just eats a strip of the page. So it stays out of the way there and
+ * reappears the moment you wander off, which is the same thing the iOS call bar
+ * does: no green bar while you're in the call, one the moment you leave it.
+ *
+ * `viewingRecipeId` is the recipe actually on screen, or null anywhere else.
+ */
+export function shouldShowCookBar(
+  cooks: ActiveCook[],
+  viewingRecipeId: string | null | undefined,
+): boolean {
+  if (cooks.length === 0) return false;
+  if (cooks.length > 1) return true;
+  return cooks[0].recipeId !== viewingRecipeId;
+}

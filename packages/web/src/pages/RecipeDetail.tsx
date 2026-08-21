@@ -11,6 +11,7 @@ import {
 import type { Recipe, SubRecipe, SubRecipeMap, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import { useCookSession } from '../context/CookSessionContext';
+import { useCookBarOffset } from '../hooks/useCookBar';
 import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
 import FavouriteButton from '../components/FavouriteButton';
@@ -373,6 +374,9 @@ export default function RecipeDetail() {
   const cook = cookFor(id);
   const cookMode = cook !== null;
   const cookEntryId = cook?.mealPlanEntryId ?? null;
+  // With a second pot going the bar is on screen here too, and these are
+  // fixed to the viewport rather than laid out above it.
+  const cookBarOffset = useCookBarOffset();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2017,7 +2021,7 @@ export default function RecipeDetail() {
       {!cookMode && sessionLive && recipe && id && (
         <div
           className="fixed left-0 right-0 z-40 flex justify-center pointer-events-none"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}
+          style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${84 + cookBarOffset}px)` }}
         >
           <button
             onClick={() =>
@@ -2056,7 +2060,7 @@ export default function RecipeDetail() {
           // just mobile, so this has to clear it everywhere — at a desktop-only
           // 28px the nav painted straight over the button.
           className="fixed left-0 right-0 z-40 flex justify-center pointer-events-none"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}
+          style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${84 + cookBarOffset}px)` }}
         >
           <button
             onClick={handleMarkCooked}
@@ -2092,7 +2096,7 @@ export default function RecipeDetail() {
         onConfirm={idleGuard.confirm}
         onTurnOff={idleGuard.turnOffNow}
         onTurnBackOn={() => setIsAwake(true)}
-        bottomOffset={cookMode && !rateCookId ? 56 : 0}
+        bottomOffset={cookBarOffset + ((cookMode || sessionLive) && !rateCookId ? 56 : 0)}
       />
 
       {/* Post-cook rating — closing (save or skip) returns to the plan. */}

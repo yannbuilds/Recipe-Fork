@@ -1,22 +1,25 @@
 import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronUp, Plus, X } from 'lucide-react';
 import { COOK_BAR_VISIBLE, cookProgress } from '@recipe-aggregator/shared';
 import type { ActiveCook } from '@recipe-aggregator/shared';
 import { useCookSession } from '../context/CookSessionContext';
+import { useCookBarVisible, useViewingRecipeId } from '../hooks/useCookBar';
 import AddToCookSheet from './AddToCookSheet';
 import { fMono, fSans, fSerif } from '../styles/pieKeeper';
 
 /*
  * "On the stove" — the persistent switcher, modelled on the iOS in-call bar.
  *
- * Lives directly above the bottom nav on every screen, so a cook is never
- * something you can navigate away from by accident. One pill per recipe: tap
- * one to jump to it, exactly where you left off. The pill you're currently
- * looking at is filled in; the others are outlined, which makes the bar read as
- * "tap here to go back to the other thing" at a glance.
+ * Lives directly above the bottom nav, so a cook is never something you can
+ * navigate away from by accident. One pill per recipe: tap one to jump to it,
+ * exactly where you left off. The pill you're currently looking at is filled in;
+ * the others are outlined, which makes the bar read as "tap here to go back to
+ * the other thing" at a glance.
  *
- * It renders nothing at all when nothing is cooking.
+ * It renders nothing when nothing is cooking — and nothing when a single cook is
+ * already the recipe on screen, where it would only be repeating what you can
+ * see. `shouldShowCookBar` in shared holds that rule.
  */
 
 /** Thin ring showing steps done. Reads as progress without needing the number. */
@@ -119,15 +122,14 @@ function CookPill({
 export default function CookingBar() {
   const { cooks, session, switchCook, endCook, clearSession } = useCookSession();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  // Which recipe is actually on screen right now — not the same thing as the
+  // session's active cook, since you can be on the plan or browsing.
+  const viewingId = useViewingRecipeId();
+  const visible = useCookBarVisible();
   const [showAdd, setShowAdd] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  if (cooks.length === 0) return null;
-
-  // Which recipe is actually on screen right now — not the same thing as the
-  // session's active cook, since you can be on the plan or browsing.
-  const viewingId = pathname.startsWith('/recipe/') ? pathname.split('/')[2] : null;
+  if (!visible) return null;
 
   function goTo(recipeId: string) {
     switchCook(recipeId);
@@ -147,7 +149,7 @@ export default function CookingBar() {
       <div
         className="relative shrink-0 z-40"
         style={{
-          background: 'var(--green-deep)',
+          background: 'var(--cook-bar)',
           color: '#fff',
           fontFamily: fSans,
           animation: 'fadeUp 0.28s ease both',
