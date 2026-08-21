@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   SUB_RECIPE_SELECT,
   resolveSubRecipe,
@@ -10,6 +10,7 @@ import {
 } from '@recipe-aggregator/shared';
 import type { Recipe, SubRecipe, SubRecipeMap, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
+import { useCookSession } from '../context/CookSessionContext';
 import ConfirmModal from '../components/ConfirmModal';
 import WeekPickerModal from '../components/WeekPickerModal';
 import FavouriteButton from '../components/FavouriteButton';
@@ -353,12 +354,25 @@ export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Cook mode: arrived via the plan's "Cook recipe" button. Auto-enables the
-  // screen-on toggle and shows a floating "Mark as cooked" action; `entry` is
-  // the meal_plan_recipes row to flip when done.
-  const [searchParams] = useSearchParams();
-  const cookMode = searchParams.get('cook') === '1';
-  const cookEntryId = searchParams.get('entry');
+  // Cooking is a session, not a screen (see context/CookSessionContext). This
+  // screen is a *view* onto one pot: the meal plan and the cooking bar put
+  // recipes on the stove, and whether we're in cook mode is simply whether this
+  // recipe is one of them. That's what lets you walk off to the other recipe
+  // and come back to your check-offs intact.
+  const {
+    cookFor,
+    isCooking: sessionLive,
+    startCook,
+    endCook,
+    nextCookAfter,
+    switchCook,
+    toggleIngredient: toggleSessionIngredient,
+    toggleStep: toggleSessionStep,
+    setStepCount,
+  } = useCookSession();
+  const cook = cookFor(id);
+  const cookMode = cook !== null;
+  const cookEntryId = cook?.mealPlanEntryId ?? null;
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -366,8 +380,45 @@ export default function RecipeDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [currentServings, setCurrentServings] = useState<number>(1);
-  const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  // Check-offs live in the cooking session while this recipe is on the stove,
+  // so they survive switching to the other pot. Browsing a recipe that isn't
+  // cooking still ticks — that state is just local and disposable.
+  const [browseIngredients, setBrowseIngredients] = useState<Set<string>>(new Set());
+  const [browseSteps, setBrowseSteps] = useState<Set<number>>(new Set());
+  const usedIngredients = useMemo(
+    () => (cook ? new Set(cook.checkedIngredients) : browseIngredients),
+    [cook, browseIngredients],
+  );
+  const completedSteps = useMemo(
+    () => (cook ? new Set(cook.checkedSteps) : browseSteps),
+    [cook, browseSteps],
+  );
+
+  function toggleIngredientKey(key: string) {
+    if (cook) {
+      toggleSessionIngredient(cook.recipeId, key);
+      return;
+    }
+    setBrowseIngredients((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleStepOrder(order: number) {
+    if (cook) {
+      toggleSessionStep(cook.recipeId, order);
+      return;
+    }
+    setBrowseSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(order)) next.delete(order);
+      else next.add(order);
+      return next;
+    });
+  }
   // Recipes used as an ingredient of this one, and which of those rows are
   // expanded to show their ingredients inline.
   const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
@@ -386,6 +437,9 @@ export default function RecipeDetail() {
   const [cookHistory, setCookHistory] = useState<{ count: number; last: string | null }>({ count: 0, last: null });
   const [markingCooked, setMarkingCooked] = useState(false);
   const [rateCookId, setRateCookId] = useState<string | null>(null);
+  // Where to go once the rating is dismissed. Captured before the cook is taken
+  // off the stove, because that's what clears the plan link we need to read.
+  const [handoff, setHandoff] = useState<{ next: string | null; fromPlan: boolean } | null>(null);
 
   // ── Wake Lock (keep screen on while cooking) ──────────────
   const supportsWakeLock = 'wakeLock' in navigator;
@@ -454,6 +508,17 @@ export default function RecipeDetail() {
   }, [isAwake, supportsWakeLock]);
 
   useEffect(() => {
+    // Switching pots changes `id` under a screen that's already rendered.
+    // Without this the old recipe stays on screen wearing the *new* one's
+    // check-offs until the fetch lands — briefly showing ticks against the
+    // wrong ingredients, which is exactly what you can't afford mid-cook.
+    setLoading(true);
+    // Same reason, for the not-cooking case: this screen is reused across
+    // recipes, so casual browse ticks have to be dropped with the recipe they
+    // belonged to. (A cook's ticks live in the session and are keyed by recipe,
+    // so they're unaffected.)
+    setBrowseIngredients(new Set());
+    setBrowseSteps(new Set());
     async function fetchRecipe() {
       const [recipeResult, tagsResult, cooksResult] = await Promise.all([
         supabase.from('recipes').select('*').eq('id', id!).single(),
@@ -510,6 +575,24 @@ export default function RecipeDetail() {
     fetchRecipe();
   }, [id]);
 
+  // Looking at a pot makes it the active one, so the bar and the screen agree.
+  useEffect(() => {
+    if (id && cookMode) switchCook(id);
+  }, [id, cookMode, switchCook]);
+
+  // A cook added from the plan sheet doesn't know its step count until the
+  // recipe loads here — and an edit mid-cook can change it.
+  useEffect(() => {
+    if (id && cookMode && recipe) setStepCount(id, recipe.steps.length);
+  }, [id, cookMode, recipe, setStepCount]);
+
+  // Keep the screen on whenever this recipe is cooking — including when you
+  // switch back to it from the other pot. Only re-fires on arrival, so turning
+  // the toggle off by hand (or the idle guard doing it) still sticks.
+  useEffect(() => {
+    if (cookMode && supportsWakeLock) setIsAwake(true);
+  }, [id, cookMode, supportsWakeLock]);
+
   function updateServings(newServings: number) {
     setCurrentServings(newServings);
   }
@@ -561,25 +644,46 @@ export default function RecipeDetail() {
 
   // Cook-mode completion: flip the plan entry to cooked, log the cook in the
   // recipe's history, then ask how it went. Closing the rating modal (save or
-  // skip) lands back on the meal plan.
+  // skip) hands over to whatever's still on the stove — see `finishUp`.
   async function handleMarkCooked() {
     if (!user || !id || markingCooked) return;
     setMarkingCooked(true);
     if (cookEntryId) {
       await supabase.from('meal_plan_recipes').update({ is_cooked: true }).eq('id', cookEntryId);
     }
-    const { data: cook } = await supabase
+    const { data: cookRow } = await supabase
       .from('recipe_cooks')
       .insert({ recipe_id: id, user_id: user.id, meal_plan_recipe_id: cookEntryId })
       .select('id')
       .single();
     setMarkingCooked(false);
-    if (cook) {
+
+    // Work out the handover before taking this pot off the stove: finishing one
+    // of two should land you on the other, not back on the plan. Both facts have
+    // to be captured now — `endCook` is what drops the plan link behind them.
+    const where = { next: nextCookAfter(id)?.recipeId ?? null, fromPlan: !!cookEntryId };
+    setHandoff(where);
+    endCook(id);
+
+    if (cookRow) {
       setCookHistory((prev) => ({ count: prev.count + 1, last: new Date().toISOString() }));
-      setRateCookId(cook.id);
+      setRateCookId(cookRow.id);
     } else {
+      finishUp(where);
+    }
+  }
+
+  /** Where you end up after a cook: the other pot, the plan, or right here. */
+  function finishUp(where: { next: string | null; fromPlan: boolean } | null) {
+    setHandoff(null);
+    if (where?.next) {
+      switchCook(where.next);
+      navigate(`/recipe/${where.next}`);
+    } else if (where?.fromPlan) {
+      // Came from the plan, so the plan is where the tick you just earned shows.
       navigate('/meal-plan');
     }
+    // Started from the recipe itself — stay put, the bar just goes quiet.
   }
 
   async function handleDelete() {
@@ -674,14 +778,7 @@ export default function RecipeDetail() {
               key={step.order}
               className="flex gap-4 rounded-md transition-colors select-none"
               style={{ cursor: 'pointer' }}
-              onClick={() => {
-                setCompletedSteps((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(step.order)) next.delete(step.order);
-                  else next.add(step.order);
-                  return next;
-                });
-              }}
+              onClick={() => toggleStepOrder(step.order)}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--warm)';
               }}
@@ -845,14 +942,7 @@ export default function RecipeDetail() {
                   padding: '12px 0',
                   cursor: 'pointer',
                 }}
-                onClick={() => {
-                  setUsedIngredients((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(ingKey)) next.delete(ingKey);
-                    else next.add(ingKey);
-                    return next;
-                  });
-                }}
+                onClick={() => toggleIngredientKey(ingKey)}
               >
                 <span
                   style={{
@@ -997,14 +1087,7 @@ export default function RecipeDetail() {
                           padding: '7px 0',
                           cursor: 'pointer',
                         }}
-                        onClick={() => {
-                          setUsedIngredients((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(subKey)) next.delete(subKey);
-                            else next.add(subKey);
-                            return next;
-                          });
-                        }}
+                        onClick={() => toggleIngredientKey(subKey)}
                       >
                         <span
                           style={{
@@ -1928,6 +2011,44 @@ export default function RecipeDetail() {
         />
       )}
 
+      {/* Something else is already on the stove and this isn't it — offer to add
+          it rather than making you go back to the plan to start a second cook.
+          Shares the floating slot with "Mark as cooked"; they're never both up. */}
+      {!cookMode && sessionLive && recipe && id && (
+        <div
+          className="fixed left-0 right-0 z-40 flex justify-center pointer-events-none"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}
+        >
+          <button
+            onClick={() =>
+              startCook({
+                recipeId: id,
+                title: recipe.title,
+                imageUrl: recipe.image_url,
+                stepCount: recipe.steps.length,
+              })
+            }
+            className="pointer-events-auto inline-flex items-center gap-2 transition-transform"
+            style={{
+              padding: '13px 26px',
+              borderRadius: 999,
+              border: '1px solid var(--green)',
+              background: 'var(--card)',
+              color: 'var(--green)',
+              fontFamily: '"DM Sans", system-ui, sans-serif',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+              animation: 'fadeUp 0.4s ease both',
+            }}
+          >
+            <Flame size={16} strokeWidth={2} />
+            Cook this too
+          </button>
+        </div>
+      )}
+
       {/* ── Cook mode: floating "Mark as cooked" ─────────────── */}
       {cookMode && !rateCookId && (
         <div
@@ -1985,7 +2106,7 @@ export default function RecipeDetail() {
         }}
         onClose={() => {
           setRateCookId(null);
-          navigate('/meal-plan');
+          finishUp(handoff);
         }}
       />
     </div>

@@ -7,12 +7,15 @@ import { useRouter } from 'expo-router';
 import { Body, Button, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { useCookBarOffset } from '@/lib/cookBar';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
 
 export default function ProfileScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  // Keep the last row clear of the cooking bar when something's on the stove.
+  const cookBarOffset = useCookBarOffset();
   const {
     user,
     profile,
@@ -103,7 +106,7 @@ export default function ProfileScreen() {
   } as const;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: 40 + cookBarOffset }}>
       <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
         <Eyebrow>Your account</Eyebrow>
         <Serif size={34} style={{ marginTop: 10, lineHeight: 36 }}>

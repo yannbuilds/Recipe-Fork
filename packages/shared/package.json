@@ -26,6 +26,10 @@
       "import": "./dist/keepAwake.js",
       "types": "./dist/keepAwake.d.ts"
     },
+    "./cookSession": {
+      "import": "./dist/cookSession.js",
+      "types": "./dist/cookSession.d.ts"
+    },
     "./scaling": {
       "import": "./dist/scaling.js",
       "types": "./dist/scaling.d.ts"

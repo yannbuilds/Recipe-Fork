@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import CookbookRow from '@/components/CookbookRow';
+import { useCookBarOffset } from '@/lib/cookBar';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
 
@@ -70,6 +71,8 @@ export default function SortableCookbookList({
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
+  // Keep the last shelf clear of the cooking bar when something's on the stove.
+  const cookBarOffset = useCookBarOffset();
   const scrollY = useRef(0);
   const startScrollY = useRef(0);
   const rowH = useRef(0);
@@ -284,7 +287,7 @@ export default function SortableCookbookList({
       onScroll={(e) => {
         scrollY.current = e.nativeEvent.contentOffset.y;
       }}
-      contentContainerStyle={{ paddingBottom: 24 }}
+      contentContainerStyle={{ paddingBottom: 24 + cookBarOffset }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.green} />}
     >
       {header}

@@ -50,6 +50,7 @@ import type {
   SubRecipeMap,
 } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
+import { useCookSession } from '../context/CookSessionContext';
 import AddRecipeModal from '../components/AddRecipeModal';
 import SubRecipePrompt from '../components/SubRecipePrompt';
 import RateCookModal from '../components/RateCookModal';
@@ -175,6 +176,9 @@ export default function MealPlan() {
   const [pendingAdd, setPendingAdd] = useState<{ recipe: Recipe; dayIndex: number | null } | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
+  // What's already on the stove — changes each meal's Cook button into "Add"
+  // (start a second pot) or "Open" (one you're already cooking).
+  const { cookFor, isCooking, startCook } = useCookSession();
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [categorising, setCategorising] = useState(false);
@@ -875,13 +879,33 @@ export default function MealPlan() {
   }
 
   /**
-   * Cook mode on the recipe screen: keeps the screen awake, ticks off
-   * ingredients and steps, then "Mark as cooked" flips this plan row, logs the
-   * cook in the recipe's history and asks how it went.
+   * Put this meal on the stove. Keeps the screen awake, ticks off ingredients
+   * and steps, then "Mark as cooked" flips this plan row, logs the cook in the
+   * recipe's history and asks how it went.
+   *
+   * With something already cooking this *adds* rather than replaces — two pots
+   * at once, switched between from the cooking bar. See CookSessionContext.
    */
   function startCooking(entry: MealPlanEntry) {
     if (!entry.recipe_id) return;
-    navigate(`/recipe/${entry.recipe_id}?cook=1&entry=${entry.id}`);
+    // The session is started here, not signalled through the URL. The recipe is
+    // already loaded on this screen, and a `?cook=1` left in the address bar
+    // used to re-start a cook the moment you stopped one from the bar.
+    if (entry.recipe) {
+      startCook({
+        recipeId: entry.recipe_id,
+        mealPlanEntryId: entry.id,
+        title: entry.recipe.title,
+        imageUrl: entry.recipe.image_url,
+        stepCount: entry.recipe.steps?.length ?? 0,
+      });
+    }
+    navigate(`/recipe/${entry.recipe_id}`);
+  }
+
+  /** Already cooking this one — the button says "go there", not "start". */
+  function isOnTheStove(entry: MealPlanEntry): boolean {
+    return !!entry.recipe_id && cookFor(entry.recipe_id) !== null;
   }
 
   // ── Drag a meal onto a day ──────────────────────────
@@ -1050,23 +1074,30 @@ export default function MealPlan() {
         </div>
 
         {/* Any planned cook can start now. Today gets the labelled primary
-            button; the rest get a quiet flame so the hierarchy still reads. */}
-        {canCook(entry) && (
-          <button
-            onClick={() => startCooking(entry)}
-            aria-label={isToday ? undefined : `Cook ${entry.recipe?.title} now`}
-            title={isToday ? undefined : 'Cook now'}
-            className="inline-flex items-center justify-center gap-1.5"
-            style={
-              isToday
-                ? { padding: '6px 13px', borderRadius: 999, border: '1px solid var(--green-solid)', background: 'var(--green-solid)', color: '#fff', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', flexShrink: 0 }
-                : { width: 30, height: 30, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--green)', cursor: 'pointer', flexShrink: 0, padding: 0 }
-            }
-          >
-            <Flame size={isToday ? 12 : 13} strokeWidth={isToday ? 2 : 1.8} />
-            {isToday && 'Cook'}
-          </button>
-        )}
+            button; the rest get a quiet flame so the hierarchy still reads.
+            Mid-session the label changes: "Add" starts a second pot alongside
+            the first, "Open" jumps to one already going. */}
+        {canCook(entry) && (() => {
+          const onStove = isOnTheStove(entry);
+          const adding = !onStove && isCooking;
+          const label = onStove ? 'Open' : adding ? 'Add' : 'Cook';
+          return (
+            <button
+              onClick={() => startCooking(entry)}
+              aria-label={isToday ? undefined : `${onStove ? 'Open' : adding ? 'Add to cook' : 'Cook'} ${entry.recipe?.title}`}
+              title={isToday ? undefined : onStove ? 'Already cooking — open it' : adding ? 'Add to cook' : 'Cook now'}
+              className="inline-flex items-center justify-center gap-1.5"
+              style={
+                isToday || onStove
+                  ? { padding: '6px 13px', borderRadius: 999, border: '1px solid var(--green-solid)', background: onStove ? 'var(--green-light)' : 'var(--green-solid)', color: onStove ? 'var(--green)' : '#fff', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', flexShrink: 0 }
+                  : { width: 30, height: 30, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--green)', cursor: 'pointer', flexShrink: 0, padding: 0 }
+              }
+            >
+              <Flame size={isToday || onStove ? 12 : 13} strokeWidth={isToday || onStove ? 2 : 1.8} />
+              {(isToday || onStove) && label}
+            </button>
+          );
+        })()}
         {cooked && (
           <span
             className="inline-flex items-center gap-1"
@@ -1964,7 +1995,15 @@ export default function MealPlan() {
 
             {[
               canCook(entryMenu)
-                ? { label: 'Cook now', run: () => { setEntryMenu(null); startCooking(entryMenu); }, primary: true }
+                ? {
+                    label: isOnTheStove(entryMenu)
+                      ? 'Back to cooking'
+                      : isCooking
+                        ? 'Cook this too'
+                        : 'Cook now',
+                    run: () => { setEntryMenu(null); startCooking(entryMenu); },
+                    primary: true,
+                  }
                 : null,
               entryMenu.recipe_id
                 ? { label: 'View recipe', run: () => { setEntryMenu(null); navigate(`/recipe/${entryMenu.recipe_id}`); } }

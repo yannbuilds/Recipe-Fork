@@ -35,6 +35,8 @@ import SettlingRow from '@/components/SettlingRow';
 import SubRecipePromptSheet from '@/components/SubRecipePromptSheet';
 import { Body, CheckSquare, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useCookSession } from '@/context/CookSessionContext';
+import { useCookBarOffset } from '@/lib/cookBar';
 import { categoriseIngredients, CATEGORY_ORDER } from '@/lib/categoriseIngredients';
 import {
   combineIngredients,
@@ -119,6 +121,11 @@ export default function MealPlanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  // What's already on the stove — turns each meal's Cook button into "Add"
+  // (start a second pot) or "Open" (one you're already cooking).
+  const { cookFor, isCooking, startCook } = useCookSession();
+  // Keep the last meal clear of the cooking bar when something's on the stove.
+  const cookBarOffset = useCookBarOffset();
   const [weekStart, setWeekStart] = useState(() => getDefaultWeekStart());
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
@@ -825,17 +832,36 @@ export default function MealPlanScreen() {
   }
 
   /**
-   * Cook mode on the recipe screen: keeps the screen awake, ticks off
-   * ingredients and steps, then "Mark as cooked" flips this plan row, logs the
-   * cook in the recipe's history and asks how it went.
+   * Put this meal on the stove. Keeps the screen awake, ticks off ingredients
+   * and steps, then "Mark as cooked" flips this plan row, logs the cook in the
+   * recipe's history and asks how it went.
+   *
+   * With something already cooking this *adds* rather than replaces — two pots
+   * at once, switched between from the cooking bar. See CookSessionContext.
    */
   function startCooking(entry: MealPlanEntry) {
     if (!entry.recipe_id) return;
     haptics.medium();
-    router.push({
-      pathname: '/recipe/[id]',
-      params: { id: entry.recipe_id, cook: '1', entry: entry.id },
-    });
+    // The session is started here, not signalled through route params. The
+    // recipe is already loaded on this screen, and params can't be cleared the
+    // way a URL can — a stale `cook: '1'` would re-start a cook the moment you
+    // stopped one from the bar. `startCook` on a pot that's already going just
+    // switches to it, so this is safe to call either way.
+    if (entry.recipe) {
+      startCook({
+        recipeId: entry.recipe_id,
+        mealPlanEntryId: entry.id,
+        title: entry.recipe.title,
+        imageUrl: entry.recipe.image_url,
+        stepCount: entry.recipe.steps?.length ?? 0,
+      });
+    }
+    router.navigate({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } });
+  }
+
+  /** Already cooking this one — the button says "go there", not "start". */
+  function isOnTheStove(entry: MealPlanEntry): boolean {
+    return !!entry.recipe_id && cookFor(entry.recipe_id) !== null;
   }
 
   // ── Row rendering ───────────────────────────────────
@@ -957,46 +983,54 @@ export default function MealPlanScreen() {
         </Pressable>
 
         {/* Any planned cook can start now. Today gets the labelled primary
-            button; the rest get a quiet flame so the hierarchy still reads. */}
-        {canCook(entry) ? (
-          <Pressable
-            onPress={() => startCooking(entry)}
-            hitSlop={6}
-            style={
-              isToday
-                ? {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    paddingHorizontal: 13,
-                    paddingVertical: 6,
-                    borderRadius: 999,
-                    backgroundColor: t.greenSolid,
-                  }
-                : {
-                    width: 32,
-                    height: 32,
-                    borderRadius: 999,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: t.border,
-                    backgroundColor: t.card,
-                  }
-            }
-          >
-            <Ionicons
-              name={isToday ? 'flame' : 'flame-outline'}
-              size={isToday ? 12 : 15}
-              color={isToday ? t.onGreen : t.green}
-            />
-            {isToday ? (
-              <Body size={12.5} weight="medium" color={t.onGreen}>
-                Cook
-              </Body>
-            ) : null}
-          </Pressable>
-        ) : null}
+            button; the rest get a quiet flame so the hierarchy still reads.
+            Mid-session the label changes: "Add" starts a second pot alongside
+            the first, "Open" jumps to one already going. */}
+        {canCook(entry) ? (() => {
+          const onStove = isOnTheStove(entry);
+          const labelled = isToday || onStove;
+          return (
+            <Pressable
+              onPress={() => startCooking(entry)}
+              hitSlop={6}
+              style={
+                labelled
+                  ? {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      paddingHorizontal: 13,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: onStove ? t.greenLight : t.greenSolid,
+                      borderWidth: onStove ? 1 : 0,
+                      borderColor: t.green,
+                    }
+                  : {
+                      width: 32,
+                      height: 32,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: t.border,
+                      backgroundColor: t.card,
+                    }
+              }
+            >
+              <Ionicons
+                name={labelled && !onStove ? 'flame' : 'flame-outline'}
+                size={labelled ? 12 : 15}
+                color={onStove ? t.green : labelled ? t.onGreen : t.green}
+              />
+              {labelled ? (
+                <Body size={12.5} weight="medium" color={onStove ? t.green : t.onGreen}>
+                  {onStove ? 'Open' : isCooking ? 'Add' : 'Cook'}
+                </Body>
+              ) : null}
+            </Pressable>
+          );
+        })() : null}
 
         {cooked ? (
           <View
@@ -1024,7 +1058,11 @@ export default function MealPlanScreen() {
     ? ([
         canCook(entryMenu)
           ? {
-              label: 'Cook now',
+              label: isOnTheStove(entryMenu)
+                ? 'Back to cooking'
+                : isCooking
+                  ? 'Cook this too'
+                  : 'Cook now',
               primary: true,
               run: () => {
                 const e = entryMenu;
@@ -1095,7 +1133,7 @@ export default function MealPlanScreen() {
         // move from the field to a row.
         automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32 + cookBarOffset }}
       >
         {/* ── Masthead: one line, plus the week control ── */}
         <View

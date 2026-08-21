@@ -9,7 +9,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import BootScreen from '@/components/BootScreen';
+import CookingBar from '@/components/CookingBar';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { CookSessionProvider } from '@/context/CookSessionContext';
 import { OnboardingProvider, useOnboarding } from '@/context/OnboardingContext';
 import { useAppFonts } from '@/lib/fonts';
 import { font, ThemePreferenceProvider, useIsDark, useTheme } from '@/lib/theme';
@@ -76,10 +78,16 @@ function RootLayoutInner() {
       persistOptions={{ persister, maxAge: ONE_WEEK }}
     >
       <AuthProvider>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        {fontsReady ? <Navigator /> : null}
-        {fontsReady ? <IncomingShareRouter /> : null}
-        <BootGate fontsReady={fontsReady} />
+        <CookSessionProvider>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
+          {fontsReady ? <Navigator /> : null}
+          {/* Above the navigator so a live cook is one tap away from any
+              screen, and survives every push and tab switch. Draws nothing
+              when the stove is cold. */}
+          {fontsReady ? <CookingBar /> : null}
+          {fontsReady ? <IncomingShareRouter /> : null}
+          <BootGate fontsReady={fontsReady} />
+        </CookSessionProvider>
       </AuthProvider>
     </PersistQueryClientProvider>
   );

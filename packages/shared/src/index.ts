@@ -40,6 +40,24 @@ export {
   parseShoppingLine,
 } from './shoppingItems.js';
 export type { CustomShoppingItem } from './shoppingItems.js';
+export {
+  COOK_BAR_VISIBLE,
+  COOK_SESSION_KEY,
+  COOK_SESSION_MAX_AGE_MS,
+  EMPTY_SESSION,
+  cookProgress,
+  endCook,
+  findCook,
+  nextCookAfter,
+  parseSession,
+  serializeSession,
+  setStepCount,
+  startCook,
+  switchCook,
+  toggleIngredient,
+  toggleStep,
+} from './cookSession.js';
+export type { ActiveCook, CookSession, StartCookInput } from './cookSession.js';
 export type {
   Recipe,
   RecipeInsert,

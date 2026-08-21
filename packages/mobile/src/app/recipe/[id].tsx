@@ -24,10 +24,12 @@ import NutritionPanel from '@/components/NutritionPanel';
 import RateCookSheet from '@/components/RateCookSheet';
 import { ScreenOnGlow } from '@/components/ScreenOnGlow';
 import StillCookingPrompt from '@/components/StillCookingPrompt';
+import { useCookBarOffset } from '@/lib/cookBar';
 import { useIdleScreenOff } from '@/lib/useIdleScreenOff';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import WeekPickerSheet from '@/components/WeekPickerSheet';
 import { useAuth } from '@/context/AuthContext';
+import { useCookSession } from '@/context/CookSessionContext';
 import { haptics } from '@/lib/haptics';
 import { accentTitle, formatTime, getDomain, scaleQuantity } from '@/lib/recipeFormat';
 import { supabase } from '@/lib/supabase';
@@ -187,15 +189,43 @@ export default function RecipeDetailScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, session, loading: authLoading } = useAuth();
-  // Cook mode: arrived via the plan's "Cook recipe" button. Auto-enables
-  // keep-awake and shows a floating "Mark as cooked" action; `entry` is the
-  // meal_plan_recipes row to flip when done.
-  const { id, cook, entry } = useLocalSearchParams<{ id: string; cook?: string; entry?: string }>();
-  const cookMode = cook === '1';
+  // Cooking is a session, not a screen (see context/CookSessionContext). This
+  // screen is a *view* onto one pot: the meal plan and the cooking bar put
+  // recipes on the stove, and whether we're in cook mode is simply whether this
+  // recipe is one of them. That's what lets you walk off to the other pot and
+  // come back to your check-offs intact.
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const {
+    cookFor,
+    isCooking: sessionLive,
+    startCook,
+    endCook,
+    nextCookAfter,
+    switchCook,
+    toggleIngredient: toggleSessionIngredient,
+    toggleStep: toggleSessionStep,
+    setStepCount,
+  } = useCookSession();
+  const activeCook = cookFor(id);
+  const cookMode = activeCook !== null;
+  const cookEntryId = activeCook?.mealPlanEntryId ?? null;
+  // Lift this screen's floating buttons clear of the cooking bar.
+  const cookBarOffset = useCookBarOffset();
 
   const [tab, setTab] = useState<'ingredients' | 'steps'>('ingredients');
-  const [usedIngredients, setUsedIngredients] = useState<Set<string>>(new Set());
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  // Check-offs live in the cooking session while this recipe is on the stove,
+  // so they survive switching pots. Browsing a recipe that isn't cooking still
+  // ticks — that state is just local and disposable.
+  const [browseIngredients, setBrowseIngredients] = useState<Set<string>>(new Set());
+  const [browseSteps, setBrowseSteps] = useState<Set<number>>(new Set());
+  const usedIngredients = useMemo(
+    () => (activeCook ? new Set(activeCook.checkedIngredients) : browseIngredients),
+    [activeCook, browseIngredients],
+  );
+  const completedSteps = useMemo(
+    () => (activeCook ? new Set(activeCook.checkedSteps) : browseSteps),
+    [activeCook, browseSteps],
+  );
   // Which linked-recipe rows are opened up to show their ingredients inline.
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [currentServings, setCurrentServings] = useState(1);
@@ -205,6 +235,9 @@ export default function RecipeDetailScreen() {
   const [isAwake, setIsAwake] = useState(cookMode);
   const [markingCooked, setMarkingCooked] = useState(false);
   const [rateCookId, setRateCookId] = useState<string | null>(null);
+  // Where to go once the rating is dismissed. Captured before the cook is taken
+  // off the stove, because that's what clears the plan link we need to read.
+  const [handoff, setHandoff] = useState<{ next: string | null; fromPlan: boolean } | null>(null);
   const [isFav, setIsFav] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -250,12 +283,15 @@ export default function RecipeDetailScreen() {
   );
 
   // Leaving the recipe (back, or pushing another recipe) switches the toggle
-  // back off, so it never lingers on when you return. Empty deps keep this
-  // callback stable so the cleanup fires on blur only — not on every toggle.
+  // back off, so it never lingers on when you return — but a recipe that's on
+  // the stove turns it straight back on when you come back to it, so switching
+  // between two pots doesn't cost you the screen each time. `cookMode` is the
+  // only dep, so toggling it off by hand (or the idle guard doing it) sticks.
   useFocusEffect(
     useCallback(() => {
+      if (cookMode) setIsAwake(true);
       return () => setIsAwake(false);
-    }, []),
+    }, [cookMode]),
   );
 
   // Dead-man's switch: 15 minutes untouched with the screen held on, then a
@@ -268,27 +304,85 @@ export default function RecipeDetailScreen() {
     [recipe],
   );
 
+  // Looking at a pot makes it the active one, so the bar and screen agree.
+  useEffect(() => {
+    if (id && cookMode) switchCook(id);
+  }, [id, cookMode, switchCook]);
+
+  // A cook added from the plan sheet doesn't know its step count until the
+  // recipe loads here — and an edit mid-cook can change it.
+  useEffect(() => {
+    if (id && cookMode && recipe) setStepCount(id, recipe.steps.length);
+  }, [id, cookMode, recipe, setStepCount]);
+
+  function toggleIngredientKey(key: string) {
+    if (activeCook) {
+      toggleSessionIngredient(activeCook.recipeId, key);
+      return;
+    }
+    setBrowseIngredients((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleStepOrder(order: number) {
+    if (activeCook) {
+      toggleSessionStep(activeCook.recipeId, order);
+      return;
+    }
+    setBrowseSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(order)) next.delete(order);
+      else next.add(order);
+      return next;
+    });
+  }
+
+  /** Where you end up after a cook: the other pot, back where you came from, or here. */
+  function finishUp(where: { next: string | null; fromPlan: boolean } | null) {
+    setHandoff(null);
+    if (where?.next) {
+      switchCook(where.next);
+      router.navigate({ pathname: '/recipe/[id]', params: { id: where.next } });
+    } else if (where?.fromPlan) {
+      // Came from the plan, so the plan is where the tick you just earned shows.
+      router.back();
+    }
+    // Started from the recipe itself — stay put, the bar just goes quiet.
+  }
+
   // Cook-mode completion: flip the plan entry to cooked, log the cook in the
   // recipe's history, then ask how it went. Closing the rating sheet (save or
-  // skip) lands back on the meal plan.
+  // skip) hands over to whatever's still on the stove — see `finishUp`.
   async function handleMarkCooked() {
     if (!user || !id || markingCooked) return;
     setMarkingCooked(true);
-    if (entry) {
-      await supabase.from('meal_plan_recipes').update({ is_cooked: true }).eq('id', entry);
+    if (cookEntryId) {
+      await supabase.from('meal_plan_recipes').update({ is_cooked: true }).eq('id', cookEntryId);
     }
-    const { data: cook } = await supabase
+    const { data: cookRow } = await supabase
       .from('recipe_cooks')
-      .insert({ recipe_id: id, user_id: user.id, meal_plan_recipe_id: entry ?? null })
+      .insert({ recipe_id: id, user_id: user.id, meal_plan_recipe_id: cookEntryId })
       .select('id')
       .single();
     setMarkingCooked(false);
     queryClient.invalidateQueries({ queryKey: ['recipe', id] });
-    if (cook) {
+
+    // Work out the handover before taking this pot off the stove: finishing one
+    // of two should land you on the other, not back on the plan. Both facts have
+    // to be captured now — `endCook` is what drops the plan link behind them.
+    const where = { next: nextCookAfter(id)?.recipeId ?? null, fromPlan: !!cookEntryId };
+    setHandoff(where);
+    endCook(id);
+
+    if (cookRow) {
       haptics.success();
-      setRateCookId(cook.id);
+      setRateCookId(cookRow.id);
     } else {
-      router.back();
+      finishUp(where);
     }
   }
 
@@ -354,7 +448,11 @@ export default function RecipeDetailScreen() {
         could ever land on a button. */}
     <View style={{ flex: 1, backgroundColor: t.bg }} {...idleGuard.activityHandlers}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + (cookMode ? 110 : 40) }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + cookBarOffset + (cookMode || sessionLive ? 110 : 40),
+        }}
+      >
         {/* Hero */}
         <View style={{ height: 340, backgroundColor: t.paper3 }}>
           {recipe.image_url ? (
@@ -755,12 +853,7 @@ export default function RecipeDetailScreen() {
                           <Pressable
                             onPress={() => {
                               haptics.select();
-                              setUsedIngredients((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(key)) next.delete(key);
-                                else next.add(key);
-                                return next;
-                              });
+                              toggleIngredientKey(key);
                             }}
                             style={{
                               flexDirection: 'row',
@@ -872,12 +965,7 @@ export default function RecipeDetailScreen() {
                                     key={j}
                                     onPress={() => {
                                       haptics.select();
-                                      setUsedIngredients((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(subKey)) next.delete(subKey);
-                                        else next.add(subKey);
-                                        return next;
-                                      });
+                                      toggleIngredientKey(subKey);
                                     }}
                                     style={{
                                       flexDirection: 'row',
@@ -931,12 +1019,7 @@ export default function RecipeDetailScreen() {
                           key={step.order}
                           onPress={() => {
                             haptics.select();
-                            setCompletedSteps((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(step.order)) next.delete(step.order);
-                              else next.add(step.order);
-                              return next;
-                            });
+                            toggleStepOrder(step.order);
                           }}
                           style={{ flexDirection: 'row', gap: 12, paddingBottom: 20 }}
                         >
@@ -1082,6 +1165,55 @@ export default function RecipeDetailScreen() {
       {/* Full-screen halo while keep-awake is on (green→orange, breathing) */}
       <ScreenOnGlow active={isAwake} />
 
+      {/* Something else is already on the stove and this isn't it — offer to add
+          it rather than making you go back to the plan to start a second cook.
+          Shares the floating slot with "Mark as cooked"; never both at once. */}
+      {!cookMode && sessionLive && (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: insets.bottom + 16 + cookBarOffset,
+            alignItems: 'center',
+          }}
+        >
+          <Pressable
+            onPress={() => {
+              haptics.success();
+              startCook({
+                recipeId: id,
+                title: recipe.title,
+                imageUrl: recipe.image_url,
+                stepCount: recipe.steps.length,
+              });
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingVertical: 13,
+              paddingHorizontal: 26,
+              borderRadius: 999,
+              backgroundColor: t.card,
+              borderWidth: 1,
+              borderColor: t.green,
+              shadowColor: '#000',
+              shadowOpacity: 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 6,
+            }}
+          >
+            <Ionicons name="flame-outline" size={17} color={t.green} />
+            <Body size={15} weight="semi" color={t.green}>
+              Cook this too
+            </Body>
+          </Pressable>
+        </View>
+      )}
+
       {/* Cook mode: floating "Mark as cooked" */}
       {cookMode && !rateCookId && (
         <View
@@ -1090,7 +1222,7 @@ export default function RecipeDetailScreen() {
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: insets.bottom + 16,
+            bottom: insets.bottom + 16 + cookBarOffset,
             alignItems: 'center',
           }}
         >
@@ -1153,7 +1285,8 @@ export default function RecipeDetailScreen() {
         />
       )}
 
-      {/* Post-cook rating — closing (save or skip) returns to the plan. */}
+      {/* Post-cook rating — closing (save or skip) hands over to the other pot
+          if one is still going, otherwise back to wherever you started. */}
       <RateCookSheet
         open={rateCookId !== null}
         cookId={rateCookId}
@@ -1165,7 +1298,7 @@ export default function RecipeDetailScreen() {
         }}
         onClose={() => {
           setRateCookId(null);
-          router.back();
+          finishUp(handoff);
         }}
       />
     </View>
@@ -1179,7 +1312,7 @@ export default function RecipeDetailScreen() {
       onConfirm={idleGuard.confirm}
       onTurnOff={idleGuard.turnOffNow}
       onTurnBackOn={() => setIsAwake(true)}
-      bottom={insets.bottom + (cookMode && !rateCookId ? 78 : 20)}
+      bottom={insets.bottom + cookBarOffset + ((cookMode || sessionLive) && !rateCookId ? 78 : 20)}
     />
     </>
   );

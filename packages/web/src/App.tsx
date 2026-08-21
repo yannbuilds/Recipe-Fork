@@ -4,6 +4,7 @@ import { useTheme } from "./hooks/useTheme";
 import { BrowserRouter, Routes, Route, Link, Navigate, Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NewRecipeModalProvider } from "./context/NewRecipeModalContext";
+import { CookSessionProvider } from "./context/CookSessionContext";
 import RecipeList from "./pages/RecipeList";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
@@ -19,6 +20,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import LandingPage from "./pages/LandingPage";
 import LandingPageV2 from "./pages/LandingPageV2";
 import BottomNav from "./components/BottomNav";
+import CookingBar from "./components/CookingBar";
 import NewRecipeModal from "./components/NewRecipeModal";
 import OfflineBanner from "./components/OfflineBanner";
 
@@ -224,23 +226,28 @@ function AppShell() {
 
   return (
     <NewRecipeModalProvider>
-      <AppScrollContext.Provider value={locked ? scrollRef : null}>
-        <ScrollToTop />
-        {locked ? (
-          // Fixed-height column: one scrolling region, nav pinned as its last
-          // flex child. See `.pk-shell` in index.css for why it isn't fixed.
-          <div className="pk-shell">
-            <div className="pk-shell-scroll" ref={scrollRef}>
-              {routes}
+      <CookSessionProvider>
+        <AppScrollContext.Provider value={locked ? scrollRef : null}>
+          <ScrollToTop />
+          {locked ? (
+            // Fixed-height column: one scrolling region, nav pinned as its last
+            // flex child. See `.pk-shell` in index.css for why it isn't fixed.
+            <div className="pk-shell">
+              <div className="pk-shell-scroll" ref={scrollRef}>
+                {routes}
+              </div>
+              {/* Between the scroller and the nav, so a live cook is always one
+                  tap away from any screen. Renders nothing when idle. */}
+              <CookingBar />
+              <BottomNav />
             </div>
-            <BottomNav />
-          </div>
-        ) : (
-          <div className="min-h-screen">{routes}</div>
-        )}
-        <NewRecipeModal />
-        <OfflineBanner />
-      </AppScrollContext.Provider>
+          ) : (
+            <div className="min-h-screen">{routes}</div>
+          )}
+          <NewRecipeModal />
+          <OfflineBanner />
+        </AppScrollContext.Provider>
+      </CookSessionProvider>
     </NewRecipeModalProvider>
   );
 }

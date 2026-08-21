@@ -16,6 +16,7 @@ import RecipeFilterBar from '@/components/RecipeFilterBar';
 import { RecipeGridSkeleton } from '@/components/Skeleton';
 import { Body, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useCookBarOffset } from '@/lib/cookBar';
 import { supabase } from '@/lib/supabase';
 import type { RecipeTagRow } from '@/lib/tagMeta';
 import { font, useTheme } from '@/lib/theme';
@@ -93,6 +94,8 @@ const SORT_LABELS: [SortOption, string][] = [
 export default function RecipeListScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  // Keep the last card clear of the cooking bar when something's on the stove.
+  const cookBarOffset = useCookBarOffset();
   const { user, session, profile, familyMembers } = useAuth();
   const [search, setSearch] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
@@ -255,7 +258,7 @@ export default function RecipeListScreen() {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={{ gap: 14, paddingHorizontal: 16 }}
-        contentContainerStyle={{ gap: 18, paddingBottom: 24 }}
+        contentContainerStyle={{ gap: 18, paddingBottom: 24 + cookBarOffset }}
         ListHeaderComponent={header}
         ListEmptyComponent={isPending ? <RecipeGridSkeleton count={6} /> : empty}
         refreshControl={
