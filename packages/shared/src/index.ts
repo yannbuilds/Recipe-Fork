@@ -15,6 +15,7 @@ export {
 export {
   parseFraction,
   formatQuantity,
+  formatIngredientLine,
   scaleQuantity,
   scaleIngredientsForServings,
 } from './scaling.js';

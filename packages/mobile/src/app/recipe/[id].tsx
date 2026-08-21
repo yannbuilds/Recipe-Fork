@@ -4,7 +4,7 @@ import {
   resolveSubRecipe,
   subRecipeIdsIn,
 } from '@recipe-aggregator/shared/ingredients';
-import { scaleIngredientsForServings } from '@recipe-aggregator/shared/scaling';
+import { formatIngredientLine, scaleIngredientsForServings } from '@recipe-aggregator/shared/scaling';
 import { youTubeVideoId } from '@recipe-aggregator/shared/videoProgress';
 import type { Recipe, SubRecipe, SubRecipeMap, Tag } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -826,9 +826,12 @@ export default function RecipeDetailScreen() {
                     {group.items.map(({ value: ing, index }, i) => {
                       const key = `${index}`;
                       const used = usedIngredients.has(key);
-                      const name = ing.item || ing.original_text || '';
+                      const originalLine = ing.original_text?.trim();
+                      const name = originalLine
+                        ? formatIngredientLine(ing, recipe.servings, currentServings)
+                        : ing.item || '';
                       const qty =
-                        ing.quantity || ing.unit
+                        !originalLine && (ing.quantity || ing.unit)
                           ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
                           : '';
                       // This ingredient is another recipe — the pastry in a pie.
@@ -959,10 +962,24 @@ export default function RecipeDetailScreen() {
                               {subIngredients.map((subIng, j) => {
                                 const subKey = `${key}::sub::${j}`;
                                 const subUsed = usedIngredients.has(subKey);
-                                const subQty = [subIng.quantity, subIng.unit]
-                                  .filter(Boolean)
-                                  .join(' ')
-                                  .trim();
+                                const originalSubIngredient = sub.ingredients[j] ?? subIng;
+                                const originalSubLine = originalSubIngredient.original_text?.trim();
+                                const subTargetServings =
+                                  (sub.custom_servings ?? sub.servings ?? 0) *
+                                  (recipe.servings ? currentServings / recipe.servings : 1);
+                                const subName = originalSubLine
+                                  ? formatIngredientLine(
+                                      originalSubIngredient,
+                                      sub.custom_servings ?? sub.servings,
+                                      subTargetServings,
+                                    )
+                                  : subIng.item || '';
+                                const subQty = originalSubLine
+                                  ? ''
+                                  : [subIng.quantity, subIng.unit]
+                                      .filter(Boolean)
+                                      .join(' ')
+                                      .trim();
                                 return (
                                   <Pressable
                                     key={j}
@@ -986,7 +1003,7 @@ export default function RecipeDetailScreen() {
                                         textDecorationLine: subUsed ? 'line-through' : 'none',
                                       }}
                                     >
-                                      {subIng.item || subIng.original_text || ''}
+                                      {subName}
                                     </Serif>
                                     {subQty ? <Mono size={10}>{subQty}</Mono> : null}
                                   </Pressable>

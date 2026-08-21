@@ -1,3 +1,5 @@
+import type { Ingredient } from './types.js';
+
 // Quantity scaling + formatting helpers, used by the recipe detail pages, the
 // meal plan and the sub-recipe expansion in ./ingredients.ts.
 //
@@ -68,6 +70,56 @@ export function scaleQuantity(
   const suffixMatch = quantity.match(/[a-zA-Z]+$/);
   const suffix = suffixMatch ? suffixMatch[0] : '';
   return formatQuantity(scaled) + suffix;
+}
+
+/**
+ * Return the complete ingredient line exactly as the recipe author supplied it,
+ * while still honouring the serving control. Structured fields remain the
+ * fallback for older and manually-created recipes without `original_text`.
+ */
+export function formatIngredientLine(
+  ingredient: Ingredient,
+  originalServings: number | null | undefined,
+  currentServings: number | null | undefined,
+): string {
+  const originalText = ingredient.original_text?.trim();
+  const quantity = ingredient.quantity.trim();
+
+  if (!originalText) {
+    const scaledQuantity = currentServings == null
+      ? quantity
+      : scaleQuantity(quantity, originalServings ?? null, currentServings);
+    return [scaledQuantity, ingredient.unit.trim(), ingredient.item.trim()]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  if (!quantity || !originalServings || !currentServings || originalServings === currentServings) {
+    return originalText;
+  }
+
+  const scaledQuantity = scaleQuantity(quantity, originalServings, currentServings);
+  if (scaledQuantity === quantity) return originalText;
+
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Quantities such as "1 1/4" occasionally contain different whitespace in
+  // the source line, so match each run of spaces flexibly.
+  const quantityPattern = escapeRegExp(quantity).replace(/\s+/g, '\\s+');
+  const unit = ingredient.unit.trim();
+
+  if (unit) {
+    const withUnit = new RegExp(`(${quantityPattern})(\\s*)(${escapeRegExp(unit)})`, 'i');
+    if (withUnit.test(originalText)) {
+      return originalText.replace(withUnit, (_match, _qty, spacing, matchedUnit) =>
+        `${scaledQuantity}${spacing}${matchedUnit}`,
+      );
+    }
+  }
+
+  const quantityOnly = new RegExp(quantityPattern);
+  return quantityOnly.test(originalText)
+    ? originalText.replace(quantityOnly, scaledQuantity)
+    : originalText;
 }
 
 // Scales a recipe's ingredient quantities to the servings the user actually saved.

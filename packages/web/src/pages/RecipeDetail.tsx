@@ -3,13 +3,14 @@ import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, 
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   SUB_RECIPE_SELECT,
+  formatIngredientLine,
   resolveSubRecipe,
   scaleIngredientsForServings,
   subRecipeIdsIn,
   supabase,
   youTubeVideoId,
 } from '@recipe-aggregator/shared';
-import type { Recipe, SubRecipe, SubRecipeMap, Tag, Ingredient } from '@recipe-aggregator/shared';
+import type { Recipe, SubRecipe, SubRecipeMap, Tag } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import { useCookSession } from '../context/CookSessionContext';
 import { useCookBarOffset } from '../hooks/useCookBar';
@@ -183,63 +184,6 @@ function formatAuthorNotes(raw: string): React.ReactNode {
       </div>
     );
   });
-}
-
-function renderOriginalText(
-  ing: Ingredient,
-  originalServings: number | null,
-  currentServings: number,
-): React.JSX.Element {
-  const text = ing.original_text!;
-  const qty = ing.quantity;
-  const unit = ing.unit;
-
-  // Try to locate and scale the quantity in the original text.
-  // First attempt: use the stored quantity+unit fields from the DB.
-  // Fallback: parse the leading number directly from the original text.
-  let matchedQty = qty;
-  let matchedUnit = unit;
-  let match: RegExpMatchArray | null = null;
-
-  if (matchedQty && matchedQty !== '0') {
-    const escapedQty = matchedQty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escapedUnit = matchedUnit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = matchedUnit
-      ? new RegExp(`(${escapedQty}\\s*${escapedUnit})`)
-      : new RegExp(`(${escapedQty})`);
-    match = text.match(pattern);
-
-    // If qty+unit didn't match, try just the quantity
-    if (!match && matchedUnit) {
-      match = text.match(new RegExp(`(${escapedQty})`));
-      if (match) matchedUnit = '';
-    }
-  }
-
-  // Fallback: parse leading number from original text when qty is missing or regex failed
-  if (!match) {
-    const leadingMatch = text.match(/^([\d]+(?:\s+\d+\/\d+|\s*\/\s*\d+)?(?:\.\d+)?)/);
-    if (leadingMatch) {
-      matchedQty = leadingMatch[1];
-      matchedUnit = '';
-      match = leadingMatch;
-    }
-  }
-
-  if (!match || match.index === undefined) {
-    return <>{text}</>;
-  }
-
-  const before = text.slice(0, match.index);
-  const after = text.slice(match.index + match[0].length);
-  const scaledQty = scaleQuantity(matchedQty, originalServings, currentServings);
-  const boldPart = matchedUnit ? `${scaledQty} ${matchedUnit}` : scaledQty;
-
-  return (
-    <>
-      {before}<strong>{boldPart}</strong>{after}
-    </>
-  );
 }
 
 function formatTime(minutes: number): string {
@@ -900,9 +844,12 @@ export default function RecipeDetail() {
         {group.items.map((ing, i) => {
           const ingKey = `${group.category}::${group.start + i}`;
           const isUsed = usedIngredients.has(ingKey);
-          const name = ing.item || ing.original_text || '';
+          const originalLine = ing.original_text?.trim();
+          const name = originalLine
+            ? formatIngredientLine(ing, recipe.servings, currentServings)
+            : ing.item || '';
           const qty =
-            ing.quantity || ing.unit
+            !originalLine && (ing.quantity || ing.unit)
               ? `${scaleQuantity(ing.quantity, recipe.servings, currentServings)}${ing.unit ? ` ${ing.unit}` : ''}`.trim()
               : '';
           // This ingredient is another recipe — the pastry in a pie. Its own
@@ -1068,7 +1015,21 @@ export default function RecipeDetail() {
                   {subIngredients.map((subIng, j) => {
                     const subKey = `${ingKey}::sub::${j}`;
                     const subUsed = usedIngredients.has(subKey);
-                    const subQty = [subIng.quantity, subIng.unit].filter(Boolean).join(' ').trim();
+                    const originalSubIngredient = sub.ingredients[j] ?? subIng;
+                    const originalSubLine = originalSubIngredient.original_text?.trim();
+                    const subTargetServings =
+                      (sub.custom_servings ?? sub.servings ?? 0) *
+                      (recipe.servings ? currentServings / recipe.servings : 1);
+                    const subName = originalSubLine
+                      ? formatIngredientLine(
+                          originalSubIngredient,
+                          sub.custom_servings ?? sub.servings,
+                          subTargetServings,
+                        )
+                      : subIng.item || '';
+                    const subQty = originalSubLine
+                      ? ''
+                      : [subIng.quantity, subIng.unit].filter(Boolean).join(' ').trim();
                     return (
                       <div
                         key={j}
@@ -1105,7 +1066,7 @@ export default function RecipeDetail() {
                             textDecoration: subUsed ? 'line-through' : 'none',
                           }}
                         >
-                          {subIng.item || subIng.original_text || ''}
+                          {subName}
                         </span>
                         {subQty && (
                           <span
