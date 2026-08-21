@@ -5,6 +5,7 @@ import {
   subRecipeIdsIn,
 } from '@recipe-aggregator/shared/ingredients';
 import { scaleIngredientsForServings } from '@recipe-aggregator/shared/scaling';
+import { youTubeVideoId } from '@recipe-aggregator/shared/videoProgress';
 import type { Recipe, SubRecipe, SubRecipeMap, Tag } from '@recipe-aggregator/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
@@ -24,6 +25,7 @@ import NutritionPanel from '@/components/NutritionPanel';
 import RateCookSheet from '@/components/RateCookSheet';
 import { ScreenOnGlow } from '@/components/ScreenOnGlow';
 import StillCookingPrompt from '@/components/StillCookingPrompt';
+import VideoPlayer from '@/components/VideoPlayer';
 import { useCookBarOffset } from '@/lib/cookBar';
 import { useIdleScreenOff } from '@/lib/useIdleScreenOff';
 import { Body, Button, CheckSquare, Divider, Eyebrow, Mono, Serif } from '@/components/ui';
@@ -413,9 +415,7 @@ export default function RecipeDetailScreen() {
 
   const { head, last } = accentTitle(recipe.title);
   const notesText = stripHtml(localNotes ?? '');
-  const videoId = recipe.video_url?.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-  )?.[1];
+  const videoId = youTubeVideoId(recipe.video_url);
 
   function saveNotes(text: string) {
     setLocalNotes(text);
@@ -1070,41 +1070,7 @@ export default function RecipeDetailScreen() {
               <Serif size={22} style={{ marginTop: 6, marginBottom: 12 }}>
                 Video
               </Serif>
-              <Pressable
-                onPress={() => Linking.openURL(recipe.video_url!)}
-                style={{ borderRadius: 8, overflow: 'hidden', aspectRatio: 16 / 9, backgroundColor: t.paper3 }}
-              >
-                <Image
-                  source={{ uri: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }}
-                  style={{ width: '100%', height: '100%' }}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 28,
-                      backgroundColor: 'rgba(0,0,0,0.55)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Ionicons name="play" size={26} color="#fff" />
-                  </View>
-                </View>
-              </Pressable>
+              <VideoPlayer videoId={videoId} url={recipe.video_url!} title={recipe.title} />
             </View>
           )}
 

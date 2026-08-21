@@ -30,6 +30,10 @@
       "import": "./dist/cookSession.js",
       "types": "./dist/cookSession.d.ts"
     },
+    "./videoProgress": {
+      "import": "./dist/videoProgress.js",
+      "types": "./dist/videoProgress.d.ts"
+    },
     "./scaling": {
       "import": "./dist/scaling.js",
       "types": "./dist/scaling.d.ts"

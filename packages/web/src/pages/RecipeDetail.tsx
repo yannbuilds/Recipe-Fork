@@ -7,6 +7,7 @@ import {
   scaleIngredientsForServings,
   subRecipeIdsIn,
   supabase,
+  youTubeVideoId,
 } from '@recipe-aggregator/shared';
 import type { Recipe, SubRecipe, SubRecipeMap, Tag, Ingredient } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -818,11 +819,7 @@ export default function RecipeDetail() {
      drops the card wrapper so it sits directly on the paper like the mock; desktop
      keeps the card to match its Directions card. */
   const renderVideo = (flat = false) => {
-    if (!recipe.video_url) return null;
-    const match = recipe.video_url.match(
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-    );
-    const videoId = match?.[1];
+    const videoId = youTubeVideoId(recipe.video_url);
     if (!videoId) return null;
 
     const player = <VideoPlayer videoId={videoId} title={recipe.title} />;

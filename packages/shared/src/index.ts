@@ -41,6 +41,23 @@ export {
 } from './shoppingItems.js';
 export type { CustomShoppingItem } from './shoppingItems.js';
 export {
+  VIDEO_PROGRESS_KEY,
+  VIDEO_PROGRESS_MAX_AGE_MS,
+  VIDEO_PROGRESS_MAX_ENTRIES,
+  VIDEO_RESUME_END_PAD_SECONDS,
+  VIDEO_RESUME_MIN_SECONDS,
+  clearVideoProgress,
+  formatVideoTime,
+  markVideoProgress,
+  parseVideoProgress,
+  serializeVideoProgress,
+  videoMarkFor,
+  videoResumeAt,
+  videoWatchedFraction,
+  youTubeVideoId,
+} from './videoProgress.js';
+export type { VideoMark, VideoProgress } from './videoProgress.js';
+export {
   COOK_BAR_VISIBLE,
   COOK_SESSION_KEY,
   COOK_SESSION_MAX_AGE_MS,
