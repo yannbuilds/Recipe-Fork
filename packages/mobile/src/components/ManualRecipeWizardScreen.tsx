@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PhotoField from '@/components/PhotoField';
-import SortableRows, { useSortableScroll } from '@/components/SortableRows';
+import SortableRows, { moveAdoptingCategory, useSortableScroll } from '@/components/SortableRows';
 import { Body, Button, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
@@ -178,20 +178,21 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
   // list holds still under a finger that is placing a row.
   const { scroll, scrollProps } = useSortableScroll();
 
-  // Drag-to-reorder for the ingredient list. The wizard never shows ingredient
-  // categories, so a row dropped inside another section adopts that section's
-  // category — otherwise the recipe page would group it straight back where it
-  // came from and the order you just set wouldn't be the order you got.
+  // Drag-to-reorder. Both lists carry a category the wizard never shows, so a
+  // dropped row adopts its new neighbour's — see moveAdoptingCategory.
   function reorderIngredients(from: number, to: number) {
     setEditingIngredient(null);
-    setDraft((d) => {
-      const ingredients = d.ingredients.slice();
-      const [moved] = ingredients.splice(from, 1);
-      ingredients.splice(to, 0, moved);
-      const neighbour = ingredients[to - 1] ?? ingredients[to + 1];
-      if (neighbour) ingredients[to] = { ...ingredients[to], category: neighbour.category };
-      return { ...d, ingredients };
-    });
+    setDraft((d) => ({ ...d, ingredients: moveAdoptingCategory(d.ingredients, from, to) }));
+  }
+
+  function reorderSteps(from: number, to: number) {
+    setEditingStep(null);
+    setDraft((d) => ({
+      ...d,
+      // Renumbered here as well as on save, so the draft never carries an order
+      // that disagrees with what the list shows.
+      steps: moveAdoptingCategory(d.steps, from, to).map((s, i) => ({ ...s, order: i + 1 })),
+    }));
   }
 
   function go(next: WizardStep) {
@@ -413,10 +414,21 @@ export default function ManualRecipeWizardScreen({ recipeId }: { recipeId?: stri
             }}
           />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 9 }}><Serif size={21}>Steps</Serif><Pressable onPress={() => { setEditingStep(draft.steps.length); setDraft((d) => ({ ...d, steps: [...d.steps, { order: d.steps.length + 1, instruction: '' }] })); }}><Body size={13} color={t.green}>+ Add</Body></Pressable></View>
-          {draft.steps.map((recipeStep, i) => <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 13, marginBottom: 8 }}>
+          <SortableRows
+            count={draft.steps.length}
+            gap={8}
+            scroll={scroll}
+            isLocked={(i) => editingStep === i}
+            onDragStart={() => setEditingStep(null)}
+            onReorder={reorderSteps}
+            renderItem={(i) => {
+              const recipeStep = draft.steps[i];
+              return <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 13 }}>
             {editingStep === i ? <View style={{ gap: 8 }}><TextInput value={recipeStep.instruction} onChangeText={(instruction) => setDraft((d) => ({ ...d, steps: d.steps.map((item, x) => x === i ? { ...item, instruction } : item) }))} multiline textAlignVertical="top" style={[input, { minHeight: 90 }]} /><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Pressable onPress={() => { setDraft((d) => ({ ...d, steps: d.steps.filter((_, x) => x !== i).map((s, x) => ({ ...s, order: x + 1 })) })); setEditingStep(null); }}><Body size={12} color={t.red}>Remove</Body></Pressable><Button label="Done" variant="secondary" onPress={() => setEditingStep(null)} /></View></View>
               : <Pressable onPress={() => setEditingStep(i)} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}><View style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: t.green, alignItems: 'center', justifyContent: 'center' }}><Body size={12} weight="bold" color={t.onGreen}>{i + 1}</Body></View><Body size={14} style={{ flex: 1, lineHeight: 21 }}>{recipeStep.instruction || 'Empty step'}</Body><Ionicons name="create-outline" size={16} color={t.muted} /></Pressable>}
-          </View>)}
+              </View>;
+            }}
+          />
           <Button label="Looks right" variant="filled" full disabled={!valid} onPress={() => go('look')} style={{ marginTop: 16 }} />
           {editing && <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 20, marginTop: 16 }}>
             <Pressable onPress={() => go('paste')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="sparkles-outline" size={14} color={t.muted} /><Body size={13} color={t.muted}>Re-paste and reorganise</Body></Pressable>

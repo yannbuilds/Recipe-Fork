@@ -9,7 +9,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PhotoField from '@/components/PhotoField';
 import RecipePickerSheet from '@/components/RecipePickerSheet';
-import SortableRows, { useSortableScroll } from '@/components/SortableRows';
+import SortableRows, { moveItem, useSortableScroll } from '@/components/SortableRows';
 import { Body, Button, Divider, Eyebrow, Serif } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { haptics } from '@/lib/haptics';
@@ -122,14 +122,13 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
   const { scroll, scrollProps } = useSortableScroll();
 
   // Drag-to-reorder. Ingredient categories are carried through untouched here —
-  // the recipe page renders the list in exactly this order either way.
+  // the recipe page renders both lists in exactly this order either way.
   function reorderIngredient(from: number, to: number) {
-    setIngredients((prev) => {
-      const next = prev.slice();
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
+    setIngredients((prev) => moveItem(prev, from, to));
+  }
+
+  function reorderStep(from: number, to: number) {
+    setSteps((prev) => moveItem(prev, from, to));
   }
 
   // Resolve the titles of linked recipes so the chips can name them. A link that
@@ -615,8 +614,16 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
         <Serif size={20} style={{ marginTop: 18, marginBottom: 4 }}>
           Steps
         </Serif>
-        {steps.map((step, i) => (
-          <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10 }}>
+        <SortableRows
+          count={steps.length}
+          gap={10}
+          style={{ marginTop: 10 }}
+          scroll={scroll}
+          onReorder={reorderStep}
+          renderItem={(i) => {
+            const step = steps[i];
+            return (
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: t.green, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
               <Body size={13} weight="bold" color={t.onGreen}>
                 {i + 1}
@@ -634,7 +641,9 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
               <Ionicons name="close-circle" size={22} color={t.muted} />
             </Pressable>
           </View>
-        ))}
+            );
+          }}
+        />
         <Pressable
           onPress={() => setSteps((prev) => [...prev, ''])}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}

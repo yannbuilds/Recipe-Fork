@@ -6,7 +6,7 @@ import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import { saveTags, syncTags } from '../lib/saveTags';
 import PhotoField from './PhotoField';
-import { SortableRow, SortableRows, moveItem, rowIds } from './SortableRows';
+import { SortableRow, SortableRows, moveAdoptingCategory, rowIds } from './SortableRows';
 
 type WizardStep = 'paste' | 'review' | 'look' | 'details' | 'finish';
 type SuggestedTag = { name: string; emoji: string };
@@ -142,18 +142,21 @@ export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedIdKey]);
 
-  // Drag-to-reorder for the ingredient list. The wizard never shows ingredient
-  // categories, so a row dropped inside another section adopts that section's
-  // category — otherwise the recipe page would group it straight back where it
-  // came from and the order you just set wouldn't be the order you got.
+  // Drag-to-reorder. Both lists carry a category the wizard never shows, so a
+  // dropped row adopts its new neighbour's — see moveAdoptingCategory.
   function reorderIngredients(from: number, to: number) {
     setEditingIngredient(null);
-    setDraft((d) => {
-      const ingredients = moveItem(d.ingredients, from, to);
-      const neighbour = ingredients[to - 1] ?? ingredients[to + 1];
-      if (neighbour) ingredients[to] = { ...ingredients[to], category: neighbour.category };
-      return { ...d, ingredients };
-    });
+    setDraft((d) => ({ ...d, ingredients: moveAdoptingCategory(d.ingredients, from, to) }));
+  }
+
+  function reorderSteps(from: number, to: number) {
+    setEditingStep(null);
+    setDraft((d) => ({
+      ...d,
+      // Renumbered here as well as on save, so the draft never carries an order
+      // that disagrees with what the list shows.
+      steps: moveAdoptingCategory(d.steps, from, to).map((s, i) => ({ ...s, order: i + 1 })),
+    }));
   }
 
   function go(next: WizardStep) {
@@ -440,10 +443,16 @@ export default function ManualRecipeWizard({ recipeId }: { recipeId?: string }) 
           </SortableRows>
 
           <div className="flex items-center justify-between mt-8 mb-3"><h2 className="rf-heading text-xl">Steps</h2><button type="button" onClick={() => { setDraft((d) => ({ ...d, steps: [...d.steps, { order: d.steps.length + 1, instruction: '' }] })); setEditingStep(draft.steps.length); }} className="text-sm" style={{ color: 'var(--green)' }}>+ Add</button></div>
-          <div className="space-y-2">{draft.steps.map((recipeStep, index) => <div key={index} className="rf-card" style={{ padding: 14 }}>
+          <SortableRows
+            ids={rowIds('step', draft.steps.length)}
+            onDragStart={() => setEditingStep(null)}
+            onReorder={reorderSteps}
+          >
+            {draft.steps.map((recipeStep, index) => <SortableRow key={index} id={`step-${index}`} disabled={editingStep === index} className="rf-card" style={{ padding: 14 }}>
             {editingStep === index ? <div className="space-y-3"><textarea className="rf-input w-full" rows={4} value={recipeStep.instruction} onChange={(e) => setDraft((d) => ({ ...d, steps: d.steps.map((item, i) => i === index ? { ...item, instruction: e.target.value } : item) }))} autoFocus /><div className="flex justify-between"><button type="button" onClick={() => { setDraft((d) => ({ ...d, steps: d.steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i + 1 })) })); setEditingStep(null); }} className="text-sm" style={{ color: 'var(--red)' }}>Remove</button><button type="button" onClick={() => setEditingStep(null)} className="rf-btn rf-btn-secondary"><Check size={15} /> Done</button></div></div>
               : <button type="button" onClick={() => setEditingStep(index)} className="w-full flex items-start gap-3 text-left"><span className="shrink-0 flex items-center justify-center rounded-full text-xs font-bold text-white" style={{ width: 26, height: 26, background: 'var(--green)' }}>{index + 1}</span><span className="flex-1 leading-relaxed">{recipeStep.instruction || 'Empty step'}</span><PenLine size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} /></button>}
-          </div>)}</div>
+            </SortableRow>)}
+          </SortableRows>
           <button type="button" onClick={() => go('look')} disabled={!valid} className="rf-btn rf-btn-primary w-full justify-center mt-7" style={{ minHeight: 50 }}>Looks right <ArrowRight size={18} /></button>
           {editing && (
             <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-5 text-sm">

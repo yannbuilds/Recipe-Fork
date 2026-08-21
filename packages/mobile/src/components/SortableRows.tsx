@@ -28,6 +28,30 @@ import { useTheme } from '@/lib/theme';
 //     tall), so each one is measured and the drop slot worked out from the real
 //     layout rather than from a single row height.
 
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  const next = list.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+/**
+ * Move a row, and give it the category of whichever neighbour it landed next
+ * to. For the lists the wizard edits: it never shows categories, so without
+ * this the recipe page would group a moved row straight back where it came
+ * from and the order you just set wouldn't be the order you got.
+ */
+export function moveAdoptingCategory<T extends { category?: string | null }>(
+  list: T[],
+  from: number,
+  to: number,
+): T[] {
+  const next = moveItem(list, from, to);
+  const neighbour = next[to - 1] ?? next[to + 1];
+  if (neighbour) next[to] = { ...next[to], category: neighbour.category };
+  return next;
+}
+
 /** How close to the top/bottom of the screen before the form scrolls itself. */
 const EDGE = 120;
 /** Auto-scroll step and cadence. */

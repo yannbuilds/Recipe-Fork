@@ -44,6 +44,23 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
   return next;
 }
 
+/**
+ * Move a row, and give it the category of whichever neighbour it landed next
+ * to. For the lists the wizard edits: it never shows categories, so without
+ * this the recipe page would group a moved row straight back where it came
+ * from and the order you just set wouldn't be the order you got.
+ */
+export function moveAdoptingCategory<T extends { category?: string | null }>(
+  list: T[],
+  from: number,
+  to: number,
+): T[] {
+  const next = moveItem(list, from, to);
+  const neighbour = next[to - 1] ?? next[to + 1];
+  if (neighbour) next[to] = { ...next[to], category: neighbour.category };
+  return next;
+}
+
 interface SortableRowsProps {
   /** One id per row, in render order. Build with `rowIds`. */
   ids: string[];

@@ -229,6 +229,12 @@ function StructuredRecipeForm() {
     setSteps(updated.map((s, i) => ({ ...s, order: i + 1, category: s.category })));
   }
 
+  // Renumbered on the way out, the same as removeStep — the step number is on
+  // screen here, so it has to agree with the order straight away.
+  function reorderStep(from: number, to: number) {
+    setSteps((prev) => moveItem(prev, from, to).map((s, i) => ({ ...s, order: i + 1 })));
+  }
+
   function updateStep(index: number, field: 'instruction' | 'category', value: string) {
     const updated = [...steps];
     updated[index] = { ...updated[index], [field]: value };
@@ -669,8 +675,14 @@ function StructuredRecipeForm() {
           {/* Steps */}
           <fieldset className="space-y-3">
             <legend className="rf-heading text-sm font-semibold" style={{ color: 'var(--muted)' }}>Steps</legend>
+            <SortableRows
+              ids={rowIds('step', steps.length)}
+              onReorder={reorderStep}
+              gap={12}
+            >
             {steps.map((step, i) => (
-              <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
+              <SortableRow key={i} id={`step-${i}`} handleOnly gripAlign="top">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
                 <span className="text-sm pt-2 w-6 text-right" style={{ color: 'var(--muted)' }}>{step.order}.</span>
                 <input
                   type="text"
@@ -696,7 +708,9 @@ function StructuredRecipeForm() {
                   Remove
                 </button>
               </div>
+              </SortableRow>
             ))}
+            </SortableRows>
             <button
               type="button"
               onClick={addStep}
