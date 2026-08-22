@@ -63,8 +63,8 @@ import {
   formatWeekLabel,
   formatWeekStart,
   getDefaultWeekStart,
+  getPlanningNudge,
   getSunday,
-  isPlanningMode,
   shiftWeek,
 } from '@/lib/weekHelpers';
 import { toRoman } from '@/lib/recipeFormat';
@@ -820,6 +820,9 @@ export default function MealPlanScreen() {
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
       : `${mealEntries.length} meal${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked. Drag a meal to any day.`;
 
+  // The week starts Sunday, so Sunday's nudge is about the week you're in.
+  const planningNudge = getPlanningNudge();
+
   const existingIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
   // ── Cooking ─────────────────────────────────────────
@@ -1185,9 +1188,11 @@ export default function MealPlanScreen() {
           {subtitle}
         </Body>
 
-        {/* Fri–Sun is when the week ahead usually gets planned. Offer the jump
-            rather than making it — you always land on this week. */}
-        {isPlanningMode() && isCurrentWeek && (
+        {/* The nudge follows the Sunday-first week. On Sunday the new week
+            starts today, so it points at the week you're on and opens plan mode
+            right here — no jumping. On Fri/Sat the current week is spent, so it
+            offers the jump to the week starting Sunday rather than making it. */}
+        {planningNudge === 'this-week' && isCurrentWeek && mealEntries.length === 0 && (
           <View
             style={{
               marginHorizontal: 16,
@@ -1206,7 +1211,41 @@ export default function MealPlanScreen() {
           >
             <Ionicons name="calendar-outline" size={14} color={t.green} />
             <Body size={12.5} color={t.textSoft} style={{ flex: 1 }}>
-              It's the weekend — good time to sort the week ahead.
+              Your week starts today — good time to sort the meals.
+            </Body>
+            <Pressable
+              onPress={() => {
+                haptics.select();
+                setPlanOpen(true);
+              }}
+            >
+              <Body size={12.5} weight="medium" color={t.green}>
+                Plan it →
+              </Body>
+            </Pressable>
+          </View>
+        )}
+
+        {planningNudge === 'next-week' && isCurrentWeek && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 16,
+              padding: 11,
+              borderWidth: 1,
+              borderLeftWidth: 2,
+              borderColor: t.border,
+              borderLeftColor: t.green,
+              borderRadius: 3,
+              backgroundColor: t.greenLight,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Ionicons name="calendar-outline" size={14} color={t.green} />
+            <Body size={12.5} color={t.textSoft} style={{ flex: 1 }}>
+              This week's nearly done — the next one starts Sunday.
             </Body>
             <Pressable
               onPress={() => {

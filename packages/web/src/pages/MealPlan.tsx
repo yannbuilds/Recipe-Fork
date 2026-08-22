@@ -63,7 +63,7 @@ import {
   type IngredientWithRecipe,
 } from '../utils/combineIngredients';
 import { categoriseIngredients, CATEGORY_ORDER } from '../utils/categoriseIngredients';
-import { getSunday, getDefaultWeekStart, isPlanningMode, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
+import { getSunday, getDefaultWeekStart, getPlanningNudge, formatWeekStart, formatWeekLabel, shiftWeek } from '../utils/weekHelpers';
 import {
   DAY_SHORT,
   DAY_INDEXES,
@@ -867,6 +867,9 @@ export default function MealPlan() {
       ? 'Nothing planned yet — plan the week, or add meals as you go.'
       : `${mealEntries.length} meal${mealEntries.length !== 1 ? 's' : ''} planned · ${cookedCount} cooked · drag a meal to any day.`;
 
+  // The week starts Sunday, so Sunday's nudge is about the week you're in.
+  const planningNudge = getPlanningNudge();
+
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
 
   // ── Cooking ─────────────────────────────────────────
@@ -1226,9 +1229,11 @@ export default function MealPlan() {
         {subtitle}
       </p>
 
-      {/* Fri–Sun is when the week ahead usually gets planned. Offer the jump
-          rather than making it — you always land on this week. */}
-      {isPlanningMode() && isCurrentWeek && (
+      {/* The nudge follows the Sunday-first week. On Sunday the new week starts
+          today, so it points at the week you're on and opens plan mode right
+          here — no jumping. On Fri/Sat the current week is spent, so it offers
+          the jump to the week starting Sunday, rather than making it for you. */}
+      {planningNudge === 'this-week' && isCurrentWeek && mealEntries.length === 0 && (
         <div
           className="flex items-center gap-2 flex-wrap"
           style={{
@@ -1243,7 +1248,33 @@ export default function MealPlan() {
         >
           <CalendarDays size={14} strokeWidth={1.6} color="var(--green)" />
           <span style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--text-soft)' }}>
-            It's the weekend — good time to sort the week ahead.
+            Your week starts today — good time to sort the meals.
+          </span>
+          <button
+            onClick={() => setPlanOpen(true)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: fSans, fontSize: 12.5, fontWeight: 500, color: 'var(--green)' }}
+          >
+            Plan this week →
+          </button>
+        </div>
+      )}
+
+      {planningNudge === 'next-week' && isCurrentWeek && (
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          style={{
+            padding: '10px 13px',
+            marginBottom: 18,
+            border: '1px solid var(--border)',
+            borderLeft: '2px solid var(--green)',
+            borderRadius: '0 3px 3px 0',
+            background: 'var(--green-light)',
+            animation: 'fadeUp 0.4s ease 0.05s both',
+          }}
+        >
+          <CalendarDays size={14} strokeWidth={1.6} color="var(--green)" />
+          <span style={{ fontFamily: fSans, fontSize: 12.5, color: 'var(--text-soft)' }}>
+            This week's nearly done — the next one starts Sunday.
           </span>
           <button
             onClick={() => setWeekStart(shiftWeek(getSunday(new Date()), 1))}

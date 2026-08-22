@@ -29,10 +29,23 @@ export interface WeekOption {
   isDefault: boolean;
 }
 
-/** Returns true when today is Fri/Sat/Sun — the typical meal-planning window. */
-export function isPlanningMode(): boolean {
-  const day = new Date().getDay();
-  return day === 0 || day === 5 || day === 6;
+/** Which week is worth sorting out right now, if any. */
+export type PlanningNudge = 'this-week' | 'next-week' | null;
+
+/**
+ * Weeks run Sunday→Saturday, so the week worth planning moves with the day:
+ *
+ *  - **Sunday** — the new week starts *today*. The week to sort is the one
+ *    you're standing in, not the one seven days out.
+ *  - **Fri/Sat** — the current week is spent; the week worth sorting is the
+ *    next one, which starts this coming Sunday.
+ *  - **Mon–Thu** — no nudge. You're mid-week and already cooking it.
+ */
+export function getPlanningNudge(now: Date = new Date()): PlanningNudge {
+  const day = now.getDay();
+  if (day === 0) return 'this-week';
+  if (day === 5 || day === 6) return 'next-week';
+  return null;
 }
 
 /**
@@ -48,7 +61,10 @@ export function getDefaultWeekStart(): Date {
 export function getWeekOptions(count = 4): WeekOption[] {
   const now = new Date();
   const currentSunday = getSunday(now);
-  const defaultSunday = formatWeekStart(isPlanningMode() ? shiftWeek(currentSunday, 1) : currentSunday);
+  // Sunday points at the week that just began; Fri/Sat at the one about to.
+  const defaultSunday = formatWeekStart(
+    getPlanningNudge(now) === 'next-week' ? shiftWeek(currentSunday, 1) : currentSunday,
+  );
 
   return Array.from({ length: count }, (_, i) => {
     const sunday = shiftWeek(currentSunday, i);

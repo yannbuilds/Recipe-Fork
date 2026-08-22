@@ -309,10 +309,16 @@ export default function WeekPickerModal({
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* The suggested week is the filled chip. On a Sunday
+                            that's this week — it starts today. */}
                         {week.isCurrent && (
                           <span
                             className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                            style={{ background: 'var(--warm)', color: 'var(--muted)' }}
+                            style={
+                              week.isDefault
+                                ? { background: 'var(--green)', color: '#fff' }
+                                : { background: 'var(--warm)', color: 'var(--muted)' }
+                            }
                           >
                             This week
                           </span>

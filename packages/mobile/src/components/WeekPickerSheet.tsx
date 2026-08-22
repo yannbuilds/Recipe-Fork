@@ -186,16 +186,18 @@ export default function WeekPickerSheet({
                     backgroundColor: isAdded ? t.greenLight : t.bg,
                   }}
                 >
+                  {/* The suggested week is the filled chip. On a Sunday that's
+                      this week — it starts today. */}
                   {(week.isCurrent || week.isDefault) && (
                     <View
                       style={{
                         paddingHorizontal: 8,
                         paddingVertical: 2,
                         borderRadius: 999,
-                        backgroundColor: week.isCurrent ? t.warm : t.green,
+                        backgroundColor: week.isDefault ? t.green : t.warm,
                       }}
                     >
-                      <Mono size={9} color={week.isCurrent ? t.muted : t.onGreen}>
+                      <Mono size={9} color={week.isDefault ? t.onGreen : t.muted}>
                         {week.isCurrent ? 'THIS WEEK' : 'NEXT WEEK'}
                       </Mono>
                     </View>
