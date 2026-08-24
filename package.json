@@ -17,6 +17,7 @@
     "test:ingredient-aggregation": "tsx scripts/test-ingredient-aggregation.ts",
     "test:recipe-source": "tsx scripts/test-recipe-source.ts",
     "test:parse-recipe-text": "tsx scripts/test-parse-recipe-text.ts",
+    "test:video-progress": "node --import tsx scripts/test-video-progress.ts",
     "test:social-source": "tsx scripts/test-social-source.ts",
     "smoke:social-source": "tsx scripts/smoke-social-source.ts",
     "smoke:social-import:production": "tsx scripts/smoke-production-social-import.ts",

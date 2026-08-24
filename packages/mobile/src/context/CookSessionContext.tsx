@@ -14,6 +14,7 @@ import {
   toggleStep as toggleStepIn,
 } from '@recipe-aggregator/shared/cookSession';
 import type { ActiveCook, CookSession, StartCookInput } from '@recipe-aggregator/shared/cookSession';
+import { finishVideoProgress } from '@/lib/videoProgress';
 import {
   createContext,
   useCallback,
@@ -107,6 +108,7 @@ export function CookSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const endCook = useCallback((recipeId: string) => {
+    finishVideoProgress(recipeId);
     setSession((prev) => endCookIn(prev, recipeId));
   }, []);
 
@@ -126,7 +128,12 @@ export function CookSessionProvider({ children }: { children: ReactNode }) {
     setSession((prev) => setStepCountIn(prev, recipeId, stepCount));
   }, []);
 
-  const clearSession = useCallback(() => setSession(EMPTY_SESSION), []);
+  const clearSession = useCallback(() => {
+    setSession((prev) => {
+      for (const cook of prev.cooks) finishVideoProgress(cook.recipeId);
+      return EMPTY_SESSION;
+    });
+  }, []);
 
   const value = useMemo<CookSessionValue>(
     () => ({

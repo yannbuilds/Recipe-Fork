@@ -1,22 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatVideoTime } from '@recipe-aggregator/shared';
-import { forgetVideoMark, resumeAtFor, saveVideoMark, watchedFractionFor } from '../lib/videoProgress';
+import {
+  beginVideoProgress,
+  finishVideoProgress,
+  forgetVideoMark,
+  resumeAtFor,
+  saveVideoMark,
+  watchedFractionFor,
+} from '../lib/videoProgress';
 import { loadYouTubeApi, type YouTubePlayer } from '../lib/youtube';
 
 interface VideoPlayerProps {
+  recipeId: string;
   videoId: string;
   title: string;
+  /** Cooking recipes keep their mark while their screen is swapped out. */
+  retainOnUnmount: boolean;
 }
 
-/** How often to read the player's clock, and how often to commit it to storage. */
+/** How often to read the player's clock, and how often to commit it to session memory. */
 const POLL_MS = 1000;
 const PERSIST_EVERY = 5;
 
 /** How long the "picked up at…" line stays before it gets out of the way. */
 const RESUME_NOTE_MS = 5000;
 
-export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
+export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount }: VideoPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
   /** Where this open started, so the overlay can say so and offer a way back. */
   const [resumedFrom, setResumedFrom] = useState(0);
@@ -35,13 +45,15 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   const positionRef = useRef(0);
   const durationRef = useRef<number | null>(null);
   const openAtRef = useRef(0);
+  const retentionByRecipeRef = useRef(new Map<string, boolean>());
+  retentionByRecipeRef.current.set(recipeId, retainOnUnmount);
 
-  /* Refresh the thumbnail from storage: on mount, and every time the overlay
+  /* Refresh the thumbnail from session memory: on mount, and every time the overlay
      closes (the effect below has just written the new position by then). */
   useEffect(() => {
     if (isOpen) return;
-    setMark({ seconds: resumeAtFor(videoId), fraction: watchedFractionFor(videoId) });
-  }, [isOpen, videoId]);
+    setMark({ seconds: resumeAtFor(recipeId), fraction: watchedFractionFor(recipeId) });
+  }, [isOpen, recipeId, retainOnUnmount]);
 
   const readPlayerClock = useCallback(() => {
     const player = playerRef.current;
@@ -57,11 +69,12 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   }, []);
 
   const persist = useCallback(() => {
-    saveVideoMark(videoId, positionRef.current, durationRef.current);
-  }, [videoId]);
+    saveVideoMark(recipeId, positionRef.current, durationRef.current);
+  }, [recipeId]);
 
   function open() {
-    const at = resumeAtFor(videoId);
+    beginVideoProgress(recipeId);
+    const at = resumeAtFor(recipeId);
     openAtRef.current = at;
     positionRef.current = at;
     setResumedFrom(at);
@@ -71,6 +84,10 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   }
 
   function close() {
+    // Capture while the iframe is still connected. Waiting for the effect
+    // cleanup is too late on some browsers: React has already detached it.
+    readPlayerClock();
+    persist();
     setIsOpen(false);
   }
 
@@ -79,7 +96,7 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
   function startOver() {
     openAtRef.current = 0;
     positionRef.current = 0;
-    forgetVideoMark(videoId);
+    forgetVideoMark(recipeId);
     setResumedFrom(0);
     setNoteVisible(false);
     const player = playerRef.current;
@@ -169,8 +186,8 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
               poll = window.setInterval(() => {
                 readPlayerClock();
                 ticks += 1;
-                // Commit every few seconds so a killed tab loses seconds, not
-                // the whole session.
+                // Commit every few seconds so an unexpected screen change
+                // loses seconds, not the whole position.
                 if (ticks % PERSIST_EVERY === 0) persist();
               }, POLL_MS);
             },
@@ -179,7 +196,7 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
               if (e.data === YT.PlayerState.ENDED) {
                 // Watched to the end: next open starts from the top.
                 positionRef.current = 0;
-                forgetVideoMark(videoId);
+                finishVideoProgress(recipeId);
               } else {
                 persist();
               }
@@ -206,7 +223,17 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
       persist();
       host.replaceChildren();
     };
-  }, [isOpen, videoId, readPlayerClock, persist]);
+  }, [isOpen, videoId, recipeId, readPlayerClock, persist]);
+
+  /* Browsing a recipe owns a page-scoped mark. A cooking recipe is different:
+     its component unmounts every time the cook bar swaps to another pot, so
+     keep that mark until endCook/clearSession explicitly removes it. Declared
+     after the player effect so this clear is the final unmount operation. */
+  useEffect(() => () => {
+    readPlayerClock();
+    persist();
+    if (!retentionByRecipeRef.current.get(recipeId)) forgetVideoMark(recipeId);
+  }, [recipeId, readPlayerClock, persist]);
 
   /* iOS kills backgrounded tabs without running React cleanups, so commit on
      the way out too. */
@@ -315,8 +342,9 @@ export default function VideoPlayer({ videoId, title }: VideoPlayerProps) {
           player on every recipe page with a video. iOS drops the whole page off
           compositor scrolling when it has to deal with that, and every
           position:fixed element — the bottom nav included — then scrolls with
-          the content instead of staying pinned. The mark in storage is what
-          replaces that always-alive iframe: the position outlives the player. */}
+          the content instead of staying pinned. The mark in session memory is what
+          replaces that always-alive iframe: the position outlives the player
+          for the current recipe/cooking session. */}
       {isOpen && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"

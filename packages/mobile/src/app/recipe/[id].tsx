@@ -1087,7 +1087,13 @@ export default function RecipeDetailScreen() {
               <Serif size={22} style={{ marginTop: 6, marginBottom: 12 }}>
                 Video
               </Serif>
-              <VideoPlayer videoId={videoId} url={recipe.video_url!} title={recipe.title} />
+              <VideoPlayer
+                recipeId={recipe.id}
+                videoId={videoId}
+                url={recipe.video_url!}
+                title={recipe.title}
+                retainOnUnmount={cookMode}
+              />
             </View>
           )}
 

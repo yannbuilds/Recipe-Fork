@@ -10,7 +10,15 @@ import PressableScale from '@/components/PressableScale';
 import { Body, Mono } from '@/components/ui';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
-import { NO_MARK, forgetVideoMark, loadVideoMark, saveVideoMark, type VideoMarkView } from '@/lib/videoProgress';
+import {
+  NO_MARK,
+  beginVideoProgress,
+  finishVideoProgress,
+  forgetVideoMark,
+  loadVideoMark,
+  saveVideoMark,
+  type VideoMarkView,
+} from '@/lib/videoProgress';
 import { youTubePlayerHtml } from '@/lib/youtubePlayerHtml';
 
 /*
@@ -20,28 +28,30 @@ import { youTubePlayerHtml } from '@/lib/youtubePlayerHtml';
  * one. Half of following a recipe by video is closing it to chop something and
  * opening it again thirty seconds later, and every one of those round trips
  * used to leave the kitchen — app out, YouTube in, app back. Playing it here
- * keeps the recipe one tap away, and the position is remembered on this side,
- * so it picks up where you left off whether you closed the player, walked over
- * to the meal plan, or came back tomorrow.
+ * keeps the recipe one tap away, and the position is remembered on this side
+ * for as long as this detail view or its cooking session is alive.
  *
  * "Open in YouTube" is still there for when you want the big screen — and it
  * carries the position across with it.
  */
 
 interface Props {
+  recipeId: string;
   videoId: string;
   /** The original URL, for handing off to YouTube proper. */
   url: string;
   title: string;
+  /** Cooking recipes keep their mark while their screen is swapped out. */
+  retainOnUnmount: boolean;
 }
 
-/** Commit to storage every few player ticks — cheap insurance against a kill. */
+/** Commit to session memory every few player ticks. */
 const PERSIST_EVERY = 5;
 
 /** How long the "picking up at…" line stays before it gets out of the way. */
 const RESUME_NOTE_MS = 5000;
 
-export default function VideoPlayer({ videoId, url, title }: Props) {
+export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnmount }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -57,25 +67,20 @@ export default function VideoPlayer({ videoId, url, title }: Props) {
   const positionRef = useRef(0);
   const durationRef = useRef<number | null>(null);
   const ticksRef = useRef(0);
+  const retentionByRecipeRef = useRef(new Map<string, boolean>());
+  retentionByRecipeRef.current.set(recipeId, retainOnUnmount);
 
-  /* The mark is read up front so the thumbnail can advertise it and the player
-     knows where to start the moment it's tapped — AsyncStorage is async, and
-     waiting for it after the tap would cost the player a beat. */
+  /* Read the mark up front so the thumbnail can advertise it and the player
+     knows where to start the moment it's tapped. */
   const refreshMark = useCallback(() => {
-    let alive = true;
-    loadVideoMark(videoId).then((next) => {
-      if (alive) setMark(next);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [videoId]);
+    setMark(loadVideoMark(recipeId));
+  }, [recipeId]);
 
-  useEffect(() => refreshMark(), [refreshMark]);
+  useEffect(() => refreshMark(), [refreshMark, retainOnUnmount]);
 
   const persist = useCallback(
-    () => saveVideoMark(videoId, positionRef.current, durationRef.current),
-    [videoId],
+    () => saveVideoMark(recipeId, positionRef.current, durationRef.current),
+    [recipeId],
   );
 
   /* Watching is the one time the phone is being *looked* at without being
@@ -105,9 +110,18 @@ export default function VideoPlayer({ videoId, url, title }: Props) {
     return () => clearTimeout(timer);
   }, [open, noteVisible]);
 
+  /* A normal detail view owns a page-scoped mark. Cooking screens are swapped
+     out when you move between pots, so their marks live until the cook session
+     explicitly ends them. */
+  useEffect(() => () => {
+    persist();
+    if (!retentionByRecipeRef.current.get(recipeId)) forgetVideoMark(recipeId);
+  }, [recipeId, persist]);
+
   function openPlayer() {
     haptics.medium();
-    const at = mark.seconds;
+    beginVideoProgress(recipeId);
+    const at = loadVideoMark(recipeId).seconds;
     positionRef.current = at;
     durationRef.current = null;
     ticksRef.current = 0;
@@ -120,16 +134,17 @@ export default function VideoPlayer({ videoId, url, title }: Props) {
   }
 
   function closePlayer() {
-    // The write has to land before the thumbnail re-reads it, or the pill comes
-    // back showing the position from the *previous* watch.
-    persist().finally(refreshMark);
+    // This is synchronous session memory, so a rapid close/reopen cannot race
+    // a delayed write and accidentally start from zero.
+    persist();
+    refreshMark();
     setOpen(false);
     setHtml(null);
   }
 
   function startOver() {
     positionRef.current = 0;
-    forgetVideoMark(videoId);
+    forgetVideoMark(recipeId);
     setResumedFrom(0);
     setNoteVisible(false);
     webRef.current?.injectJavaScript('window.__rfSeek(0); true;');
@@ -162,7 +177,7 @@ export default function VideoPlayer({ videoId, url, title }: Props) {
     if (msg.type === 'ended') {
       // Watched to the end: next open starts from the top.
       positionRef.current = 0;
-      forgetVideoMark(videoId);
+      finishVideoProgress(recipeId);
       return;
     }
     if (typeof msg.seconds === 'number' && Number.isFinite(msg.seconds) && msg.seconds > 0) {

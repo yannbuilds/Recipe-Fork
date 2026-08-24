@@ -766,7 +766,15 @@ export default function RecipeDetail() {
     const videoId = youTubeVideoId(recipe.video_url);
     if (!videoId) return null;
 
-    const player = <VideoPlayer videoId={videoId} title={recipe.title} />;
+    const player = (
+      <VideoPlayer
+        key={recipe.id}
+        recipeId={recipe.id}
+        videoId={videoId}
+        title={recipe.title}
+        retainOnUnmount={cookMode}
+      />
+    );
 
     if (flat) {
       return (
