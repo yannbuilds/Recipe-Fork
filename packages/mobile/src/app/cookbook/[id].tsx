@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
+import { Image } from 'expo-image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -16,6 +17,19 @@ import { useTheme } from '@/lib/theme';
 
 const RECIPE_SELECT =
   'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
+const COVER_BUCKET = 'cookbook-covers';
+
+function coverStoragePath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${COVER_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) return null;
+  try {
+    return decodeURIComponent(url.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
 
 type RecipeItem = Pick<
   Recipe,
@@ -31,7 +45,7 @@ async function fetchDetail(id: string): Promise<Data> {
   const [cbRes, crRes] = await Promise.all([
     supabase
       .from('cookbooks')
-      .select('id, user_id, name, description, emoji, cover_recipe_id, sort_order, created_at, updated_at')
+      .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
       .eq('id', id)
       .maybeSingle(),
     supabase.from('cookbook_recipes').select(`recipe_id, recipes(${RECIPE_SELECT})`).eq('cookbook_id', id),
@@ -79,8 +93,14 @@ export default function CookbookDetailScreen() {
 
   async function handleDelete() {
     setShowDelete(false);
+    const coverPath = coverStoragePath(data?.cookbook.cover_image_url);
+    const { error: deleteError } = await supabase.from('cookbooks').delete().eq('id', id);
+    if (deleteError) {
+      haptics.error();
+      return;
+    }
+    if (coverPath) await supabase.storage.from(COVER_BUCKET).remove([coverPath]);
     haptics.success();
-    await supabase.from('cookbooks').delete().eq('id', id);
     queryClient.invalidateQueries({ queryKey: ['cookbooks'] });
     router.back();
   }
@@ -93,19 +113,30 @@ export default function CookbookDetailScreen() {
   const header = (
     <View style={{ paddingHorizontal: 16, paddingTop: 8, marginBottom: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: t.border,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="book-outline" size={22} color={t.green} />
-        </View>
+        {cookbook?.cover_image_url ? (
+          <Image
+            source={{ uri: cookbook.cover_image_url }}
+            style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: t.border }}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={cookbook.cover_image_url}
+          />
+        ) : (
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: t.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="book-outline" size={22} color={t.green} />
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <Eyebrow>Cookbook</Eyebrow>
           <Serif size={28} style={{ marginTop: 6, lineHeight: 32 }}>

@@ -17,6 +17,7 @@ type CookbookListItem = Cookbook & { recipeCount: number; coverImages: string[] 
 
 type CookbookImageRow = {
   cookbook_id: string;
+  recipe_id: string;
   recipes:
     | { image_url: string | null; created_at: string }
     | { image_url: string | null; created_at: string }[]
@@ -26,7 +27,7 @@ type CookbookImageRow = {
 async function fetchCookbooks(): Promise<CookbookListItem[]> {
   const { data: cookbooks, error } = await supabase
     .from('cookbooks')
-    .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+    .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
@@ -37,15 +38,17 @@ async function fetchCookbooks(): Promise<CookbookListItem[]> {
   const ids = list.map((c) => c.id);
   const { data: rows } = await supabase
     .from('cookbook_recipes')
-    .select('cookbook_id, recipes(image_url, created_at)')
+    .select('cookbook_id, recipe_id, recipes(image_url, created_at)')
     .in('cookbook_id', ids);
 
   const counts: Record<string, number> = {};
   const images: Record<string, { url: string; created_at: string }[]> = {};
+  const imageByRecipe: Record<string, string> = {};
   for (const row of (rows ?? []) as unknown as CookbookImageRow[]) {
     counts[row.cookbook_id] = (counts[row.cookbook_id] ?? 0) + 1;
     const rec = Array.isArray(row.recipes) ? row.recipes[0] : row.recipes;
     if (rec?.image_url) {
+      imageByRecipe[`${row.cookbook_id}:${row.recipe_id}`] = rec.image_url;
       images[row.cookbook_id] = images[row.cookbook_id] ?? [];
       images[row.cookbook_id].push({ url: rec.image_url, created_at: rec.created_at });
     }
@@ -54,10 +57,13 @@ async function fetchCookbooks(): Promise<CookbookListItem[]> {
   return list.map((c) => ({
     ...c,
     recipeCount: counts[c.id] ?? 0,
-    coverImages: (images[c.id] ?? [])
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 4)
-      .map((x) => x.url),
+    coverImages: [...new Set([
+      c.cover_image_url,
+      c.cover_recipe_id ? imageByRecipe[`${c.id}:${c.cover_recipe_id}`] : undefined,
+      ...(images[c.id] ?? [])
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .map((x) => x.url),
+    ].filter((url): url is string => !!url))].slice(0, 4),
   }));
 }
 

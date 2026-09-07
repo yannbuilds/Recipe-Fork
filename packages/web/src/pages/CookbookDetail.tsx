@@ -13,6 +13,19 @@ import { useAuth } from '../context/AuthContext';
 
 const RECIPE_SELECT =
   'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
+const COVER_BUCKET = 'cookbook-covers';
+
+function coverStoragePath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${COVER_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) return null;
+  try {
+    return decodeURIComponent(url.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
 
 export default function CookbookDetail() {
   const { id } = useParams<{ id: string }>();
@@ -36,7 +49,7 @@ export default function CookbookDetail() {
       setLoading(true);
       const cbResult = await supabase
         .from('cookbooks')
-        .select('id, user_id, name, description, emoji, cover_recipe_id, created_at, updated_at')
+        .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
         .eq('id', id!)
         .maybeSingle();
       if (cancelled) return;
@@ -80,7 +93,13 @@ export default function CookbookDetail() {
 
   async function handleDelete() {
     if (!cookbook) return;
-    await supabase.from('cookbooks').delete().eq('id', cookbook.id);
+    const coverPath = coverStoragePath(cookbook.cover_image_url);
+    const { error: deleteError } = await supabase.from('cookbooks').delete().eq('id', cookbook.id);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    if (coverPath) await supabase.storage.from(COVER_BUCKET).remove([coverPath]);
     navigate('/');
   }
 
@@ -135,12 +154,21 @@ export default function CookbookDetail() {
       >
         {/* Title row */}
         <div className="flex items-start gap-3 sm:gap-4">
-          <div
-            className="shrink-0 flex items-center justify-center"
-            style={{ width: 44, height: 44, borderRadius: 6, border: '1px solid var(--border)', color: 'var(--green)' }}
-          >
-            <BookOpen size={22} strokeWidth={1.5} />
-          </div>
+          {cookbook?.cover_image_url ? (
+            <img
+              src={cookbook.cover_image_url}
+              alt=""
+              className="shrink-0 object-cover"
+              style={{ width: 44, height: 44, borderRadius: 6, border: '1px solid var(--border)' }}
+            />
+          ) : (
+            <div
+              className="shrink-0 flex items-center justify-center"
+              style={{ width: 44, height: 44, borderRadius: 6, border: '1px solid var(--border)', color: 'var(--green)' }}
+            >
+              <BookOpen size={22} strokeWidth={1.5} />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="rf-eyebrow" style={{ marginBottom: 8 }}>Cookbook</div>
             <h1

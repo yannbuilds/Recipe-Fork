@@ -3,10 +3,24 @@ import { Utensils } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
+import PhotoField from './PhotoField';
 
 // Default cover glyph kept for the DB column; no longer shown in the UI
 // (cookbook covers use recipe photos with a line-icon fallback).
 const DEFAULT_COVER = '📖';
+const COVER_BUCKET = 'cookbook-covers';
+
+function coverStoragePath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${COVER_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) return null;
+  try {
+    return decodeURIComponent(url.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
 
 interface CookbookFormModalProps {
   open: boolean;
@@ -31,12 +45,16 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
   const [error, setError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
   const [coverRecipeId, setCoverRecipeId] = useState<string | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState('');
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(cookbook?.name ?? initialValues?.name ?? '');
       setDescription(cookbook?.description ?? initialValues?.description ?? '');
       setCoverRecipeId(cookbook?.cover_recipe_id ?? null);
+      setCoverImageUrl(cookbook?.cover_image_url ?? '');
+      setCoverImageFile(null);
       setError(null);
       setPendingRemoval(new Set());
     }
@@ -58,21 +76,46 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     setSaving(true);
     setError(null);
     if (cookbook) {
+      let uploadedPath: string | null = null;
+      let nextCoverImageUrl = coverImageUrl.trim() || null;
+
+      if (coverImageFile) {
+        const extension = coverImageFile.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'jpg';
+        uploadedPath = `${user.id}/${cookbook.id}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from(COVER_BUCKET).upload(uploadedPath, coverImageFile, {
+          contentType: coverImageFile.type || 'image/jpeg',
+          upsert: false,
+        });
+        if (uploadError) {
+          setError(`Could not upload the cover: ${uploadError.message}`);
+          setSaving(false);
+          return;
+        }
+        nextCoverImageUrl = supabase.storage.from(COVER_BUCKET).getPublicUrl(uploadedPath).data.publicUrl;
+      }
+
       const { data, error: err } = await supabase
         .from('cookbooks')
         .update({
           name: name.trim(),
           description: description.trim() || null,
           cover_recipe_id: coverRecipeId,
+          cover_image_url: nextCoverImageUrl,
           updated_at: new Date().toISOString(),
         })
         .eq('id', cookbook.id)
         .select()
         .single();
       if (err) {
+        if (uploadedPath) await supabase.storage.from(COVER_BUCKET).remove([uploadedPath]);
         setError(err.message);
         setSaving(false);
         return;
+      }
+
+      const previousPath = coverStoragePath(cookbook.cover_image_url);
+      if (previousPath && cookbook.cover_image_url !== nextCoverImageUrl) {
+        await supabase.storage.from(COVER_BUCKET).remove([previousPath]);
       }
       if (pendingRemoval.size > 0 && onCommitRemovals) {
         await onCommitRemovals(Array.from(pendingRemoval));
@@ -124,7 +167,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     >
       <div
         className="rf-card max-w-md w-full mx-4 space-y-4"
-        style={{ padding: 24 }}
+        style={{ padding: 24, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
@@ -158,54 +201,87 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
           />
         </div>
 
-        {cookbook && recipes && recipes.some((r) => r.image_url) && (
+        {cookbook && (
           <div>
             <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-              Cover
+              Cover image
             </label>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button
-                type="button"
-                onClick={() => setCoverRecipeId(null)}
-                className="shrink-0 flex items-center justify-center text-xs font-semibold"
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 10,
-                  border: `1.5px dashed ${coverRecipeId === null ? 'var(--green)' : 'var(--border)'}`,
-                  background: coverRecipeId === null ? 'var(--green-light)' : 'transparent',
-                  color: coverRecipeId === null ? 'var(--green)' : 'var(--muted)',
-                }}
-                title="Automatic — newest recipe photo"
-              >
-                Auto
-              </button>
-              {recipes
-                .filter((r) => r.image_url)
-                .map((r) => (
+            <PhotoField
+              file={coverImageFile}
+              url={coverImageUrl}
+              height={150}
+              alt={`${name.trim() || 'Cookbook'} cover`}
+              onPick={(file) => {
+                setCoverImageFile(file);
+                setCoverRecipeId(null);
+                setError(null);
+              }}
+              onRemove={() => {
+                setCoverImageFile(null);
+                setCoverImageUrl('');
+                setCoverRecipeId(null);
+              }}
+              onError={setError}
+            />
+
+            {recipes?.some((r) => r.image_url) && (
+              <>
+                <p className="text-xs mt-3 mb-2" style={{ color: 'var(--muted)' }}>
+                  Or use a recipe photo
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
                   <button
                     type="button"
-                    key={r.id}
-                    onClick={() => setCoverRecipeId(r.id)}
-                    className="shrink-0 p-0"
-                    style={{
-                      borderRadius: 10,
-                      border: `2px solid ${coverRecipeId === r.id ? 'var(--green)' : 'transparent'}`,
-                      lineHeight: 0,
+                    onClick={() => {
+                      setCoverImageFile(null);
+                      setCoverImageUrl('');
+                      setCoverRecipeId(null);
                     }}
-                    title={r.title}
+                    className="shrink-0 flex items-center justify-center text-xs font-semibold"
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 10,
+                      border: `1.5px dashed ${!coverImageFile && !coverImageUrl && coverRecipeId === null ? 'var(--green)' : 'var(--border)'}`,
+                      background: !coverImageFile && !coverImageUrl && coverRecipeId === null ? 'var(--green-light)' : 'transparent',
+                      color: !coverImageFile && !coverImageUrl && coverRecipeId === null ? 'var(--green)' : 'var(--muted)',
+                    }}
+                    title="Automatic — newest recipe photo"
                   >
-                    <img
-                      src={r.image_url!}
-                      alt={r.title}
-                      className="object-cover"
-                      style={{ width: 52, height: 52, borderRadius: 8 }}
-                    />
+                    Auto
                   </button>
-                ))}
-            </div>
+                  {recipes
+                    .filter((r) => r.image_url)
+                    .map((r) => (
+                      <button
+                        type="button"
+                        key={r.id}
+                        onClick={() => {
+                          setCoverImageFile(null);
+                          setCoverImageUrl('');
+                          setCoverRecipeId(r.id);
+                        }}
+                        className="shrink-0 p-0"
+                        style={{
+                          borderRadius: 10,
+                          border: `2px solid ${!coverImageFile && !coverImageUrl && coverRecipeId === r.id ? 'var(--green)' : 'transparent'}`,
+                          lineHeight: 0,
+                        }}
+                        title={r.title}
+                      >
+                        <img
+                          src={r.image_url!}
+                          alt={r.title}
+                          className="object-cover"
+                          style={{ width: 52, height: 52, borderRadius: 8 }}
+                        />
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-              Shown next to the cookbook when saving a recipe.
+              Used on your cookbook shelf and when saving a recipe.
             </p>
           </div>
         )}

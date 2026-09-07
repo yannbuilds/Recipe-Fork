@@ -71,7 +71,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
       const [cbRes, crRes, coverRes] = await Promise.all([
         supabase
           .from('cookbooks')
-          .select('id, user_id, name, description, emoji, cover_recipe_id, sort_order, created_at, updated_at')
+          .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id').eq('recipe_id', recipeId),
@@ -95,6 +95,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
       const next: Record<string, string> = {};
       for (const cb of cbList) {
         const url =
+          cb.cover_image_url ??
           (cb.cover_recipe_id ? byPair[`${cb.id}:${cb.cover_recipe_id}`] : undefined) ??
           newest[cb.id]?.url;
         if (url) next[cb.id] = url;
@@ -153,7 +154,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: Props) {
     const { data } = await supabase
       .from('cookbooks')
       .insert({ user_id: uid, name })
-      .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+      .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
       .single();
     if (data) {
       const cb = data as Cookbook;

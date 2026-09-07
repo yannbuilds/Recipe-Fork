@@ -34,6 +34,7 @@ interface CookbooksViewProps {
 
 interface RecipeImageRow {
   cookbook_id: string;
+  recipe_id: string;
   recipes: { image_url: string | null; created_at: string } | null;
 }
 
@@ -58,7 +59,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       setLoading(true);
       const cbResult = await supabase
         .from('cookbooks')
-        .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+        .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
 
@@ -83,19 +84,21 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       const ids = cbList.map((c) => c.id);
       const crResult = await supabase
         .from('cookbook_recipes')
-        .select('cookbook_id, recipes(image_url, created_at)')
+        .select('cookbook_id, recipe_id, recipes(image_url, created_at)')
         .in('cookbook_id', ids);
 
       if (cancelled) return;
 
       const counts: Record<string, number> = {};
       const imagesAccum: Record<string, { url: string; created_at: string }[]> = {};
+      const imageByRecipe: Record<string, string> = {};
 
       for (const row of ((crResult.data ?? []) as unknown) as RecipeImageRow[]) {
         counts[row.cookbook_id] = (counts[row.cookbook_id] ?? 0) + 1;
         // Supabase may return `recipes` as object or array depending on the relation
         const rec = Array.isArray(row.recipes) ? row.recipes[0] : row.recipes;
         if (rec?.image_url) {
+          imageByRecipe[`${row.cookbook_id}:${row.recipe_id}`] = rec.image_url;
           if (!imagesAccum[row.cookbook_id]) imagesAccum[row.cookbook_id] = [];
           imagesAccum[row.cookbook_id].push({
             url: rec.image_url,
@@ -104,14 +107,17 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
         }
       }
 
-      // Take 4 newest images per cookbook
+      // A custom cover leads the shelf, followed by a deliberately chosen
+      // recipe photo, then the newest remaining recipe photos.
       const images: Record<string, string[]> = {};
-      for (const id of ids) {
-        const list = (imagesAccum[id] ?? [])
+      for (const cb of cbList) {
+        const newest = (imagesAccum[cb.id] ?? [])
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 4)
           .map((x) => x.url);
-        images[id] = list;
+        const chosen = cb.cover_recipe_id
+          ? imageByRecipe[`${cb.id}:${cb.cover_recipe_id}`]
+          : undefined;
+        images[cb.id] = [...new Set([cb.cover_image_url, chosen, ...newest].filter((url): url is string => !!url))].slice(0, 4);
       }
 
       setImagesByCookbook(images);

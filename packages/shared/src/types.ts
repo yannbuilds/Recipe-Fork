@@ -174,6 +174,9 @@ export interface Cookbook {
   // Chosen cover recipe (shown as the cookbook's thumbnail in the
   // save-to-cookbook sheet). Null = automatic (newest recipe photo).
   cover_recipe_id?: string | null;
+  // A cover uploaded specifically for this cookbook. When present it takes
+  // priority over the chosen recipe photo and the automatic fallback.
+  cover_image_url?: string | null;
   // Manual display order (ascending). Lower = earlier. Defaults to 0 server-side.
   sort_order?: number;
   created_at: string;

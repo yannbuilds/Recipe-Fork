@@ -10,6 +10,7 @@ interface Props {
   onRemove: () => void;
   onError?: (message: string) => void;
   height?: number;
+  alt?: string;
 }
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -21,7 +22,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
  * carry a remote image_url; it just shows as the current photo rather than as
  * text to edit.
  */
-export default function PhotoField({ file, url, onPick, onRemove, onError, height = 260 }: Props) {
+export default function PhotoField({ file, url, onPick, onRemove, onError, height = 260, alt = 'Recipe photo' }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [objectUrl, setObjectUrl] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -55,7 +56,7 @@ export default function PhotoField({ file, url, onPick, onRemove, onError, heigh
 
       {preview ? (
         <div className="rf-photo rf-photo-filled" style={{ height }}>
-          <img src={preview} alt="Recipe photo" />
+          <img src={preview} alt={alt} />
           <div className="rf-photo-actions">
             <button type="button" onClick={() => input.current?.click()} className="rf-photo-pill">
               <RefreshCw size={14} strokeWidth={2.2} /> Replace photo

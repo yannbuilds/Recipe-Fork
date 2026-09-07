@@ -17,7 +17,7 @@ export interface RecipeBrowserData {
   cookbookRecipes: Record<string, Set<string>>;
   /** Cookbooks you can actually pick from — an empty one is just noise. */
   pickableCookbooks: Cookbook[];
-  /** Cookbook id → up to four cover images, newest first. */
+  /** Cookbook id → custom/chosen cover followed by newest recipe photos. */
   cookbookCovers: Record<string, string[]>;
   loading: boolean;
 }
@@ -54,7 +54,7 @@ export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
         supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
         supabase
           .from('cookbooks')
-          .select('id, user_id, name, description, emoji, sort_order, created_at, updated_at')
+          .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
@@ -97,21 +97,21 @@ export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
     [cookbooks, cookbookRecipes],
   );
 
-  // Four plates per shelf, newest first — the same cover strip the Cookbook
-  // page builds, derived from data already loaded here.
+  // Four plates per shelf — custom cover first, then a chosen recipe photo,
+  // then newest recipe photos. This matches the main Cookbook page.
   const cookbookCovers = useMemo(() => {
     const byId = new Map(recipes.map((r) => [r.id, r]));
     const out: Record<string, string[]> = {};
     for (const cb of cookbooks) {
       const ids = cookbookRecipes[cb.id];
-      out[cb.id] = !ids
+      const recipeImages = !ids
         ? []
         : [...ids]
-            .map((id) => byId.get(id))
-            .filter((r): r is Recipe => !!r?.image_url)
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 4)
-            .map((r) => r.image_url as string);
+          .map((id) => byId.get(id))
+          .filter((r): r is Recipe => !!r?.image_url)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const chosen = cb.cover_recipe_id ? byId.get(cb.cover_recipe_id)?.image_url : null;
+      out[cb.id] = [...new Set([cb.cover_image_url, chosen, ...recipeImages.map((r) => r.image_url)].filter((url): url is string => !!url))].slice(0, 4);
     }
     return out;
   }, [recipes, cookbooks, cookbookRecipes]);
