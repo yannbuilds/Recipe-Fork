@@ -367,6 +367,119 @@ html.pk-locked body {
   max-height: 86dvh;
 }
 
+/* Cookbook editor: portal-mounted so it sits above the app shell/nav. Its
+   content is the only scrolling region; the title and actions stay reachable. */
+.rf-cookbook-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.rf-cookbook-modal {
+  display: flex;
+  width: 100%;
+  max-height: calc(100vh - env(safe-area-inset-top, 0px) - 12px);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px 20px 0 0;
+}
+
+.rf-cookbook-modal-header,
+.rf-cookbook-modal-footer {
+  flex: none;
+  background: var(--card);
+}
+
+.rf-cookbook-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.rf-cookbook-modal-close {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--warm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rf-cookbook-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 18px 20px 20px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rf-cookbook-recipe-list {
+  overflow: visible;
+}
+
+.rf-cookbook-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  border-top: 1px solid var(--rule-soft);
+  box-shadow: 0 -8px 24px rgba(31, 27, 22, 0.05);
+}
+
+.rf-cookbook-modal-footer .rf-btn {
+  flex: 1;
+}
+
+@media (min-width: 640px) {
+  .rf-cookbook-modal-overlay {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .rf-cookbook-modal {
+    width: min(100%, 520px);
+    max-height: min(760px, calc(100dvh - 32px));
+    border-radius: 14px;
+  }
+
+  .rf-cookbook-modal-header {
+    padding: 22px 24px 16px;
+  }
+
+  .rf-cookbook-modal-body {
+    padding: 20px 24px 22px;
+  }
+
+  .rf-cookbook-recipe-list {
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+
+  .rf-cookbook-modal-footer {
+    justify-content: flex-end;
+    padding: 16px 24px 20px;
+  }
+
+  .rf-cookbook-modal-footer .rf-btn {
+    flex: none;
+  }
+}
+
 /* ── Buttons ───────────────────────────────────── */
 .rf-btn {
   display: inline-flex;

@@ -2,7 +2,7 @@ import type { Cookbook } from '@recipe-aggregator/shared';
 import { Image } from 'expo-image';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, TextInput } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import PhotoField from '@/components/PhotoField';
 import { Body, Button, Serif } from '@/components/ui';
@@ -147,15 +147,41 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
   } as const;
 
   return (
-    <BottomSheet open={open} onClose={onClose}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4 }}
-      >
-        <Serif size={18} weight="semi">
-          {cookbook ? 'Edit cookbook' : 'New cookbook'}
-        </Serif>
+    <BottomSheet open={open} onClose={onClose} maxHeightRatio={0.94}>
+      <View style={{ flexShrink: 1 }}>
+        <ScrollView
+          style={{ flexShrink: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 18 }}
+        >
+          <Serif size={18} weight="semi">
+            {cookbook ? 'Edit cookbook' : 'New cookbook'}
+          </Serif>
+
+        <Body size={12} color={t.muted} style={{ marginTop: 16, marginBottom: 6 }}>
+          Name
+        </Body>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Weeknight dinners"
+          placeholderTextColor={t.muted}
+          style={inputStyle}
+          autoFocus={!cookbook}
+        />
+
+        <Body size={12} color={t.muted} style={{ marginTop: 12, marginBottom: 6 }}>
+          Description (optional)
+        </Body>
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          placeholder="What's this collection about?"
+          placeholderTextColor={t.muted}
+          style={[inputStyle, { minHeight: 60, textAlignVertical: 'top' }]}
+          multiline
+        />
 
         {cookbook ? (
           <>
@@ -242,46 +268,33 @@ export default function CookbookFormModal({ open, cookbook, recipes, onClose, on
           </>
         ) : null}
 
-        <Body size={12} color={t.muted} style={{ marginTop: 16, marginBottom: 6 }}>
-          Name
-        </Body>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Weeknight dinners"
-          placeholderTextColor={t.muted}
-          style={inputStyle}
-          autoFocus={!cookbook}
-        />
-
-        <Body size={12} color={t.muted} style={{ marginTop: 12, marginBottom: 6 }}>
-          Description (optional)
-        </Body>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="What's this collection about?"
-          placeholderTextColor={t.muted}
-          style={[inputStyle, { minHeight: 60, textAlignVertical: 'top' }]}
-          multiline
-        />
-
         {error ? (
           <Body size={13} color={t.red} style={{ marginTop: 12 }}>
             {error}
           </Body>
         ) : null}
 
-        <Button
-          label={cookbook ? 'Save changes' : 'Create cookbook'}
-          variant="filled"
-          full
-          loading={saving}
-          disabled={!name.trim()}
-          onPress={handleSave}
-          style={{ marginTop: 18 }}
-        />
-      </ScrollView>
+        </ScrollView>
+
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 14,
+            borderTopWidth: 1,
+            borderTopColor: t.border,
+            backgroundColor: t.card,
+          }}
+        >
+          <Button
+            label={cookbook ? 'Save changes' : 'Create cookbook'}
+            variant="filled"
+            full
+            loading={saving}
+            disabled={!name.trim()}
+            onPress={handleSave}
+          />
+        </View>
+      </View>
     </BottomSheet>
   );
 }

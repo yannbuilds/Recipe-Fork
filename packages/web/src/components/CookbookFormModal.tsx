@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Utensils } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Utensils, X } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
@@ -65,8 +66,17 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
+    // The signed-in app scrolls inside this shell element rather than the
+    // document. Freeze it while the portal-mounted dialog owns the screen so
+    // touch gestures cannot move the page behind the sheet on iOS.
+    const appScroller = document.querySelector<HTMLElement>('.pk-shell-scroll');
+    const previousOverflow = appScroller?.style.overflow;
+    if (appScroller) appScroller.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      if (appScroller) appScroller.style.overflow = previousOverflow ?? '';
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -159,47 +169,60 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     setSaving(false);
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="rf-cookbook-modal-overlay"
       onClick={onClose}
       style={{ animation: 'fadeIn 0.15s ease both' }}
     >
-      <div
-        className="rf-card max-w-md w-full mx-4 space-y-4"
-        style={{ padding: 24, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
+      <section
+        className="rf-card rf-cookbook-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cookbook-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
-          {cookbook ? 'Edit cookbook' : 'New cookbook'}
-        </h2>
+        <header className="rf-cookbook-modal-header">
+          <h2 id="cookbook-modal-title" className="rf-heading text-lg font-semibold" style={{ color: 'var(--text)' }}>
+            {cookbook ? 'Edit cookbook' : 'New cookbook'}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rf-cookbook-modal-close"
+            aria-label="Close cookbook editor"
+          >
+            <X size={20} />
+          </button>
+        </header>
 
-        <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-            Name
-          </label>
-          <input
-            className="rf-input w-full"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Weeknight dinners"
-            autoFocus
-            maxLength={60}
-          />
-        </div>
+        <div className="rf-cookbook-modal-body space-y-4">
+          <div>
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
+              Name
+            </label>
+            <input
+              className="rf-input w-full"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Weeknight dinners"
+              autoFocus
+              maxLength={60}
+            />
+          </div>
 
-        <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-            Description (optional)
-          </label>
-          <input
-            className="rf-input w-full"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's this cookbook for?"
-            maxLength={140}
-          />
-        </div>
+          <div>
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
+              Description (optional)
+            </label>
+            <input
+              className="rf-input w-full"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What's this cookbook for?"
+              maxLength={140}
+            />
+          </div>
 
         {cookbook && (
           <div>
@@ -293,7 +316,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
               {pendingRemoval.size > 0 ? ` · ${pendingRemoval.size} to remove` : ''})
             </label>
             <div
-              className="max-h-48 overflow-y-auto -mx-1 px-1 space-y-1"
+              className="rf-cookbook-recipe-list -mx-1 px-1 space-y-1"
               style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}
             >
               {recipes.map((r) => {
@@ -396,8 +419,9 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
             {error}
           </p>
         )}
+        </div>
 
-        <div className="flex justify-end gap-3 pt-2">
+        <footer className="rf-cookbook-modal-footer">
           <button onClick={onClose} className="rf-btn rf-btn-secondary" disabled={saving}>
             Cancel
           </button>
@@ -408,8 +432,9 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
           >
             {saving ? 'Saving…' : cookbook ? 'Save' : 'Create'}
           </button>
-        </div>
-      </div>
-    </div>
+        </footer>
+      </section>
+    </div>,
+    document.body,
   );
 }
