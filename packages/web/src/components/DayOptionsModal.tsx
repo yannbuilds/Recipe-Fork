@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Utensils, Store, Zap, X as XIcon } from 'lucide-react';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
 import { DAY_FULL, dayDate } from '../utils/mealPlanDays';
+import ModalPortal from './ModalPortal';
 
 interface Props {
   open: boolean;
@@ -64,6 +65,7 @@ export default function DayOptionsModal({
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
         className="rf-card w-full max-w-[440px] mx-3"
@@ -172,5 +174,6 @@ export default function DayOptionsModal({
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }

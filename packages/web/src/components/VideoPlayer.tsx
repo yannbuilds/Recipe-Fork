@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { formatVideoTime } from '@recipe-aggregator/shared';
 import {
   beginVideoProgress,
@@ -10,6 +9,7 @@ import {
   watchedFractionFor,
 } from '../lib/videoProgress';
 import { loadYouTubeApi, type YouTubePlayer } from '../lib/youtube';
+import ModalPortal from './ModalPortal';
 
 interface VideoPlayerProps {
   recipeId: string;
@@ -345,7 +345,8 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
           the content instead of staying pinned. The mark in session memory is what
           replaces that always-alive iframe: the position outlives the player
           for the current recipe/cooking session. */}
-      {isOpen && createPortal(
+      {isOpen && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
           style={{ animation: 'fadeIn 0.2s ease' }}
@@ -426,8 +427,8 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
               />
             )}
           </div>
-        </div>,
-        document.body
+        </div>
+        </ModalPortal>
       )}
     </>
   );

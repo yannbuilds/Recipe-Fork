@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import ModalPortal from './ModalPortal';
 import { Utensils, X } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
@@ -169,7 +169,8 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
     setSaving(false);
   }
 
-  return createPortal(
+  return (
+    <ModalPortal>
     <div
       className="rf-cookbook-modal-overlay"
       onClick={onClose}
@@ -434,7 +435,7 @@ export default function CookbookFormModal({ open, cookbook, recipes, initialValu
           </button>
         </footer>
       </section>
-    </div>,
-    document.body,
+    </div>
+    </ModalPortal>
   );
 }

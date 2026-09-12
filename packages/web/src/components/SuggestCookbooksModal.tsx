@@ -3,6 +3,7 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import { useAuth } from '../context/AuthContext';
 import CookbookFormModal from './CookbookFormModal';
+import ModalPortal from './ModalPortal';
 import { fSerif } from '../styles/pieKeeper';
 
 interface Suggestion {
@@ -142,6 +143,7 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -398,5 +400,6 @@ export default function SuggestCookbooksModal({ open, onClose, onCreated }: Sugg
         }}
       />
     </>
+    </ModalPortal>
   );
 }

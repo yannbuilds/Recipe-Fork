@@ -6,6 +6,7 @@ import type { MealPlanEntry, Recipe } from '@recipe-aggregator/shared';
 import { useCookSession } from '../context/CookSessionContext';
 import { formatWeekStart, getSunday } from '../utils/weekHelpers';
 import { fMono, fSerif } from '../styles/pieKeeper';
+import ModalPortal from './ModalPortal';
 
 /*
  * "Cook another recipe" — reached from the + on the cooking bar.
@@ -180,6 +181,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
   );
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
       onClick={onClose}
@@ -248,5 +250,6 @@ export default function AddToCookSheet({ open, onClose }: Props) {
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }

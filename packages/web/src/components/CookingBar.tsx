@@ -6,6 +6,7 @@ import type { ActiveCook } from '@recipe-aggregator/shared';
 import { useCookSession } from '../context/CookSessionContext';
 import { useCookBarVisible, useViewingRecipeId } from '../hooks/useCookBar';
 import AddToCookSheet from './AddToCookSheet';
+import ModalPortal from './ModalPortal';
 import { fMono, fSans, fSerif } from '../styles/pieKeeper';
 
 /*
@@ -217,6 +218,7 @@ export default function CookingBar() {
       {/* Options sheet — the only place a cook can be stopped without finishing
           it, which is the escape hatch the old URL-param cook mode never had. */}
       {showMenu && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
           onClick={() => setShowMenu(false)}
@@ -315,6 +317,7 @@ export default function CookingBar() {
             )}
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <AddToCookSheet open={showAdd} onClose={() => setShowAdd(false)} />

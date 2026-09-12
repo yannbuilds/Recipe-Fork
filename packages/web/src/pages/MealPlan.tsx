@@ -56,6 +56,7 @@ import SubRecipePrompt from '../components/SubRecipePrompt';
 import RateCookModal from '../components/RateCookModal';
 import DayOptionsModal from '../components/DayOptionsModal';
 import PlanWeekModal, { type PlanPrefs, type PlanPick } from '../components/PlanWeekModal';
+import ModalPortal from '../components/ModalPortal';
 import { DraggableMealRow, MealDropZone, dayFromDropId, dropId } from '../components/MealPlanDnd';
 import {
   combineIngredients,
@@ -1945,6 +1946,7 @@ export default function MealPlan() {
 
       {/* ── Per-meal menu ────────────────────────────────── */}
       {entryMenu && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEntryMenu(null)}>
           <div className="rf-card w-full max-w-[380px] mx-3" style={{ padding: '20px 22px 22px' }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 2px', fontFamily: fSerif, fontWeight: 400, fontSize: 20, letterSpacing: '-0.02em', color: 'var(--text)' }}>
@@ -2077,9 +2079,11 @@ export default function MealPlan() {
               })}
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {weekArchiveOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setWeekArchiveOpen(false)}>
           <div className="rf-card w-full max-w-[420px] mx-3" style={{ padding: '20px 22px 24px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between">
@@ -2118,9 +2122,11 @@ export default function MealPlan() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {movePicker && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setMovePicker(null)}>
           <div className="rf-card w-full max-w-[440px] mx-3" style={{ padding: '20px 22px 24px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between" style={{ marginBottom: 16 }}>
@@ -2170,6 +2176,7 @@ export default function MealPlan() {
             )}
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <DayOptionsModal

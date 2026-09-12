@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ModalPortal from './ModalPortal';
 
 interface ConfirmModalProps {
   open: boolean;
@@ -43,6 +44,7 @@ export default function ConfirmModal({
   const confirmed = confirmWord ? typed.toLowerCase() === confirmWord.toLowerCase() : true;
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={onCancel}
@@ -80,5 +82,6 @@ export default function ConfirmModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

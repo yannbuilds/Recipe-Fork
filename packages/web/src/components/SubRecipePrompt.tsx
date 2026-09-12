@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient } from '@recipe-aggregator/shared';
+import ModalPortal from './ModalPortal';
 
 /*
  * "Are you making the pastry, or buying it?"
@@ -157,6 +158,7 @@ export default function SubRecipePrompt({ open, onClose, ...body }: Props) {
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
       style={{ animation: 'fadeIn 0.15s ease both' }}
@@ -192,5 +194,6 @@ export default function SubRecipePrompt({ open, onClose, ...body }: Props) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

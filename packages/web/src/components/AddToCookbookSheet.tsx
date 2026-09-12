@@ -3,6 +3,7 @@ import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook } from '@recipe-aggregator/shared';
 import CookbookFormModal from './CookbookFormModal';
 import { fSerif } from '../styles/pieKeeper';
+import ModalPortal from './ModalPortal';
 
 interface AddToCookbookSheetProps {
   open: boolean;
@@ -136,6 +137,7 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
   }
 
   return (
+    <ModalPortal>
     <>
       <div
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
@@ -308,5 +310,6 @@ export default function AddToCookbookSheet({ open, recipeId, onClose }: AddToCoo
         }}
       />
     </>
+    </ModalPortal>
   );
 }

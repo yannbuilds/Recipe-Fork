@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { Bold, Underline as UnderlineIcon, List, ListOrdered } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 interface MyNotesModalProps {
   open: boolean;
@@ -92,6 +93,7 @@ export default function MyNotesModal({ open, content, onSave, onClose, saveStatu
   ];
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 flex items-center justify-center p-4"
       style={{ zIndex: 50 }}
@@ -159,5 +161,6 @@ export default function MyNotesModal({ open, content, onSave, onClose, saveStatu
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

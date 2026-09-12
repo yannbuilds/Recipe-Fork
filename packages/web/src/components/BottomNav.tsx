@@ -21,8 +21,8 @@ export default function BottomNav() {
     // block in index.css before changing this.
     //
     // relative + z-40 only so the top border and shadow paint over the scroller
-    // above it; z-40 stays below the z-50 modal overlays, which render after the
-    // shell and must be able to cover the nav.
+    // above it. Modal overlays are mounted under <body> by ModalPortal, outside
+    // this composited shell, so they reliably cover the nav on iOS.
     <nav
       className="relative shrink-0 z-40"
       // Opaque background, no backdrop-filter — see --bar-bg in index.css. A

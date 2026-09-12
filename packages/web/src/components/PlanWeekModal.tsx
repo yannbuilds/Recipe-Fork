@@ -4,6 +4,7 @@ import type { Recipe } from '@recipe-aggregator/shared';
 import RecipeBrowser from './RecipeBrowser';
 import useRecipeBrowserData from '../hooks/useRecipeBrowserData';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
+import ModalPortal from './ModalPortal';
 import { DAY_SHORT, DAY_INDEXES, dayDate, todayIndex, planServings } from '../utils/mealPlanDays';
 
 export interface PlanPrefs {
@@ -298,6 +299,7 @@ export default function PlanWeekModal({
   );
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
         className="rf-card rf-modal-tall w-full max-w-[640px] mx-3 flex flex-col"
@@ -533,6 +535,7 @@ export default function PlanWeekModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

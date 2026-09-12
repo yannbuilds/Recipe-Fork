@@ -24,6 +24,7 @@ import AddToCookbookSheet from '../components/AddToCookbookSheet';
 import NutritionPanel from '../components/NutritionPanel';
 import RateCookModal from '../components/RateCookModal';
 import StillCookingPrompt from '../components/StillCookingPrompt';
+import ModalPortal from '../components/ModalPortal';
 import { useIdleScreenOff } from '../hooks/useIdleScreenOff';
 import { scaleQuantity } from '../utils/scaleQuantity';
 
@@ -1918,6 +1919,7 @@ export default function RecipeDetail() {
 
       {/* ── Author's Notes modal ─────────────────────────────── */}
       {showAuthorNotes && recipe?.author_notes && (
+        <ModalPortal>
         <div
           className="fixed inset-0 flex items-center justify-center p-4"
           style={{ zIndex: 50 }}
@@ -1949,6 +1951,7 @@ export default function RecipeDetail() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* ── My Notes modal ──────────────────────────────────── */}

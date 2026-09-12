@@ -4,6 +4,7 @@ import { hasSubRecipes, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient } from '@recipe-aggregator/shared';
 import { SubRecipePromptBody } from './SubRecipePrompt';
 import { getWeekOptions } from '../utils/weekHelpers';
+import ModalPortal from './ModalPortal';
 
 type ModalStep =
   | 'pick'
@@ -229,6 +230,7 @@ export default function WeekPickerModal({
             : 'Removed';
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
       style={{ animation: 'fadeIn 0.15s ease both' }}
@@ -495,5 +497,6 @@ export default function WeekPickerModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

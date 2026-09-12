@@ -8,6 +8,7 @@ import {
 } from '@recipe-aggregator/shared';
 import { useNewRecipeModal } from '../context/NewRecipeModalContext';
 import { saveTags } from '../lib/saveTags';
+import ModalPortal from './ModalPortal';
 
 type Step = 'choose' | 'url-input' | 'photo-input' | 'processing' | 'error';
 
@@ -335,6 +336,7 @@ export default function NewRecipeModal() {
   }
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 flex flex-col justify-end bg-black/50 px-2 sm:px-0"
       style={{ zIndex: 60, animation: 'fadeIn 0.15s ease' }}
@@ -663,5 +665,6 @@ export default function NewRecipeModal() {
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }

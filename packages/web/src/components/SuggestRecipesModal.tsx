@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@recipe-aggregator/shared';
 import type { Cookbook, Recipe } from '@recipe-aggregator/shared';
+import ModalPortal from './ModalPortal';
 
 interface Suggestion {
   recipe_id: string;
@@ -130,6 +131,7 @@ export default function SuggestRecipesModal({
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={onClose}
@@ -297,5 +299,6 @@ export default function SuggestRecipesModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

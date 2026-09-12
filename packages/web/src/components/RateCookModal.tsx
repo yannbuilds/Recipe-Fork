@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Heart, Star } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
 import { fSerif, fSans, fMono } from '../styles/pieKeeper';
+import ModalPortal from './ModalPortal';
 
 /**
  * Post-cook rating modal: "How did you find it?" with three separate
@@ -155,6 +156,7 @@ export default function RateCookModal({
   }
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
         className="rf-card max-w-sm w-full mx-4"
@@ -288,5 +290,6 @@ export default function RateCookModal({
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }
