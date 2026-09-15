@@ -289,6 +289,22 @@ export function CookSessionProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, []);
 
+  // Realtime is still the instant path, but mobile operating systems can
+  // suspend its socket without warning. Poll only while an active cooking
+  // session is on screen so another device's checklist taps arrive without a
+  // manual refresh or app restart.
+  useEffect(() => {
+    if (!ready || !user || session.cooks.length === 0) return;
+    const pullIfActive = () => {
+      if (AppState.currentState === 'active') {
+        setSyncSignal((value) => value + 1);
+      }
+    };
+    pullIfActive();
+    const timer = setInterval(pullIfActive, 2_000);
+    return () => clearInterval(timer);
+  }, [ready, session.cooks.length, user?.id]);
+
   const mutate = useCallback((reducer: (current: CookSession) => CookSession) => {
     setSnapshot((previous) => {
       const nextSession = reducer(previous.session);

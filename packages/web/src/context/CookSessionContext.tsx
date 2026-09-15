@@ -314,6 +314,22 @@ export function CookSessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Some mobile browsers pause or silently lose a Realtime socket while the
+  // screen stays open. While there is food on the stove, do a tiny foreground
+  // pull as a safety net so checklist taps on another device still appear
+  // promptly without requiring a refresh. Realtime remains the instant path.
+  useEffect(() => {
+    if (!ready || !user || session.cooks.length === 0) return;
+    const pullIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        setSyncSignal((value) => value + 1);
+      }
+    };
+    pullIfVisible();
+    const timer = window.setInterval(pullIfVisible, 2_000);
+    return () => window.clearInterval(timer);
+  }, [ready, session.cooks.length, user?.id]);
+
   const mutate = useCallback((reducer: (current: CookSession) => CookSession) => {
     setSnapshot((previous) => {
       const nextSession = reducer(previous.session);
