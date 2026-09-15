@@ -12,9 +12,14 @@
  * changing which one you're looking at — nothing is lost, nothing is cancelled.
  *
  * Everything here is pure and platform-free. Web persists it to localStorage,
- * mobile to AsyncStorage; the reducers below are the only place the rules live,
- * so the two can't drift apart.
+ * mobile to AsyncStorage, and both mirror the same snapshot to Supabase; the
+ * reducers below are the only place the rules live, so the two can't drift
+ * apart.
  */
+
+import type { VideoMark } from './videoProgress.js';
+
+export type CookTab = 'ingredients' | 'steps';
 
 /** One recipe on the stove. */
 export interface ActiveCook {
@@ -40,6 +45,14 @@ export interface ActiveCook {
   checkedSteps: number[];
   /** Total steps, so the bar can say "4 of 9" without loading the recipe. */
   stepCount: number;
+  /** Serving count being used for this cook, even when it has not been saved as the recipe default. */
+  servings: number | null;
+  /** Last mobile cooking tab, so a hand-off opens where the cook left off. */
+  activeTab: CookTab;
+  /** Ingredient rows whose linked sub-recipes are expanded inline. */
+  expandedIngredients: string[];
+  /** Resume point for a recipe video while this cook is active. */
+  videoMark: VideoMark | null;
   startedAt: string;
 }
 
@@ -49,10 +62,22 @@ export interface CookSession {
   activeRecipeId: string | null;
 }
 
+/** The session plus its last local mutation time, used for offline-safe last-write-wins sync. */
+export interface CookSessionSnapshot {
+  session: CookSession;
+  updatedAt: string | null;
+}
+
 export const EMPTY_SESSION: CookSession = { cooks: [], activeRecipeId: null };
+export const EMPTY_COOK_SESSION_SNAPSHOT: CookSessionSnapshot = {
+  session: EMPTY_SESSION,
+  updatedAt: null,
+};
 
 /** Storage key, shared so web and mobile agree on where it lives. */
-export const COOK_SESSION_KEY = 'pk-cook-session-v1';
+export const COOK_SESSION_KEY = 'pk-cook-session-v2';
+/** The old unscoped key is read once when migrating an existing device. */
+export const LEGACY_COOK_SESSION_KEY = 'pk-cook-session-v1';
 
 /**
  * How many cooks the bar shows before it starts scrolling. Not a hard cap on
@@ -60,19 +85,14 @@ export const COOK_SESSION_KEY = 'pk-cook-session-v1';
  */
 export const COOK_BAR_VISIBLE = 3;
 
-/**
- * A session left running overnight is almost certainly a forgotten one, not a
- * 14-hour brisket you're still tending. Sessions older than this are dropped on
- * load rather than greeting you with a stale bar the next morning.
- */
-export const COOK_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-
 export interface StartCookInput {
   recipeId: string;
   mealPlanEntryId?: string | null;
   title: string;
   imageUrl?: string | null;
   stepCount?: number;
+  servings?: number | null;
+  activeTab?: CookTab;
 }
 
 function makeCook(input: StartCookInput): ActiveCook {
@@ -84,6 +104,10 @@ function makeCook(input: StartCookInput): ActiveCook {
     checkedIngredients: [],
     checkedSteps: [],
     stepCount: input.stepCount ?? 0,
+    servings: input.servings ?? null,
+    activeTab: input.activeTab ?? 'ingredients',
+    expandedIngredients: [],
+    videoMark: null,
     startedAt: new Date().toISOString(),
   };
 }
@@ -110,6 +134,8 @@ export function startCook(session: CookSession, input: StartCookInput): CookSess
               title: input.title || c.title,
               imageUrl: input.imageUrl ?? c.imageUrl,
               stepCount: input.stepCount ?? c.stepCount,
+              servings: input.servings ?? c.servings,
+              activeTab: input.activeTab ?? c.activeTab,
             }
           : c,
       ),
@@ -162,6 +188,7 @@ function updateCook(
   recipeId: string,
   fn: (cook: ActiveCook) => ActiveCook,
 ): CookSession {
+  if (!session.cooks.some((c) => c.recipeId === recipeId)) return session;
   return {
     ...session,
     cooks: session.cooks.map((c) => (c.recipeId === recipeId ? fn(c) : c)),
@@ -189,6 +216,53 @@ export function setStepCount(session: CookSession, recipeId: string, stepCount: 
   return updateCook(session, recipeId, (c) => ({ ...c, stepCount }));
 }
 
+export function setCookServings(session: CookSession, recipeId: string, servings: number): CookSession {
+  const cook = findCook(session, recipeId);
+  if (!cook || !Number.isFinite(servings) || servings < 1 || cook.servings === servings) return session;
+  return updateCook(session, recipeId, (c) => ({ ...c, servings }));
+}
+
+export function setCookTab(session: CookSession, recipeId: string, activeTab: CookTab): CookSession {
+  const cook = findCook(session, recipeId);
+  if (!cook || cook.activeTab === activeTab) return session;
+  return updateCook(session, recipeId, (c) => ({ ...c, activeTab }));
+}
+
+export function toggleExpandedIngredient(
+  session: CookSession,
+  recipeId: string,
+  key: string,
+): CookSession {
+  return updateCook(session, recipeId, (c) => ({
+    ...c,
+    expandedIngredients: toggleIn(c.expandedIngredients, key),
+  }));
+}
+
+export function saveCookVideoMark(
+  session: CookSession,
+  recipeId: string,
+  seconds: number,
+  duration: number | null,
+  now = Date.now(),
+): CookSession {
+  if (!Number.isFinite(seconds) || seconds < 1) return session;
+  return updateCook(session, recipeId, (c) => ({
+    ...c,
+    videoMark: {
+      seconds,
+      duration: Number.isFinite(duration) && (duration ?? 0) > 0 ? duration : c.videoMark?.duration ?? null,
+      updatedAt: new Date(now).toISOString(),
+    },
+  }));
+}
+
+export function clearCookVideoMark(session: CookSession, recipeId: string): CookSession {
+  const cook = findCook(session, recipeId);
+  if (!cook?.videoMark) return session;
+  return updateCook(session, recipeId, (c) => ({ ...c, videoMark: null }));
+}
+
 /** Steps done out of total, for the bar's progress ring and its "4 of 9" line. */
 export function cookProgress(cook: ActiveCook): { done: number; total: number; fraction: number } {
   const total = cook.stepCount;
@@ -206,53 +280,134 @@ export function cookProgress(cook: ActiveCook): { done: number; total: number; f
  * doesn't parse cleanly comes back as an empty session rather than throwing on
  * app start and leaving you staring at a white screen mid-cook.
  */
-export function parseSession(raw: string | null | undefined, now = Date.now()): CookSession {
-  if (!raw) return EMPTY_SESSION;
-  let data: unknown;
+export function parseSessionValue(data: unknown): CookSession {
   try {
-    data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return EMPTY_SESSION;
+    const rawCooks = (data as { cooks?: unknown }).cooks;
+    if (!Array.isArray(rawCooks)) return EMPTY_SESSION;
+
+    const cooks: ActiveCook[] = [];
+    const seenRecipeIds = new Set<string>();
+    for (const entry of rawCooks) {
+      if (!entry || typeof entry !== 'object') continue;
+      const c = entry as Partial<ActiveCook>;
+      if (typeof c.recipeId !== 'string' || !c.recipeId || seenRecipeIds.has(c.recipeId)) continue;
+      seenRecipeIds.add(c.recipeId);
+      const rawVideoMark = c.videoMark;
+      const videoMark =
+        rawVideoMark &&
+        typeof rawVideoMark === 'object' &&
+        typeof rawVideoMark.seconds === 'number' &&
+        Number.isFinite(rawVideoMark.seconds) &&
+        rawVideoMark.seconds >= 1
+          ? {
+              seconds: rawVideoMark.seconds,
+              duration:
+                typeof rawVideoMark.duration === 'number' &&
+                Number.isFinite(rawVideoMark.duration) &&
+                rawVideoMark.duration > 0
+                  ? rawVideoMark.duration
+                  : null,
+              updatedAt:
+                typeof rawVideoMark.updatedAt === 'string'
+                  ? rawVideoMark.updatedAt
+                  : new Date().toISOString(),
+            }
+          : null;
+      cooks.push({
+        recipeId: c.recipeId,
+        mealPlanEntryId: typeof c.mealPlanEntryId === 'string' ? c.mealPlanEntryId : null,
+        title: typeof c.title === 'string' ? c.title : 'Recipe',
+        imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
+        checkedIngredients: Array.isArray(c.checkedIngredients)
+          ? c.checkedIngredients.filter((k): k is string => typeof k === 'string')
+          : [],
+        checkedSteps: Array.isArray(c.checkedSteps)
+          ? c.checkedSteps.filter((n): n is number => typeof n === 'number')
+          : [],
+        stepCount: typeof c.stepCount === 'number' ? c.stepCount : 0,
+        servings:
+          typeof c.servings === 'number' && Number.isFinite(c.servings) && c.servings >= 1
+            ? c.servings
+            : null,
+        activeTab: c.activeTab === 'steps' ? 'steps' : 'ingredients',
+        expandedIngredients: Array.isArray(c.expandedIngredients)
+          ? c.expandedIngredients.filter((k): k is string => typeof k === 'string')
+          : [],
+        videoMark,
+        startedAt: typeof c.startedAt === 'string' ? c.startedAt : new Date().toISOString(),
+      });
+    }
+    if (cooks.length === 0) return EMPTY_SESSION;
+
+    const activeRaw = (data as { activeRecipeId?: unknown }).activeRecipeId;
+    const active =
+      typeof activeRaw === 'string' && cooks.some((c) => c.recipeId === activeRaw)
+        ? activeRaw
+        : cooks[0].recipeId;
+    return { cooks, activeRecipeId: active };
   } catch {
     return EMPTY_SESSION;
   }
-  if (!data || typeof data !== 'object') return EMPTY_SESSION;
-  const rawCooks = (data as { cooks?: unknown }).cooks;
-  if (!Array.isArray(rawCooks)) return EMPTY_SESSION;
+}
 
-  const cooks: ActiveCook[] = [];
-  for (const entry of rawCooks) {
-    if (!entry || typeof entry !== 'object') continue;
-    const c = entry as Partial<ActiveCook>;
-    if (typeof c.recipeId !== 'string' || !c.recipeId) continue;
-    const startedAt = typeof c.startedAt === 'string' ? c.startedAt : new Date(now).toISOString();
-    const started = Date.parse(startedAt);
-    if (Number.isFinite(started) && now - started > COOK_SESSION_MAX_AGE_MS) continue;
-    cooks.push({
-      recipeId: c.recipeId,
-      mealPlanEntryId: typeof c.mealPlanEntryId === 'string' ? c.mealPlanEntryId : null,
-      title: typeof c.title === 'string' ? c.title : 'Recipe',
-      imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
-      checkedIngredients: Array.isArray(c.checkedIngredients)
-        ? c.checkedIngredients.filter((k): k is string => typeof k === 'string')
-        : [],
-      checkedSteps: Array.isArray(c.checkedSteps)
-        ? c.checkedSteps.filter((n): n is number => typeof n === 'number')
-        : [],
-      stepCount: typeof c.stepCount === 'number' ? c.stepCount : 0,
-      startedAt,
-    });
+export function parseSession(raw: string | null | undefined): CookSession {
+  if (!raw) return EMPTY_SESSION;
+  try {
+    return parseSessionValue(JSON.parse(raw));
+  } catch {
+    return EMPTY_SESSION;
   }
-  if (cooks.length === 0) return EMPTY_SESSION;
-
-  const activeRaw = (data as { activeRecipeId?: unknown }).activeRecipeId;
-  const active =
-    typeof activeRaw === 'string' && cooks.some((c) => c.recipeId === activeRaw)
-      ? activeRaw
-      : cooks[0].recipeId;
-  return { cooks, activeRecipeId: active };
 }
 
 export function serializeSession(session: CookSession): string {
   return JSON.stringify(session);
+}
+
+export function parseCookSessionSnapshot(raw: string | null | undefined): CookSessionSnapshot {
+  if (!raw) return EMPTY_COOK_SESSION_SNAPSHOT;
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (data && typeof data === 'object' && 'session' in data) {
+      const stored = data as { session?: unknown; updatedAt?: unknown };
+      const parsedUpdatedAt =
+        typeof stored.updatedAt === 'string' && Number.isFinite(Date.parse(stored.updatedAt))
+          ? stored.updatedAt
+          : null;
+      return {
+        session: parseSessionValue(stored.session),
+        updatedAt: parsedUpdatedAt,
+      };
+    }
+    // v1 stored the session object directly and had no sync timestamp.
+    return { session: parseSessionValue(data), updatedAt: null };
+  } catch {
+    return EMPTY_COOK_SESSION_SNAPSHOT;
+  }
+}
+
+export function serializeCookSessionSnapshot(snapshot: CookSessionSnapshot): string {
+  return JSON.stringify(snapshot);
+}
+
+/** Generate a timestamp newer than the previous local mutation even within the same millisecond. */
+export function nextCookSessionUpdatedAt(previous: string | null, now = Date.now()): string {
+  const previousMs = previous ? Date.parse(previous) : Number.NaN;
+  const nextMs = Number.isFinite(previousMs) ? Math.max(now, previousMs + 1) : now;
+  return new Date(nextMs).toISOString();
+}
+
+export function isCookSessionSnapshotNewer(
+  candidateUpdatedAt: string | null,
+  currentUpdatedAt: string | null,
+): boolean {
+  if (!candidateUpdatedAt) return false;
+  const candidateMs = Date.parse(candidateUpdatedAt);
+  if (!Number.isFinite(candidateMs)) return false;
+  if (!currentUpdatedAt) return true;
+  const currentMs = Date.parse(currentUpdatedAt);
+  if (!Number.isFinite(currentMs)) return true;
+  return candidateMs > currentMs;
 }
 
 /**

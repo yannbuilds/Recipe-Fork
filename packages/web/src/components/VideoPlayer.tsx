@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatVideoTime } from '@recipe-aggregator/shared';
+import type { VideoMark } from '@recipe-aggregator/shared';
 import {
   beginVideoProgress,
   finishVideoProgress,
@@ -17,6 +18,10 @@ interface VideoPlayerProps {
   title: string;
   /** Cooking recipes keep their mark while their screen is swapped out. */
   retainOnUnmount: boolean;
+  /** Cloud-backed mark while this recipe is part of the cooking session. */
+  syncedMark?: VideoMark | null;
+  onSaveSyncedMark?: (recipeId: string, seconds: number, duration: number | null) => void;
+  onClearSyncedMark?: (recipeId: string) => void;
 }
 
 /** How often to read the player's clock, and how often to commit it to session memory. */
@@ -26,7 +31,15 @@ const PERSIST_EVERY = 5;
 /** How long the "picked up at…" line stays before it gets out of the way. */
 const RESUME_NOTE_MS = 5000;
 
-export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount }: VideoPlayerProps) {
+export default function VideoPlayer({
+  recipeId,
+  videoId,
+  title,
+  retainOnUnmount,
+  syncedMark,
+  onSaveSyncedMark,
+  onClearSyncedMark,
+}: VideoPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
   /** Where this open started, so the overlay can say so and offer a way back. */
   const [resumedFrom, setResumedFrom] = useState(0);
@@ -48,12 +61,25 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
   const retentionByRecipeRef = useRef(new Map<string, boolean>());
   retentionByRecipeRef.current.set(recipeId, retainOnUnmount);
 
+  const markView = useCallback(() => {
+    if (retainOnUnmount && syncedMark) {
+      return {
+        seconds: Math.floor(syncedMark.seconds),
+        fraction:
+          syncedMark.duration && syncedMark.duration > 0
+            ? Math.min(1, syncedMark.seconds / syncedMark.duration)
+            : null,
+      };
+    }
+    return { seconds: resumeAtFor(recipeId), fraction: watchedFractionFor(recipeId) };
+  }, [recipeId, retainOnUnmount, syncedMark]);
+
   /* Refresh the thumbnail from session memory: on mount, and every time the overlay
      closes (the effect below has just written the new position by then). */
   useEffect(() => {
     if (isOpen) return;
-    setMark({ seconds: resumeAtFor(recipeId), fraction: watchedFractionFor(recipeId) });
-  }, [isOpen, recipeId, retainOnUnmount]);
+    setMark(markView());
+  }, [isOpen, markView]);
 
   const readPlayerClock = useCallback(() => {
     const player = playerRef.current;
@@ -70,11 +96,12 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
 
   const persist = useCallback(() => {
     saveVideoMark(recipeId, positionRef.current, durationRef.current);
-  }, [recipeId]);
+    onSaveSyncedMark?.(recipeId, positionRef.current, durationRef.current);
+  }, [onSaveSyncedMark, recipeId]);
 
   function open() {
     beginVideoProgress(recipeId);
-    const at = resumeAtFor(recipeId);
+    const at = markView().seconds;
     openAtRef.current = at;
     positionRef.current = at;
     setResumedFrom(at);
@@ -97,6 +124,7 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
     openAtRef.current = 0;
     positionRef.current = 0;
     forgetVideoMark(recipeId);
+    onClearSyncedMark?.(recipeId);
     setResumedFrom(0);
     setNoteVisible(false);
     const player = playerRef.current;
@@ -197,6 +225,7 @@ export default function VideoPlayer({ recipeId, videoId, title, retainOnUnmount 
                 // Watched to the end: next open starts from the top.
                 positionRef.current = 0;
                 finishVideoProgress(recipeId);
+                onClearSyncedMark?.(recipeId);
               } else {
                 persist();
               }

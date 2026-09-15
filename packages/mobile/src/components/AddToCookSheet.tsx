@@ -29,6 +29,7 @@ interface Props {
 
 interface PlannedOption {
   entryId: string;
+  servings: number | null;
   recipe: Recipe;
 }
 
@@ -76,7 +77,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
         entries.reduce<PlannedOption[]>((acc, e) => {
           if (!e.recipe || seen.has(e.recipe.id)) return acc;
           seen.add(e.recipe.id);
-          acc.push({ entryId: e.id, recipe: e.recipe });
+          acc.push({ entryId: e.id, servings: e.servings, recipe: e.recipe });
           return acc;
         }, []),
       );
@@ -89,7 +90,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
     };
   }, [open]);
 
-  function pick(recipe: Recipe, entryId: string | null) {
+  function pick(recipe: Recipe, entryId: string | null, plannedServings: number | null = null) {
     haptics.success();
     startCook({
       recipeId: recipe.id,
@@ -97,6 +98,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
       title: recipe.title,
       imageUrl: recipe.image_url,
       stepCount: recipe.steps?.length ?? 0,
+      servings: plannedServings ?? recipe.custom_servings ?? recipe.servings ?? 1,
     });
     onClose();
     router.navigate({ pathname: '/recipe/[id]', params: { id: recipe.id } });
@@ -115,10 +117,10 @@ export default function AddToCookSheet({ open, onClose }: Props) {
     // is a "grab the next thing" sheet, not a browser.
     .slice(0, q ? 40 : 8);
 
-  const row = (recipe: Recipe, entryId: string | null, key: string) => (
+  const row = (recipe: Recipe, entryId: string | null, key: string, plannedServings: number | null = null) => (
     <Pressable
       key={key}
-      onPress={() => pick(recipe, entryId)}
+      onPress={() => pick(recipe, entryId, plannedServings)}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -213,7 +215,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
                 <Eyebrow style={{ marginTop: 8, marginBottom: 4, paddingLeft: 8 }}>
                   This week’s plan
                 </Eyebrow>
-                {plannedShown.map((p) => row(p.recipe, p.entryId, `plan-${p.entryId}`))}
+                {plannedShown.map((p) => row(p.recipe, p.entryId, `plan-${p.entryId}`, p.servings))}
               </>
             )}
             {otherShown.length > 0 && (

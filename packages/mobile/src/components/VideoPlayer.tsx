@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { formatVideoTime } from '@recipe-aggregator/shared/videoProgress';
+import type { VideoMark } from '@recipe-aggregator/shared/videoProgress';
 import { Image } from 'expo-image';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -43,6 +44,10 @@ interface Props {
   title: string;
   /** Cooking recipes keep their mark while their screen is swapped out. */
   retainOnUnmount: boolean;
+  /** Cloud-backed mark while this recipe is part of the cooking session. */
+  syncedMark?: VideoMark | null;
+  onSaveSyncedMark?: (recipeId: string, seconds: number, duration: number | null) => void;
+  onClearSyncedMark?: (recipeId: string) => void;
 }
 
 /** Commit to session memory every few player ticks. */
@@ -51,7 +56,16 @@ const PERSIST_EVERY = 5;
 /** How long the "picking up at…" line stays before it gets out of the way. */
 const RESUME_NOTE_MS = 5000;
 
-export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnmount }: Props) {
+export default function VideoPlayer({
+  recipeId,
+  videoId,
+  url,
+  title,
+  retainOnUnmount,
+  syncedMark,
+  onSaveSyncedMark,
+  onClearSyncedMark,
+}: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -70,17 +84,33 @@ export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnm
   const retentionByRecipeRef = useRef(new Map<string, boolean>());
   retentionByRecipeRef.current.set(recipeId, retainOnUnmount);
 
+  const currentMark = useCallback((): VideoMarkView => {
+    if (retainOnUnmount && syncedMark) {
+      return {
+        seconds: Math.floor(syncedMark.seconds),
+        fraction:
+          syncedMark.duration && syncedMark.duration > 0
+            ? Math.min(1, syncedMark.seconds / syncedMark.duration)
+            : null,
+      };
+    }
+    return loadVideoMark(recipeId);
+  }, [recipeId, retainOnUnmount, syncedMark]);
+
   /* Read the mark up front so the thumbnail can advertise it and the player
      knows where to start the moment it's tapped. */
   const refreshMark = useCallback(() => {
-    setMark(loadVideoMark(recipeId));
-  }, [recipeId]);
+    setMark(currentMark());
+  }, [currentMark]);
 
   useEffect(() => refreshMark(), [refreshMark, retainOnUnmount]);
 
   const persist = useCallback(
-    () => saveVideoMark(recipeId, positionRef.current, durationRef.current),
-    [recipeId],
+    () => {
+      saveVideoMark(recipeId, positionRef.current, durationRef.current);
+      onSaveSyncedMark?.(recipeId, positionRef.current, durationRef.current);
+    },
+    [onSaveSyncedMark, recipeId],
   );
 
   /* Watching is the one time the phone is being *looked* at without being
@@ -121,7 +151,7 @@ export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnm
   function openPlayer() {
     haptics.medium();
     beginVideoProgress(recipeId);
-    const at = loadVideoMark(recipeId).seconds;
+    const at = currentMark().seconds;
     positionRef.current = at;
     durationRef.current = null;
     ticksRef.current = 0;
@@ -145,6 +175,7 @@ export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnm
   function startOver() {
     positionRef.current = 0;
     forgetVideoMark(recipeId);
+    onClearSyncedMark?.(recipeId);
     setResumedFrom(0);
     setNoteVisible(false);
     webRef.current?.injectJavaScript('window.__rfSeek(0); true;');
@@ -178,6 +209,7 @@ export default function VideoPlayer({ recipeId, videoId, url, title, retainOnUnm
       // Watched to the end: next open starts from the top.
       positionRef.current = 0;
       finishVideoProgress(recipeId);
+      onClearSyncedMark?.(recipeId);
       return;
     }
     if (typeof msg.seconds === 'number' && Number.isFinite(msg.seconds) && msg.seconds > 0) {

@@ -857,6 +857,7 @@ export default function MealPlanScreen() {
         title: entry.recipe.title,
         imageUrl: entry.recipe.image_url,
         stepCount: entry.recipe.steps?.length ?? 0,
+        servings: entry.servings ?? entry.recipe.custom_servings ?? entry.recipe.servings ?? 1,
       });
     }
     router.navigate({ pathname: '/recipe/[id]', params: { id: entry.recipe_id } });

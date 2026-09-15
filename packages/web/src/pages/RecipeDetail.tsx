@@ -316,6 +316,11 @@ export default function RecipeDetail() {
     toggleIngredient: toggleSessionIngredient,
     toggleStep: toggleSessionStep,
     setStepCount,
+    setCookServings,
+    setCookTab,
+    toggleExpandedIngredient,
+    saveCookVideoMark,
+    clearCookVideoMark,
   } = useCookSession();
   const cook = cookFor(id);
   const cookMode = cook !== null;
@@ -372,8 +377,13 @@ export default function RecipeDetail() {
   // Recipes used as an ingredient of this one, and which of those rows are
   // expanded to show their ingredients inline.
   const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
-  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
-  const [mobileTab, setMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const [browseExpandedSubs, setBrowseExpandedSubs] = useState<Set<string>>(new Set());
+  const [browseMobileTab, setBrowseMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const expandedSubs = useMemo(
+    () => (cook ? new Set(cook.expandedIngredients) : browseExpandedSubs),
+    [cook, browseExpandedSubs],
+  );
+  const mobileTab = cook?.activeTab ?? browseMobileTab;
   const isMobile = useIsMobile();
   const [showAuthorNotes, setShowAuthorNotes] = useState(false);
   const [showMyNotes, setShowMyNotes] = useState(false);
@@ -536,6 +546,16 @@ export default function RecipeDetail() {
     if (id && cookMode && recipe) setStepCount(id, recipe.steps.length);
   }, [id, cookMode, recipe, setStepCount]);
 
+  // Serving adjustments made for this cook are session state too. A cook
+  // started from the meal plan learns its initial serving count once the recipe
+  // arrives; after that, a newer value from another device wins immediately.
+  useEffect(() => {
+    if (!id || !recipe || !cook) return;
+    const servings = cook.servings ?? recipe.custom_servings ?? recipe.servings ?? 1;
+    setCurrentServings(servings);
+    if (cook.servings === null) setCookServings(id, servings);
+  }, [id, recipe, cook, setCookServings]);
+
   // Keep the screen on whenever this recipe is cooking — including when you
   // switch back to it from the other pot. Only re-fires on arrival, so turning
   // the toggle off by hand (or the idle guard doing it) still sticks.
@@ -545,6 +565,25 @@ export default function RecipeDetail() {
 
   function updateServings(newServings: number) {
     setCurrentServings(newServings);
+    if (cook) setCookServings(cook.recipeId, newServings);
+  }
+
+  function selectMobileTab(tab: 'ingredients' | 'steps') {
+    setBrowseMobileTab(tab);
+    if (cook) setCookTab(cook.recipeId, tab);
+  }
+
+  function toggleSubRecipe(key: string) {
+    if (cook) {
+      toggleExpandedIngredient(cook.recipeId, key);
+      return;
+    }
+    setBrowseExpandedSubs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   async function saveServings() {
@@ -774,6 +813,9 @@ export default function RecipeDetail() {
         videoId={videoId}
         title={recipe.title}
         retainOnUnmount={cookMode}
+        syncedMark={cook?.videoMark ?? null}
+        onSaveSyncedMark={cook ? saveCookVideoMark : undefined}
+        onClearSyncedMark={cook ? clearCookVideoMark : undefined}
       />
     );
 
@@ -988,12 +1030,7 @@ export default function RecipeDetail() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setExpandedSubs((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(ingKey)) next.delete(ingKey);
-                        else next.add(ingKey);
-                        return next;
-                      });
+                      toggleSubRecipe(ingKey);
                     }}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? `Hide ${sub.title} ingredients` : `Show ${sub.title} ingredients`}
@@ -1701,7 +1738,7 @@ export default function RecipeDetail() {
                   return (
                     <button
                       key={key}
-                      onClick={() => setMobileTab(key)}
+                      onClick={() => selectMobileTab(key)}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -1991,6 +2028,8 @@ export default function RecipeDetail() {
                 title: recipe.title,
                 imageUrl: recipe.image_url,
                 stepCount: recipe.steps.length,
+                servings: currentServings,
+                activeTab: mobileTab,
               })
             }
             className="pointer-events-auto inline-flex items-center gap-2 transition-transform"

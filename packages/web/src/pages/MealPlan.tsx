@@ -902,6 +902,7 @@ export default function MealPlan() {
         title: entry.recipe.title,
         imageUrl: entry.recipe.image_url,
         stepCount: entry.recipe.steps?.length ?? 0,
+        servings: entry.servings ?? entry.recipe.custom_servings ?? entry.recipe.servings ?? 1,
       });
     }
     navigate(`/recipe/${entry.recipe_id}`);

@@ -25,6 +25,7 @@ interface Props {
 
 interface PlannedOption {
   entryId: string;
+  servings: number | null;
   recipe: Recipe;
 }
 
@@ -74,7 +75,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
         entries.reduce<PlannedOption[]>((acc, e) => {
           if (!e.recipe || seen.has(e.recipe.id)) return acc;
           seen.add(e.recipe.id);
-          acc.push({ entryId: e.id, recipe: e.recipe });
+          acc.push({ entryId: e.id, servings: e.servings, recipe: e.recipe });
           return acc;
         }, []),
       );
@@ -99,13 +100,14 @@ export default function AddToCookSheet({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  function pick(recipe: Recipe, entryId: string | null) {
+  function pick(recipe: Recipe, entryId: string | null, plannedServings: number | null = null) {
     startCook({
       recipeId: recipe.id,
       mealPlanEntryId: entryId,
       title: recipe.title,
       imageUrl: recipe.image_url,
       stepCount: recipe.steps?.length ?? 0,
+      servings: plannedServings ?? recipe.custom_servings ?? recipe.servings ?? 1,
     });
     onClose();
     navigate(`/recipe/${recipe.id}`);
@@ -127,10 +129,10 @@ export default function AddToCookSheet({ open, onClose }: Props) {
     // is a "grab the next thing" sheet, not a browser.
     .slice(0, q ? 40 : 8);
 
-  const row = (recipe: Recipe, entryId: string | null, key: string) => (
+  const row = (recipe: Recipe, entryId: string | null, key: string, plannedServings: number | null = null) => (
     <button
       key={key}
-      onClick={() => pick(recipe, entryId)}
+      onClick={() => pick(recipe, entryId, plannedServings)}
       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left"
       style={{ background: 'transparent', border: '1px solid transparent' }}
     >
@@ -232,7 +234,7 @@ export default function AddToCookSheet({ open, onClose }: Props) {
             {plannedShown.length > 0 && (
               <>
                 {heading('This week’s plan')}
-                {plannedShown.map((p) => row(p.recipe, p.entryId, `plan-${p.entryId}`))}
+                {plannedShown.map((p) => row(p.recipe, p.entryId, `plan-${p.entryId}`, p.servings))}
               </>
             )}
             {otherShown.length > 0 && (

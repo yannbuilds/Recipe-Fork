@@ -210,6 +210,11 @@ export default function RecipeDetailScreen() {
     toggleIngredient: toggleSessionIngredient,
     toggleStep: toggleSessionStep,
     setStepCount,
+    setCookServings,
+    setCookTab,
+    toggleExpandedIngredient,
+    saveCookVideoMark,
+    clearCookVideoMark,
   } = useCookSession();
   const activeCook = cookFor(id);
   const cookMode = activeCook !== null;
@@ -217,7 +222,8 @@ export default function RecipeDetailScreen() {
   // Lift this screen's floating buttons clear of the cooking bar.
   const cookBarOffset = useCookBarOffset();
 
-  const [tab, setTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const [browseTab, setBrowseTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const tab = activeCook?.activeTab ?? browseTab;
   // Check-offs live in the cooking session while this recipe is on the stove,
   // so they survive switching pots. Browsing a recipe that isn't cooking still
   // ticks — that state is just local and disposable.
@@ -232,7 +238,11 @@ export default function RecipeDetailScreen() {
     [activeCook, browseSteps],
   );
   // Which linked-recipe rows are opened up to show their ingredients inline.
-  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
+  const [browseExpandedSubs, setBrowseExpandedSubs] = useState<Set<string>>(new Set());
+  const expandedSubs = useMemo(
+    () => (activeCook ? new Set(activeCook.expandedIngredients) : browseExpandedSubs),
+    [activeCook, browseExpandedSubs],
+  );
   const [currentServings, setCurrentServings] = useState(1);
   const [savedServings, setSavedServings] = useState(1);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -319,6 +329,36 @@ export default function RecipeDetailScreen() {
   useEffect(() => {
     if (id && cookMode && recipe) setStepCount(id, recipe.steps.length);
   }, [id, cookMode, recipe, setStepCount]);
+
+  useEffect(() => {
+    if (!id || !recipe || !activeCook) return;
+    const servings = activeCook.servings ?? recipe.custom_servings ?? recipe.servings ?? 1;
+    setCurrentServings(servings);
+    if (activeCook.servings === null) setCookServings(id, servings);
+  }, [id, recipe, activeCook, setCookServings]);
+
+  function updateServings(newServings: number) {
+    setCurrentServings(newServings);
+    if (activeCook) setCookServings(activeCook.recipeId, newServings);
+  }
+
+  function selectTab(nextTab: 'ingredients' | 'steps') {
+    setBrowseTab(nextTab);
+    if (activeCook) setCookTab(activeCook.recipeId, nextTab);
+  }
+
+  function toggleSubRecipe(key: string) {
+    if (activeCook) {
+      toggleExpandedIngredient(activeCook.recipeId, key);
+      return;
+    }
+    setBrowseExpandedSubs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function toggleIngredientKey(key: string) {
     if (activeCook) {
@@ -696,7 +736,7 @@ export default function RecipeDetailScreen() {
                     key={key}
                     onPress={() => {
                       haptics.select();
-                      setTab(key);
+                      selectTab(key);
                     }}
                     style={{
                       paddingBottom: 12,
@@ -730,7 +770,7 @@ export default function RecipeDetailScreen() {
                 <Pressable
                   onPress={() => {
                     haptics.select();
-                    setCurrentServings((s) => Math.max(1, s - 1));
+                    updateServings(Math.max(1, currentServings - 1));
                   }}
                   style={{
                     width: 26,
@@ -753,7 +793,7 @@ export default function RecipeDetailScreen() {
                 <Pressable
                   onPress={() => {
                     haptics.select();
-                    setCurrentServings((s) => s + 1);
+                    updateServings(currentServings + 1);
                   }}
                   style={{
                     width: 26,
@@ -925,12 +965,7 @@ export default function RecipeDetailScreen() {
                               <Pressable
                                 onPress={() => {
                                   haptics.select();
-                                  setExpandedSubs((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(key)) next.delete(key);
-                                    else next.add(key);
-                                    return next;
-                                  });
+                                  toggleSubRecipe(key);
                                 }}
                                 hitSlop={10}
                                 accessibilityRole="button"
@@ -1093,6 +1128,9 @@ export default function RecipeDetailScreen() {
                 url={recipe.video_url!}
                 title={recipe.title}
                 retainOnUnmount={cookMode}
+                syncedMark={activeCook?.videoMark ?? null}
+                onSaveSyncedMark={activeCook ? saveCookVideoMark : undefined}
+                onClearSyncedMark={activeCook ? clearCookVideoMark : undefined}
               />
             </View>
           )}
@@ -1179,6 +1217,8 @@ export default function RecipeDetailScreen() {
                 title: recipe.title,
                 imageUrl: recipe.image_url,
                 stepCount: recipe.steps.length,
+                servings: currentServings,
+                activeTab: tab,
               });
             }}
             style={{
