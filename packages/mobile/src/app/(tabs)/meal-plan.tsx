@@ -96,7 +96,7 @@ const SETTLE_OUT_MS = 380;
 
 /** What the recipe picker hands back — enough to add a cook and to know whether
  *  the recipe has sub-recipes worth asking about. */
-type PickedRecipe = Pick<Recipe, 'id' | 'title' | 'ingredients'>;
+type PickedRecipe = Pick<Recipe, 'id' | 'title' | 'ingredients' | 'servings' | 'custom_servings'>;
 
 function weeksStartingInMonth(month: Date): Date[] {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -551,11 +551,15 @@ export default function MealPlanScreen() {
 
   // ── Entry mutations ─────────────────────────────────
   async function addCook(
-    recipe: Pick<Recipe, 'id'>,
+    recipe: PickedRecipe,
     dayIndex: number | null,
     makeComponents?: boolean,
   ) {
     if (!plan) return;
+    const plannedNights = prefs?.nights ?? 1;
+    const servings = prefs
+      ? planServings(recipe, prefs.servings, plannedNights)
+      : recipe.custom_servings ?? recipe.servings ?? null;
     const { data } = await supabase
       .from('meal_plan_recipes')
       .insert({
@@ -563,8 +567,8 @@ export default function MealPlanScreen() {
         recipe_id: recipe.id,
         day_index: dayIndex,
         entry_type: 'cook',
-        servings: prefs?.servings ?? null,
-        planned_nights: 1,
+        servings,
+        planned_nights: plannedNights,
         ...(makeComponents === undefined ? {} : { make_components: makeComponents }),
       })
       .select('*, recipe:recipes(*)')
@@ -824,6 +828,8 @@ export default function MealPlanScreen() {
   const planningNudge = getPlanningNudge();
 
   const existingIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+  const addBatchNights = prefs?.nights ?? 1;
+  const addBatchLabel = `${addBatchNights} MEAL${addBatchNights === 1 ? '' : 'S'}`;
 
   // ── Cooking ─────────────────────────────────────────
   /**
@@ -2180,8 +2186,8 @@ export default function MealPlanScreen() {
 
       <RecipePickerSheet
         open={showAdd}
-        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · ONE MEAL` : 'ADD ONE MEAL'}
-        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
+        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · ${addBatchLabel}` : `ADD ONE COOK · ${addBatchLabel}`}
+        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a recipe to the week'}
         existingIds={existingIds}
         existingLabel="In the week"
         // Plan mode's order, because this is plan mode's job in miniature:

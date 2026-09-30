@@ -591,10 +591,13 @@ export default function MealPlan() {
   async function addCook(
     recipe: Recipe,
     dayIndex: number | null,
-    servings?: number,
     makeComponents?: boolean,
   ) {
     if (!plan) return;
+    const plannedNights = prefs?.nights ?? 1;
+    const servings = prefs
+      ? planServings(recipe, prefs.servings, plannedNights)
+      : recipe.custom_servings ?? recipe.servings ?? null;
     const { data, error } = await supabase
       .from('meal_plan_recipes')
       .insert({
@@ -602,8 +605,8 @@ export default function MealPlan() {
         recipe_id: recipe.id,
         day_index: dayIndex,
         entry_type: 'cook',
-        servings: servings ?? null,
-        planned_nights: 1,
+        servings,
+        planned_nights: plannedNights,
         ...(makeComponents === undefined ? {} : { make_components: makeComponents }),
       })
       .select('*, recipe:recipes(*)')
@@ -623,7 +626,7 @@ export default function MealPlan() {
       setPendingAdd({ recipe, dayIndex });
       return;
     }
-    addCook(recipe, dayIndex, prefs?.servings);
+    addCook(recipe, dayIndex);
   }
 
   /** Update how many meals one cook covers without scheduling leftover days. */
@@ -872,6 +875,8 @@ export default function MealPlan() {
   const planningNudge = getPlanningNudge();
 
   const existingRecipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+  const addBatchNights = prefs?.nights ?? 1;
+  const addBatchLabel = `${addBatchNights} meal${addBatchNights === 1 ? '' : 's'}`;
 
   // ── Cooking ─────────────────────────────────────────
   /**
@@ -2211,8 +2216,8 @@ export default function MealPlan() {
         // Plan mode's order, because this is plan mode's job in miniature:
         // what haven't I cooked in a while?
         defaultSort="suggested"
-        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · one meal` : 'Add one meal'}
-        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a meal to the week'}
+        eyebrow={addTarget !== null ? `${DAY_SHORT[addTarget]} · ${addBatchLabel}` : `Add one cook · ${addBatchLabel}`}
+        title={addTarget !== null ? `Cook something on ${DAY_SHORT[addTarget]}` : 'Add a recipe to the week'}
         onAdd={(recipe) => {
           startAddCook(recipe, addTarget);
           setShowAddModal(false);
@@ -2233,7 +2238,7 @@ export default function MealPlan() {
         }
         onAnswer={(makeComponents) => {
           if (pendingAdd) {
-            addCook(pendingAdd.recipe, pendingAdd.dayIndex, prefs?.servings, makeComponents);
+            addCook(pendingAdd.recipe, pendingAdd.dayIndex, makeComponents);
           }
           setPendingAdd(null);
         }}

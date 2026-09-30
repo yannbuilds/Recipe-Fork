@@ -1,33 +1,30 @@
 import { hasSubRecipes } from '@recipe-aggregator/shared/ingredients';
-import type { Ingredient } from '@recipe-aggregator/shared';
+import type { Recipe } from '@recipe-aggregator/shared';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import { SubRecipePromptBody } from '@/components/SubRecipePromptSheet';
 import { Body, Mono, Serif } from '@/components/ui';
 import { haptics } from '@/lib/haptics';
+import { planServings } from '@/lib/mealPlanDays';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import { getWeekOptions } from '@/lib/weekHelpers';
 
 interface Props {
   open: boolean;
-  recipeId: string;
-  recipeTitle: string;
-  /** Needed to spot linked sub-recipes and ask about them before adding. */
-  ingredients: Ingredient[];
+  recipe: Recipe;
   userId: string;
   onClose: () => void;
 }
 
 export default function WeekPickerSheet({
   open,
-  recipeId,
-  recipeTitle,
-  ingredients,
+  recipe,
   userId,
   onClose,
 }: Props) {
+  const { id: recipeId, title: recipeTitle, ingredients } = recipe;
   const t = useTheme();
   const [addedWeeks, setAddedWeeks] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -126,11 +123,26 @@ export default function WeekPickerSheet({
     makeComponents: boolean | null,
   ) {
     setBusy(weekStart);
-    await supabase.from('meal_plan_recipes').insert({
+    const { data: prefs } = await supabase
+      .from('profiles')
+      .select('plan_default_servings, plan_nights_per_meal')
+      .eq('id', userId)
+      .maybeSingle();
+    const plannedNights = prefs?.plan_nights_per_meal ?? 1;
+    const servings = prefs?.plan_default_servings
+      ? planServings(recipe, prefs.plan_default_servings, plannedNights)
+      : recipe.custom_servings ?? recipe.servings ?? null;
+    const { error } = await supabase.from('meal_plan_recipes').insert({
       meal_plan_id: planId,
       recipe_id: recipeId,
+      servings,
+      planned_nights: plannedNights,
       ...(makeComponents === null ? {} : { make_components: makeComponents }),
     });
+    if (error) {
+      setBusy(null);
+      return;
+    }
     setAddedWeeks((prev) => new Set(prev).add(weekStart));
     setPending(null);
     setBusy(null);

@@ -1309,9 +1309,7 @@ export default function RecipeDetailScreen() {
       {user && (
         <WeekPickerSheet
           open={showWeekPicker}
-          recipeId={recipe.id}
-          recipeTitle={recipe.title}
-          ingredients={recipe.ingredients}
+          recipe={recipe}
           userId={user.id}
           onClose={() => setShowWeekPicker(false)}
         />

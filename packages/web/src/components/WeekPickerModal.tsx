@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { hasSubRecipes, supabase } from '@recipe-aggregator/shared';
-import type { Ingredient } from '@recipe-aggregator/shared';
+import type { Recipe } from '@recipe-aggregator/shared';
 import { SubRecipePromptBody } from './SubRecipePrompt';
 import { getWeekOptions } from '../utils/weekHelpers';
+import { planServings } from '../utils/mealPlanDays';
 import ModalPortal from './ModalPortal';
 
 type ModalStep =
@@ -17,22 +18,18 @@ type ModalStep =
 
 interface WeekPickerModalProps {
   open: boolean;
-  recipeId: string;
-  recipeTitle: string;
-  /** Needed to spot linked sub-recipes and ask about them before adding. */
-  ingredients: Ingredient[];
+  recipe: Recipe;
   userId: string;
   onClose: () => void;
 }
 
 export default function WeekPickerModal({
   open,
-  recipeId,
-  recipeTitle,
-  ingredients,
+  recipe,
   userId,
   onClose,
 }: WeekPickerModalProps) {
+  const { id: recipeId, title: recipeTitle, ingredients } = recipe;
   const [step, setStep] = useState<ModalStep>('pick');
   const [displayStep, setDisplayStep] = useState<ModalStep>('pick');
   const [fading, setFading] = useState(false);
@@ -156,11 +153,22 @@ export default function WeekPickerModal({
     makeComponents: boolean | null,
   ) {
     setStep('adding');
+    const { data: prefs } = await supabase
+      .from('profiles')
+      .select('plan_default_servings, plan_nights_per_meal')
+      .eq('id', userId)
+      .maybeSingle();
+    const plannedNights = prefs?.plan_nights_per_meal ?? 1;
+    const servings = prefs?.plan_default_servings
+      ? planServings(recipe, prefs.plan_default_servings, plannedNights)
+      : recipe.custom_servings ?? recipe.servings ?? null;
     const { error } = await supabase
       .from('meal_plan_recipes')
       .insert({
         meal_plan_id: planId,
         recipe_id: recipeId,
+        servings,
+        planned_nights: plannedNights,
         ...(makeComponents === null ? {} : { make_components: makeComponents }),
       });
 

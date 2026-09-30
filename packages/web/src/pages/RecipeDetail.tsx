@@ -2005,9 +2005,7 @@ export default function RecipeDetail() {
       {user && id && recipe && (
         <WeekPickerModal
           open={showWeekPicker}
-          recipeId={id}
-          recipeTitle={recipe.title}
-          ingredients={recipe.ingredients}
+          recipe={recipe}
           userId={user.id}
           onClose={() => setShowWeekPicker(false)}
         />
