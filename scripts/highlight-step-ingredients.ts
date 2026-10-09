@@ -57,9 +57,19 @@ async function main() {
       if (error) throw error;
       if (data.length !== 1) throw new Error(`Recipe changed during this run: ${recipe.id}. ${saved} already saved; rerun to continue.`);
       saved++;
-      const { data: stored, error: readError } = await db.from('recipes').select('steps').eq('id', recipe.id).single();
+      if (saved % 50 === 0) console.log(`Saved ${saved}/${changes.length} recipes...`);
+    }
+    // Read back in small groups: the same per-recipe verification without
+    // hundreds of extra network round trips during a collection rollout.
+    for (let offset = 0; offset < changes.length; offset += 50) {
+      const batch = changes.slice(offset, offset + 50);
+      const { data: stored, error: readError } = await db.from('recipes').select('id,steps')
+        .in('id', batch.map(({ recipe }) => recipe.id));
       if (readError) throw readError;
-      if (!isDeepStrictEqual(stored.steps, steps)) throw new Error(`Read-back verification failed: ${recipe.id}`);
+      for (const { recipe, steps } of batch) {
+        const row = stored.find((row) => row.id === recipe.id);
+        if (!row || !isDeepStrictEqual(row.steps, steps)) throw new Error(`Read-back verification failed: ${recipe.id}`);
+      }
     }
     console.log(`\nSaved and verified ${saved} recipes. Instruction wording unchanged.`);
   } else if (!values.apply) {

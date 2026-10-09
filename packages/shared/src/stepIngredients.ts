@@ -52,17 +52,27 @@ function numberVariants(term: string): string[] {
 export function ingredientAliases(ingredients: Ingredient[]): string[] {
   const aliases = new Set<string>();
   for (const { item } of ingredients) {
-    const base = item.toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[,;]/)[0]
-      .replace(/\s+/g, ' ').trim();
-    const name = base.replace(/^(?:(?:fresh|dried|frozen|chopped|diced|minced|sliced|grated|shredded|crumbled|ground|crushed|boneless|skinless|unsalted|salted|large|small|medium|finely|roughly)\s+)+/, '');
-    const terms = [base, name];
-    // Instructions commonly shorten these names; don't guess arbitrary nouns
-    // ("powder", "cream", etc.) that could refer to several different foods.
-    const short = name.match(/(?:^|\s)(oil|vinegar|pepper|parsley|wings)$/)?.[1];
-    if (short) terms.push(short);
-    for (const term of terms) {
-      if (term.length < 3) continue;
-      for (const variant of numberVariants(term)) aliases.add(variant);
+    // Imported names often contain nested notes. Remove them from the inside
+    // out, so "olive oil ((Note 1))" still ends in the ingredient name.
+    let cleaned = item.toLowerCase();
+    while (/\([^()]*\)/.test(cleaned)) cleaned = cleaned.replace(/\([^()]*\)/g, ' ');
+    const base = cleaned.split(/[,;]/)[0].replace(/\s+/g, ' ').trim();
+    for (const alternative of base.split(/\s+(?:or|and)\s+|\/|&/)) {
+      const name = alternative.trim().replace(/^(?:(?:fresh|dried|frozen|chopped|diced|minced|sliced|grated|shredded|crumbled|ground|crushed|boneless|skinless|unsalted|salted|large|small|medium|finely|roughly)\s+)+/, '');
+      // "Garlic cloves", "parsley leaves", "lime juice" and "oil spray"
+      // commonly become just "garlic", "parsley", "lime" and "oil".
+      const core = name.replace(/(?:\s+(?:cloves?|leaves|stems?|sprigs?|fillets?|tubes?|kernels?|stalks?|sticks?|thighs?|breasts?|drumsticks?|wings?|chops?|juice|zest|spray))+$/, '');
+      const terms = [alternative.trim(), name, core];
+      for (const phrase of [name, core]) {
+        const short = phrase.match(/\p{L}+$/u)?.[0];
+        // A final food noun handles "red onion", "canned tuna", "soft
+        // boiled eggs", etc. Generic modifiers/components aren't names.
+        if (short && !/^(?:powder|paste|sauce|extract|flakes|seeds|spray|cloves|leaves|stems|sprigs|fillets|tubes|kernels|stalks|sticks|juice|zest|plain|purpose|similar|choice|taste|needed|garnish|optional|serving|each|large|small|medium|size|sub|note|notes)$/.test(short)) terms.push(short);
+      }
+      for (const term of terms) {
+        if (term.length < 3 || /^(?:plain|purpose|similar|optional|garnish)$/.test(term)) continue;
+        for (const variant of numberVariants(term)) aliases.add(variant);
+      }
     }
   }
   return [...aliases];

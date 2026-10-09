@@ -26,3 +26,14 @@ assert.equal(hasIngredientHighlighting(annotateStepIngredients(plain, [])), true
 assert.deepEqual(stepTextParts({ order: 1, instruction: 'Use a+b (sauce).', ingredient_mentions: ['a+b (sauce)'] })
   .filter((part) => part.ingredient).map((part) => part.text), ['a+b (sauce)']);
 console.log('Step ingredient highlighting: all tests passed');
+
+const importedIngredients = ['extra virgin olive oil ((Note 1))', 'soft boiled eggs', 'garlic cloves',
+  'penne pasta ((or other short pasta))', 'canned tuna', 'roasted peanuts', 'lime juice (fresh)',
+  'cooked peeled prawns / shrimp', 'red onion', 'chicken thighs, skin-on', 'Oil spray ((I use olive oil))',
+  'baking powder', 'hot sauce']
+  .map((item): Ingredient => ({ item, quantity: '', unit: '' }));
+const importedStep = annotateStepIngredients([{ order: 1, instruction:
+  'Mix eggs, egg, garlic, pasta, tuna, peanuts, lime, prawns, shrimp and onion with oil. Add chicken and thighs. Use baking powder and hot sauce; keep powder and sauce plain.' }], importedIngredients)[0];
+assert.deepEqual(stepTextParts(importedStep).filter(p => p.ingredient).map(p => p.text),
+  ['eggs', 'egg', 'garlic', 'pasta', 'tuna', 'peanuts', 'lime', 'prawns', 'shrimp', 'onion', 'oil', 'chicken', 'thighs', 'baking powder', 'hot sauce']);
+console.log('Imported ingredient shorthand: all tests passed');
