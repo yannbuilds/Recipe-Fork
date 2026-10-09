@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { formatVideoTime } from '@recipe-aggregator/shared';
 import type { VideoMark } from '@recipe-aggregator/shared';
 import {
@@ -44,8 +45,6 @@ export default function VideoPlayer({
   /** Where this open started, so the overlay can say so and offer a way back. */
   const [resumedFrom, setResumedFrom] = useState(0);
   const [noteVisible, setNoteVisible] = useState(false);
-  /** The API didn't turn up — fall back to a plain embed for this open. */
-  const [apiFailed, setApiFailed] = useState(false);
   /** The mark as it stands, for the thumbnail's watched bar and resume pill. */
   const [mark, setMark] = useState<{ seconds: number; fraction: number | null }>({
     seconds: 0,
@@ -106,8 +105,9 @@ export default function VideoPlayer({
     positionRef.current = at;
     setResumedFrom(at);
     setNoteVisible(at > 0);
-    setApiFailed(false);
-    setIsOpen(true);
+    // Mount the autoplay iframe within this click, before loading the API can
+    // outlive the browser's user activation.
+    flushSync(() => setIsOpen(true));
   }
 
   function close() {
@@ -160,13 +160,11 @@ export default function VideoPlayer({
   /*
    * The player itself.
    *
-   * Built through the IFrame API rather than dropped in as an `<iframe>` so it
-   * can be asked where it got to before it's destroyed — that answer is the
-   * whole resume feature. It's created into a plain DOM node appended to the
-   * React-owned host: the API swaps that node for its iframe, and React must
-   * never be holding a reference to something it didn't put there.
+   * Start the iframe immediately, then attach the API to record its position.
+   * The iframe belongs to the player effect, inside a React-owned host, so
+   * the API can destroy it without removing a node React owns.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) return;
     const host = hostRef.current;
     if (!host) return;
@@ -174,24 +172,27 @@ export default function VideoPlayer({
     let cancelled = false;
     let ticks = 0;
     let poll = 0;
-    const mount = document.createElement('div');
+    const mount = document.createElement('iframe');
+    const params = new URLSearchParams({
+      autoplay: '1',
+      enablejsapi: '1',
+      rel: '0',
+      playsinline: '1',
+      modestbranding: '1',
+      start: String(Math.floor(openAtRef.current)),
+      origin: window.location.origin,
+    });
+    mount.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params}`;
+    mount.title = `${title} video`;
+    mount.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    mount.allowFullscreen = true;
+    mount.className = 'w-full h-full border-0';
     host.appendChild(mount);
 
     loadYouTubeApi()
       .then((YT) => {
         if (cancelled) return;
         playerRef.current = new YT.Player(mount, {
-          width: '100%',
-          height: '100%',
-          videoId,
-          playerVars: {
-            autoplay: 1,
-            rel: 0,
-            playsinline: 1,
-            modestbranding: 1,
-            start: Math.floor(openAtRef.current),
-            origin: window.location.origin,
-          },
           events: {
             onReady: (e) => {
               if (cancelled) return;
@@ -234,7 +235,8 @@ export default function VideoPlayer({
         });
       })
       .catch(() => {
-        if (!cancelled) setApiFailed(true);
+        // The original embed keeps playing even without the API; it still
+        // starts at the saved mark, but cannot record a new one this time.
       });
 
     return () => {
@@ -252,7 +254,7 @@ export default function VideoPlayer({
       persist();
       host.replaceChildren();
     };
-  }, [isOpen, videoId, recipeId, readPlayerClock, persist]);
+  }, [isOpen, videoId, title, recipeId, readPlayerClock, persist]);
 
   /* Browsing a recipe owns a page-scoped mark. A cooking recipe is different:
      its component unmounts every time the cook bar swaps to another pot, so
@@ -438,23 +440,11 @@ export default function VideoPlayer({
             style={{ aspectRatio: '16/9', maxHeight: '80vh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {apiFailed ? (
-              /* No API — still resumes from the mark, it just can't record a
-                 new one this time round. */
-              <iframe
-                className="w-full h-full rounded-lg"
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&playsinline=1&start=${Math.floor(openAtRef.current)}`}
-                title={`${title} video`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            ) : (
-              <div
-                ref={hostRef}
-                className="w-full h-full rounded-lg overflow-hidden"
-                style={{ background: '#000' }}
-              />
-            )}
+            <div
+              ref={hostRef}
+              className="w-full h-full rounded-lg overflow-hidden"
+              style={{ background: '#000' }}
+            />
           </div>
         </div>
         </ModalPortal>

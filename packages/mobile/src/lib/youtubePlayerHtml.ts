@@ -31,7 +31,12 @@ export function youTubePlayerHtml(videoId: string, startAt: number): string {
     </style>
   </head>
   <body>
-    <div id="player"></div>
+    <!-- Start playback as soon as the tapped-open WebView loads, without
+         waiting for the API. Attach the API afterward for resume/controls. -->
+    <iframe id="player"
+      src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&amp;enablejsapi=1&amp;playsinline=1&amp;rel=0&amp;modestbranding=1&amp;start=${Math.floor(startAt)}&amp;origin=https%3A%2F%2Fwww.youtube.com"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen style="border: 0"></iframe>
     <script>
       var START = ${Math.floor(startAt)};
       var player = null;
@@ -51,10 +56,6 @@ export function youTubePlayerHtml(videoId: string, startAt: number): string {
       };
       window.onYouTubeIframeAPIReady = function () {
         player = new YT.Player('player', {
-          width: '100%',
-          height: '100%',
-          videoId: '${videoId}',
-          playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, start: START },
           events: {
             onReady: function (e) {
               ready = true;
