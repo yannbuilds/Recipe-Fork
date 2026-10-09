@@ -27,6 +27,8 @@ export interface Step {
   order: number;
   instruction: string;
   category?: string;
+  /** Exact ingredient phrases to bold; absent until this recipe is opted in. */
+  ingredient_mentions?: string[];
 }
 
 /**

@@ -38,6 +38,10 @@
       "import": "./dist/scaling.js",
       "types": "./dist/scaling.d.ts"
     },
+    "./stepIngredients": {
+      "import": "./dist/stepIngredients.js",
+      "types": "./dist/stepIngredients.d.ts"
+    },
     "./types": {
       "import": "./dist/types.js",
       "types": "./dist/types.d.ts"

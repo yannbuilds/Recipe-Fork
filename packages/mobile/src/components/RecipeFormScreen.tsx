@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { subRecipeIdsIn } from '@recipe-aggregator/shared/ingredients';
 import type { Ingredient, Recipe, Step, Tag } from '@recipe-aggregator/shared';
+import { annotateStepIngredients, hasIngredientHighlighting } from '@recipe-aggregator/shared/stepIngredients';
 import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
@@ -63,6 +64,7 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
   const [cook, setCook] = useState('');
   const [ingredients, setIngredients] = useState<IngRow[]>([{ quantity: '', unit: '', item: '' }]);
   const [steps, setSteps] = useState<string[]>(['']);
+  const [highlightIngredients, setHighlightIngredients] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [tagQuery, setTagQuery] = useState('');
@@ -96,6 +98,7 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
 
       if (recipeResult.data) {
         const r = recipeResult.data as Recipe;
+        setHighlightIngredients(hasIngredientHighlighting(r.steps));
         setTitle(r.title);
         setDescription(r.description ?? '');
         setImageUrl(r.image_url ?? '');
@@ -285,7 +288,7 @@ function StructuredRecipeFormScreen({ recipeId }: Props) {
       prep_time: prep ? Number(prep) : null,
       cook_time: cook ? Number(cook) : null,
       ingredients: cleanIngredients,
-      steps: cleanSteps,
+      steps: highlightIngredients ? annotateStepIngredients(cleanSteps, cleanIngredients) : cleanSteps,
     };
 
     try {

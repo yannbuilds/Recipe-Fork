@@ -16,6 +16,8 @@
     "test:recipe-extraction": "tsx scripts/test-recipe-schema.ts",
     "test:ingredient-aggregation": "tsx scripts/test-ingredient-aggregation.ts",
     "test:recipe-source": "tsx scripts/test-recipe-source.ts",
+    "test:step-ingredients": "node --import tsx scripts/test-step-ingredients.ts",
+    "highlight:steps": "node --import tsx scripts/highlight-step-ingredients.ts",
     "test:parse-recipe-text": "tsx scripts/test-parse-recipe-text.ts",
     "test:video-progress": "node --import tsx scripts/test-video-progress.ts",
     "test:social-source": "tsx scripts/test-social-source.ts",

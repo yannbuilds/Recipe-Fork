@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Link2 } from 'lucide-react';
 import { subRecipeIdsIn, supabase } from '@recipe-aggregator/shared';
 import type { Ingredient, Step, Recipe, Tag } from '@recipe-aggregator/shared';
+import { annotateStepIngredients, hasIngredientHighlighting } from '@recipe-aggregator/shared/stepIngredients';
 import AddRecipeModal from '../components/AddRecipeModal';
 import PhotoField from '../components/PhotoField';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +43,7 @@ function StructuredRecipeForm() {
   const [steps, setSteps] = useState<Step[]>([
     { order: 1, instruction: '', category: '' },
   ]);
+  const [highlightIngredients, setHighlightIngredients] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [newTagName, setNewTagName] = useState('');
@@ -71,6 +73,7 @@ function StructuredRecipeForm() {
         setError(recipeResult.error.message);
       } else {
         const recipe = recipeResult.data as Recipe;
+        setHighlightIngredients(hasIngredientHighlighting(recipe.steps));
         setTitle(recipe.title);
         setDescription(recipe.description ?? '');
         setServings(recipe.servings != null ? String(recipe.servings) : '');
@@ -299,7 +302,9 @@ function StructuredRecipeForm() {
       video_url: videoUrl.trim() || null,
       image_url: savedImageUrl,
       ingredients: filteredIngredients,
-      steps: filteredSteps,
+      steps: highlightIngredients
+        ? annotateStepIngredients(filteredSteps, filteredIngredients)
+        : filteredSteps,
       author_notes: authorNotes.trim() || null,
     };
 

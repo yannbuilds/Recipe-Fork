@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
 import {
   SUB_RECIPE_SELECT,
   resolveSubRecipe,
@@ -1107,7 +1108,9 @@ export default function RecipeDetailScreen() {
                               textDecorationLine: done ? 'line-through' : 'none',
                             }}
                           >
-                            {step.instruction}
+                            {stepTextParts(step).map((part, index) => part.ingredient
+                              ? <Body key={index} size={15} weight="bold" color={done ? t.muted : t.text}>{part.text}</Body>
+                              : part.text)}
                           </Body>
                         </Pressable>
                       );

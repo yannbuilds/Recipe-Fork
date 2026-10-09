@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
 import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
@@ -791,7 +792,9 @@ export default function RecipeDetail() {
                   opacity: isDone ? 0.45 : 1,
                 }}
               >
-                {step.instruction}
+                {stepTextParts(step).map((part, index) => part.ingredient
+                  ? <strong key={index} style={{ fontWeight: 700 }}>{part.text}</strong>
+                  : part.text)}
               </div>
             </div>
           );
