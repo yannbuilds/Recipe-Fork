@@ -14,6 +14,33 @@ Mobile App  ──────→   (future)     ←──  Future clients...
 
 All clients share the same backend (Supabase). No custom API layer needed – each client talks directly to Supabase using the JS client library.
 
+## Mealime import rule
+
+When importing or repairing a recipe from `mealime.com`, check the ingredient
+amounts listed beneath **every cooking step**. Mealime often omits pantry amounts
+(oil, spices, honey, vinegar, etc.) from both its ingredient list and Recipe
+JSON-LD. A successful JSON-LD import alone does not mean quantities are complete.
+The public page also includes these step annotations in
+`__NEXT_DATA__.props.pageProps.publishedRecipe.instructions[].secondary_message`.
+
+- Use the exact linked recipe variant and verify its serving count matches the
+  saved recipe before copying quantities; do not mix serving sizes or unit variants.
+- Fill missing ingredient quantities from the step annotations. Sum repeated
+  uses across steps, converting compatible units explicitly. Keep the individual
+  amounts in the cooking steps so the cook knows how much goes into each component.
+- Update `original_text` alongside `quantity` and `unit`: web and mobile display
+  that text and use the structured quantity to scale servings.
+- Preserve existing quantities and unrelated recipe data. Never guess an amount
+  when the source says "to taste" or provides no measured quantity.
+- Repair the existing Supabase row, rather than re-importing a duplicate. Verify
+  the displayed totals and serving scaling used by both web and mobile.
+- For retrospective repairs, preview the changes and save the original row before
+  writing. A one-recipe trial must stay limited to that recipe until the user
+  authorises the rest of the cookbook.
+
+This is a required import/repair check; the generic importer does not currently
+recover Mealime's step annotations automatically.
+
 ## Tech Stack
 
 | Layer          | Technology            | Why                                                    |
