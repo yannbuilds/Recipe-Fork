@@ -798,7 +798,7 @@ export default function RecipeDetail() {
                 }}
               >
                 {stepTextParts(step).map((part, index) => part.ingredient
-                  ? <strong key={index} style={{ fontWeight: 700 }}>{part.text}</strong>
+                  ? <strong key={index} className="rf-ingredient-marker" data-completed={isDone || undefined}>{part.text}</strong>
                   : part.text)}
               </div>
             </div>

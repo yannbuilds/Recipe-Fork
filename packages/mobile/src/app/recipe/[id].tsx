@@ -1110,7 +1110,8 @@ export default function RecipeDetailScreen() {
                             }}
                           >
                             {stepTextParts(step).map((part, index) => part.ingredient
-                              ? <Body key={index} size={15} weight="bold" color={done ? t.muted : t.text}>{part.text}</Body>
+                              ? <Body key={index} size={15} weight="semi" color={done ? t.muted : t.green}
+                                  style={{ backgroundColor: done ? 'transparent' : t.greenLight }}>{part.text}</Body>
                               : part.text)}
                           </Body>
                         </Pressable>

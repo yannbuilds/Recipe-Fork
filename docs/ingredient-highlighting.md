@@ -1,11 +1,17 @@
 # Ingredient highlighting
 
 The web and mobile detail pages calculate ingredient mentions from the current
-ingredients and steps, then bold them using native text elements. Instructions
+ingredients and steps, then mark them using native text elements. Instructions
 remain plain text; no HTML or Markdown is saved. Since 10 October 2026,
 highlighting applies automatically to all new recipes, including extension,
 URL, photo, pasted-text and manual imports. No backfill is needed after saving
 or editing a recipe; saved `steps[].ingredient_mentions` are optional metadata.
+
+The approved Herb marker design uses semibold green text and a soft sage wash,
+with theme colours for light and dark mode. Web paints a lower stroke that
+continues across wrapped lines; native mobile uses an inline sage background.
+Completed steps mute the text and remove the wash. This is display styling for
+every recipe, so existing and future database rows need no changes.
 
 The initial Hot Honey Wings trial can be previewed or refreshed individually:
 
