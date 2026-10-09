@@ -37,3 +37,25 @@ const importedStep = annotateStepIngredients([{ order: 1, instruction:
 assert.deepEqual(stepTextParts(importedStep).filter(p => p.ingredient).map(p => p.text),
   ['eggs', 'egg', 'garlic', 'pasta', 'tuna', 'peanuts', 'lime', 'prawns', 'shrimp', 'onion', 'oil', 'chicken', 'thighs', 'baking powder', 'hot sauce']);
 console.log('Imported ingredient shorthand: all tests passed');
+
+// Detail pages derive highlights for fresh imports and recompute after edits,
+// without mutating the plain instructions returned by any importer.
+const newIngredients: Ingredient[] = ['lamb shoulder', 'rosemary', 'olive oil']
+  .map(item => ({ item, quantity: '', unit: '' }));
+const freshSteps: Step[] = [{ order: 1, category: 'Slow cook', instruction: 'Brown lamb in oil. Add rosemary; cover and cook.' }];
+const sourceSnapshot = structuredClone(freshSteps);
+const freshParts = annotateStepIngredients(freshSteps, newIngredients).map(stepTextParts);
+assert.deepEqual(freshParts[0].filter(p => p.ingredient).map(p => p.text), ['lamb', 'oil', 'rosemary']);
+assert.deepEqual(freshSteps, sourceSnapshot, 'fresh imports are not mutated by display highlighting');
+const editedSteps = [{ ...freshSteps[0], instruction: 'Brown beef in oil.', ingredient_mentions: ['lamb', 'rosemary'] }];
+const editedIngredients = [{ item: 'beef', quantity: '', unit: '' }, newIngredients[2]];
+assert.deepEqual(annotateStepIngredients(editedSteps, editedIngredients).map(stepTextParts)[0]
+  .filter(p => p.ingredient).map(p => p.text), ['beef', 'oil'], 'stale saved mentions cannot disable highlighting after an edit');
+console.log('Automatic new-recipe and edit highlighting: all tests passed');
+
+const lambIngredients = ['boneless lamb shoulder (, cut into pieces (Note 1))',
+  'pappardelle, mafaldine, rigatoni (or other shapes (Note 2))', 'Parmesan for serving']
+  .map(item => ({ item, quantity: '', unit: '' }));
+assert.deepEqual(annotateStepIngredients([{ order: 1, instruction: 'Brown lamb. Toss with pasta. Serve with parmesan.' }], lambIngredients)
+  .map(stepTextParts)[0].filter(p => p.ingredient).map(p => p.text), ['lamb', 'pasta', 'parmesan']);
+console.log('Lamb recipe ingredient shorthand: all tests passed');

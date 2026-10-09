@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
+import { annotateStepIngredients, stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
 import {
   SUB_RECIPE_SELECT,
   resolveSubRecipe,
@@ -316,7 +316,8 @@ export default function RecipeDetailScreen() {
   const idleGuard = useIdleScreenOff(isAwake, () => setIsAwake(false));
 
   const steps = useMemo(
-    () => (recipe ? [...recipe.steps].sort((a, b) => a.order - b.order) : []),
+    // Imports don't need stored annotations; edits always use current ingredients.
+    () => (recipe ? annotateStepIngredients(recipe.steps, recipe.ingredients).sort((a, b) => a.order - b.order) : []),
     [recipe],
   );
 

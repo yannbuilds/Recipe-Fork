@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
+import { annotateStepIngredients, stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
 import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
@@ -330,6 +330,12 @@ export default function RecipeDetail() {
   // fixed to the viewport rather than laid out above it.
   const cookBarOffset = useCookBarOffset();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  // Derive from current content so every import path and edit gets highlighting,
+  // including recipes without the metadata saved by the original backfill.
+  const sortedSteps = useMemo(
+    () => recipe ? annotateStepIngredients(recipe.steps, recipe.ingredients).sort((a, b) => a.order - b.order) : [],
+    [recipe],
+  );
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -708,7 +714,6 @@ export default function RecipeDetail() {
   }
 
   /* Grouping logic — category headings over the saved order. */
-  const sortedSteps = [...recipe.steps].sort((a, b) => a.order - b.order);
 
   // Headings break the list into runs rather than collecting every item of a
   // category together: the saved order is the order you arranged in the editor,

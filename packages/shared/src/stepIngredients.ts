@@ -56,12 +56,15 @@ export function ingredientAliases(ingredients: Ingredient[]): string[] {
     // out, so "olive oil ((Note 1))" still ends in the ingredient name.
     let cleaned = item.toLowerCase();
     while (/\([^()]*\)/.test(cleaned)) cleaned = cleaned.replace(/\([^()]*\)/g, ' ');
-    const base = cleaned.split(/[,;]/)[0].replace(/\s+/g, ' ').trim();
+    // Instructions use "pasta" even when the ingredient lists only its shape.
+    if (/\b(?:pappardelle|tagliatelle|spaghetti|linguine|fettuccine|rigatoni|penne|macaroni|fusilli|farfalle|orecchiette|lasagne|lasagna|mafaldine|capunti)\b/.test(cleaned)) aliases.add('pasta');
+    const base = cleaned.split(/[,;]/)[0].replace(/\s+(?:for serving|to serve|for garnish|to garnish)\s*$/, '')
+      .replace(/\s+/g, ' ').trim();
     for (const alternative of base.split(/\s+(?:or|and)\s+|\/|&/)) {
       const name = alternative.trim().replace(/^(?:(?:fresh|dried|frozen|chopped|diced|minced|sliced|grated|shredded|crumbled|ground|crushed|boneless|skinless|unsalted|salted|large|small|medium|finely|roughly)\s+)+/, '');
       // "Garlic cloves", "parsley leaves", "lime juice" and "oil spray"
       // commonly become just "garlic", "parsley", "lime" and "oil".
-      const core = name.replace(/(?:\s+(?:cloves?|leaves|stems?|sprigs?|fillets?|tubes?|kernels?|stalks?|sticks?|thighs?|breasts?|drumsticks?|wings?|chops?|juice|zest|spray))+$/, '');
+      const core = name.replace(/(?:\s+(?:cloves?|leaves|stems?|sprigs?|fillets?|tubes?|kernels?|stalks?|sticks?|thighs?|breasts?|drumsticks?|wings?|chops?|shoulders?|shanks?|legs?|juice|zest|spray))+$/, '');
       const terms = [alternative.trim(), name, core];
       for (const phrase of [name, core]) {
         const short = phrase.match(/\p{L}+$/u)?.[0];

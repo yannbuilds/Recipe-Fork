@@ -1,9 +1,11 @@
 # Ingredient highlighting
 
-The web and mobile detail pages bold `steps[].ingredient_mentions` using native
-text elements. Instructions remain plain text; no HTML or Markdown is saved.
-Recipes without that optional JSON field keep their existing appearance. Both
-edit forms refresh the mentions when an opted-in recipe is saved.
+The web and mobile detail pages calculate ingredient mentions from the current
+ingredients and steps, then bold them using native text elements. Instructions
+remain plain text; no HTML or Markdown is saved. Since 10 October 2026,
+highlighting applies automatically to all new recipes, including extension,
+URL, photo, pasted-text and manual imports. No backfill is needed after saving
+or editing a recipe; saved `steps[].ingredient_mentions` are optional metadata.
 
 The initial Hot Honey Wings trial can be previewed or refreshed individually:
 
@@ -39,7 +41,8 @@ vinegar, pasta and wings. Nested source notes are ignored. Longest names win
 and whole-word boundaries prevent matching `salt`
 inside `saltwater`. It does not infer pronouns, mixtures such as “the dressing”,
 or every possible synonym. Review the preview before a bulk run; extend aliases
-if needed. New imports can be annotated with the same command.
+if needed. The command remains available to refresh stored metadata, but the
+detail pages do not depend on it.
 
 Web deploys from main. Mobile includes the same rendering but needs an updated
 native build (the app currently has no EAS Update configuration).
