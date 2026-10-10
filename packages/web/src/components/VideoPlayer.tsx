@@ -10,7 +10,7 @@ import {
   saveVideoMark,
   watchedFractionFor,
 } from '../lib/videoProgress';
-import { loadYouTubeApi, type YouTubePlayer } from '../lib/youtube';
+import { loadYouTubeApi, needsDirectYouTubeTap, type YouTubePlayer } from '../lib/youtube';
 import ModalPortal from './ModalPortal';
 
 interface VideoPlayerProps {
@@ -41,7 +41,11 @@ export default function VideoPlayer({
   onSaveSyncedMark,
   onClearSyncedMark,
 }: VideoPlayerProps) {
+  const [directTap] = useState(needsDirectYouTubeTap);
   const [isOpen, setIsOpen] = useState(false);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
+  const isOpenRef = useRef(false);
+  isOpenRef.current = isOpen;
   /** Where this open started, so the overlay can say so and offer a way back. */
   const [resumedFrom, setResumedFrom] = useState(0);
   const [noteVisible, setNoteVisible] = useState(false);
@@ -52,6 +56,7 @@ export default function VideoPlayer({
   });
 
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const positionRef = useRef(0);
@@ -72,13 +77,25 @@ export default function VideoPlayer({
     }
     return { seconds: resumeAtFor(recipeId), fraction: watchedFractionFor(recipeId) };
   }, [recipeId, retainOnUnmount, syncedMark]);
+  const markViewRef = useRef(markView);
+  markViewRef.current = markView;
 
   /* Refresh the thumbnail from session memory: on mount, and every time the overlay
      closes (the effect below has just written the new position by then). */
   useEffect(() => {
     if (isOpen) return;
-    setMark(markView());
-  }, [isOpen, markView]);
+    const view = markView();
+    setMark(view);
+    if (directTap && view.seconds !== openAtRef.current) {
+      openAtRef.current = view.seconds;
+      positionRef.current = view.seconds;
+      try {
+        playerRef.current?.cueVideoById({ videoId, startSeconds: view.seconds });
+      } catch {
+        // onReady will apply the latest mark if the API is not ready yet.
+      }
+    }
+  }, [isOpen, markView, directTap, videoId]);
 
   const readPlayerClock = useCallback(() => {
     const player = playerRef.current;
@@ -115,8 +132,42 @@ export default function VideoPlayer({
     // cleanup is too late on some browsers: React has already detached it.
     readPlayerClock();
     persist();
+    if (directTap) {
+      isOpenRef.current = false;
+      openAtRef.current = Math.floor(positionRef.current);
+      // Keep the same frame alive for the next trusted tap. Cueing restores
+      // YouTube's thumbnail/play button without losing the saved position.
+      try {
+        playerRef.current?.pauseVideo();
+        playerRef.current?.cueVideoById({ videoId, startSeconds: openAtRef.current });
+      } catch {
+        // The player may already have gone away during navigation.
+      }
+      if (!playerRef.current) {
+        // API-blocked embeds still need to stop when their modal is closed.
+        const iframe = hostRef.current?.querySelector('iframe');
+        if (iframe) iframe.src = iframe.src;
+      }
+    }
     setIsOpen(false);
   }
+
+  /* A native dialog can promote the inline iPhone player to the top layer
+     without reparenting/reloading its iframe (which would stop playback).
+     Between plays it is an ordinary inline box, with no fixed video layer. */
+  useLayoutEffect(() => {
+    if (!directTap) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (isOpen) {
+      if (dialog.open) dialog.close();
+      dialog.showModal();
+    } else {
+      if (dialog.matches(':modal')) dialog.close();
+      // Setting open avoids show()'s autofocus/scroll when returning inline.
+      dialog.open = true;
+    }
+  }, [directTap, isOpen]);
 
   /* Send it back to the top — for when the mark is from a session you've
      mentally finished with and rejoining halfway is just confusing. */
@@ -160,21 +211,29 @@ export default function VideoPlayer({
   /*
    * The player itself.
    *
-   * Start the iframe immediately, then attach the API to record its position.
+   * Desktop starts the iframe on click. iOS loads a paused inline player so
+   * the first tap reaches YouTube itself and can start playback with sound.
    * The iframe belongs to the player effect, inside a React-owned host, so
    * the API can destroy it without removing a node React owns.
    */
+  const playerMounted = directTap || isOpen;
   useLayoutEffect(() => {
-    if (!isOpen) return;
+    if (!playerMounted) return;
     const host = hostRef.current;
     if (!host) return;
+    setApiUnavailable(false);
 
     let cancelled = false;
     let ticks = 0;
     let poll = 0;
+    if (directTap) {
+      openAtRef.current = markViewRef.current().seconds;
+      positionRef.current = openAtRef.current;
+    }
+    const initialAt = openAtRef.current;
     const mount = document.createElement('iframe');
     const params = new URLSearchParams({
-      autoplay: '1',
+      autoplay: directTap ? '0' : '1',
       enablejsapi: '1',
       rel: '0',
       playsinline: '1',
@@ -192,6 +251,26 @@ export default function VideoPlayer({
     loadYouTubeApi()
       .then((YT) => {
         if (cancelled) return;
+        function stateChanged(e: { data: number; target: YouTubePlayer }) {
+          if (cancelled) return;
+          if (directTap && !isOpenRef.current) {
+            if (e.data !== YT.PlayerState.PLAYING) return;
+            beginVideoProgress(recipeId);
+            setResumedFrom(openAtRef.current);
+            setNoteVisible(openAtRef.current > 0);
+            isOpenRef.current = true;
+            setIsOpen(true);
+          }
+          readPlayerClock();
+          if (e.data === YT.PlayerState.ENDED) {
+            positionRef.current = 0;
+            openAtRef.current = 0;
+            finishVideoProgress(recipeId);
+            onClearSyncedMark?.(recipeId);
+          } else {
+            persist();
+          }
+        }
         playerRef.current = new YT.Player(mount, {
           events: {
             onReady: (e) => {
@@ -200,7 +279,7 @@ export default function VideoPlayer({
               readPlayerClock();
               // `start` gets you close; the seek is what actually lands on the
               // second we left off, and it survives the player re-cueing.
-              if (openAtRef.current > 0) {
+              if (!directTap && openAtRef.current > 0) {
                 try {
                   e.target.seekTo(openAtRef.current, true);
                 } catch {
@@ -208,11 +287,26 @@ export default function VideoPlayer({
                 }
               }
               try {
-                e.target.playVideo();
+                if (directTap) {
+                  // A fast tap can start the video before the API is ready.
+                  const state = e.target.getPlayerState();
+                  // Never re-cue a tap that is already buffering: that would
+                  // cancel the first play while the API is still loading.
+                  if (state === -1 || state === YT.PlayerState.CUED) {
+                    const at = markViewRef.current().seconds;
+                    openAtRef.current = at;
+                    positionRef.current = at;
+                    if (at !== initialAt) e.target.cueVideoById({ videoId, startSeconds: at });
+                  }
+                  stateChanged({ data: state, target: e.target });
+                } else {
+                  e.target.playVideo();
+                }
               } catch {
                 // Autoplay refused — the mark is still good, you just press play.
               }
               poll = window.setInterval(() => {
+                if (directTap && !isOpenRef.current) return;
                 readPlayerClock();
                 ticks += 1;
                 // Commit every few seconds so an unexpected screen change
@@ -220,23 +314,14 @@ export default function VideoPlayer({
                 if (ticks % PERSIST_EVERY === 0) persist();
               }, POLL_MS);
             },
-            onStateChange: (e) => {
-              readPlayerClock();
-              if (e.data === YT.PlayerState.ENDED) {
-                // Watched to the end: next open starts from the top.
-                positionRef.current = 0;
-                finishVideoProgress(recipeId);
-                onClearSyncedMark?.(recipeId);
-              } else {
-                persist();
-              }
-            },
+            onStateChange: stateChanged,
           },
         });
       })
       .catch(() => {
         // The original embed keeps playing even without the API; it still
         // starts at the saved mark, but cannot record a new one this time.
+        if (!cancelled) setApiUnavailable(true);
       });
 
     return () => {
@@ -254,7 +339,7 @@ export default function VideoPlayer({
       persist();
       host.replaceChildren();
     };
-  }, [isOpen, videoId, title, recipeId, readPlayerClock, persist]);
+  }, [playerMounted, directTap, videoId, title, recipeId, readPlayerClock, persist]);
 
   /* Browsing a recipe owns a page-scoped mark. A cooking recipe is different:
      its component unmounts every time the cook bar swaps to another pot, so
@@ -284,99 +369,205 @@ export default function VideoPlayer({
 
   const hasMark = mark.seconds > 0;
 
+  const playerContent = (
+    <>
+      {isOpen && (
+        <button
+          ref={closeRef}
+          className="absolute top-4 right-4 z-10 text-white/80 hover:text-white transition-colors"
+          onClick={close}
+          aria-label="Close video"
+        >
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
+
+      {/* Say out loud that it picked up where you left off — otherwise a
+          video starting three minutes in just looks broken. */}
+      {isOpen && resumedFrom > 0 && noteVisible && (
+        <div
+          className="absolute z-10 flex items-center gap-3"
+          style={{
+            top: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '7px 14px',
+            borderRadius: 999,
+            background: 'rgba(251,248,241,0.94)',
+            color: '#1f1b16',
+            fontFamily: '"DM Sans", system-ui, sans-serif',
+            fontSize: 13,
+            whiteSpace: directTap ? 'nowrap' : undefined,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+            animation: 'fadeIn 0.2s ease',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span>Picking up at {formatVideoTime(resumedFrom)}</span>
+          <button
+            onClick={startOver}
+            style={{
+              font: 'inherit',
+              fontWeight: 600,
+              color: 'var(--green-solid)',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+            }}
+          >
+            Start over
+          </button>
+        </div>
+      )}
+
+      <div
+        className={directTap && !isOpen ? 'w-full h-full' : 'w-full max-w-5xl mx-4'}
+        style={directTap && !isOpen ? undefined : { aspectRatio: '16/9', maxHeight: '80vh', minHeight: directTap ? 200 : undefined }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          ref={hostRef}
+          className="w-full h-full rounded-lg overflow-hidden"
+          style={{ background: '#000' }}
+        />
+      </div>
+    </>
+  );
+
   return (
     <>
       {/* Thumbnail with play button — editorial style (cream circle + green triangle) */}
-      <button
-        className="relative w-full overflow-hidden block group"
-        style={{ paddingBottom: '56.25%', borderRadius: 4, border: '1px solid var(--border)' }}
-        onClick={open}
-        aria-label={hasMark ? `Resume ${title} video at ${formatVideoTime(mark.seconds)}` : `Play ${title} video`}
-      >
-        <img
-          className="absolute inset-0 w-full h-full object-cover"
-          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
-          alt={`${title} video thumbnail`}
-          loading="lazy"
-        />
-        {/* Soft scrim */}
-        <div className="absolute inset-0" style={{ background: 'rgba(31,27,22,0.18)' }} />
-        {/* Play button */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span
-            className="flex items-center justify-center rounded-full transition-transform group-hover:scale-105"
-            style={{
-              width: 56,
-              height: 56,
-              background: 'rgba(251,248,241,0.94)',
-              border: '1px solid rgba(0,0,0,0.06)',
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--green)" stroke="none">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </span>
-        </div>
+      {!directTap && (
+        <button
+          className="relative w-full overflow-hidden block group"
+          style={{ paddingBottom: '56.25%', borderRadius: 4, border: '1px solid var(--border)' }}
+          onClick={open}
+          aria-label={hasMark ? `Resume ${title} video at ${formatVideoTime(mark.seconds)}` : `Play ${title} video`}
+        >
+          <img
+            className="absolute inset-0 w-full h-full object-cover"
+            src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            alt={`${title} video thumbnail`}
+            loading="lazy"
+          />
+          {/* Soft scrim */}
+          <div className="absolute inset-0" style={{ background: 'rgba(31,27,22,0.18)' }} />
+          {/* Play button */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span
+              className="flex items-center justify-center rounded-full transition-transform group-hover:scale-105"
+              style={{
+                width: 56,
+                height: 56,
+                background: 'rgba(251,248,241,0.94)',
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--green)" stroke="none">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          </div>
 
-        {/* Where you left it — the pill says it, the bar shows it. */}
-        {hasMark && (
-          <span
-            style={{
-              position: 'absolute',
-              left: 10,
-              bottom: 12,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '3px 9px',
-              borderRadius: 999,
-              background: 'rgba(251,248,241,0.94)',
-              // The pill is cream in both themes, so it needs the green that
-              // stays dark in dark mode rather than the themed one.
-              color: 'var(--green-solid)',
-              fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
-              fontSize: 10,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Resume {formatVideoTime(mark.seconds)}
-          </span>
-        )}
-        {mark.fraction !== null && (
-          <span
-            aria-hidden
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 3,
-              background: 'rgba(31,27,22,0.35)',
-            }}
-          >
+          {/* Where you left it — the pill says it, the bar shows it. */}
+          {hasMark && (
             <span
               style={{
-                display: 'block',
-                height: '100%',
-                width: `${Math.round(mark.fraction * 100)}%`,
-                background: 'var(--green)',
+                position: 'absolute',
+                left: 10,
+                bottom: 12,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 9px',
+                borderRadius: 999,
+                background: 'rgba(251,248,241,0.94)',
+                // The pill is cream in both themes, so it needs the green that
+                // stays dark in dark mode rather than the themed one.
+                color: 'var(--green-solid)',
+                fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+                fontSize: 10,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
               }}
-            />
-          </span>
-        )}
-      </button>
+            >
+              Resume {formatVideoTime(mark.seconds)}
+            </span>
+          )}
+          {mark.fraction !== null && (
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 3,
+                background: 'rgba(31,27,22,0.35)',
+              }}
+            >
+              <span
+                style={{
+                  display: 'block',
+                  height: '100%',
+                  width: `${Math.round(mark.fraction * 100)}%`,
+                  background: 'var(--green)',
+                }}
+              />
+            </span>
+          )}
+        </button>
+      )}
 
-      {/* Fullscreen overlay — portaled to body, and mounted only while open.
-          It used to stay mounted permanently "so the iframe stays alive", which
-          left a full-viewport position:fixed layer wrapping a live YouTube
-          player on every recipe page with a video. iOS drops the whole page off
-          compositor scrolling when it has to deal with that, and every
-          position:fixed element — the bottom nav included — then scrolls with
-          the content instead of staying pinned. The mark in session memory is what
-          replaces that always-alive iframe: the position outlives the player
-          for the current recipe/cooking session. */}
-      {isOpen && (
+      {/* iOS keeps its player inline until a trusted YouTube tap starts it.
+          The native dialog supplies the modal top layer only while watching;
+          keeping a fixed video layer while browsing breaks iOS scrolling. */}
+      {directTap && (
+        <>
+          <div style={{ position: 'relative', aspectRatio: '16/9', minHeight: 200 }}>
+            <dialog
+              ref={dialogRef}
+              open
+              className="rf-direct-video flex items-center justify-center"
+              aria-label={`${title} video`}
+              aria-modal={isOpen || undefined}
+              onCancel={(e) => { e.preventDefault(); close(); }}
+              onClick={(e) => { if (isOpen && e.target === e.currentTarget) close(); }}
+              style={isOpen ? {
+                position: 'fixed', inset: 0, width: '100%', height: '100%',
+                maxWidth: 'none', maxHeight: 'none', margin: 0, padding: 0,
+                border: 0, background: 'rgba(0,0,0,0.9)', color: '#fff',
+              } : {
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                maxWidth: 'none', maxHeight: 'none', margin: 0, padding: 0,
+                border: '1px solid var(--border)', borderRadius: 4, background: '#000',
+              }}
+            >
+              {playerContent}
+            </dialog>
+          </div>
+          {!isOpen && apiUnavailable && (
+            <button onClick={open} className="mt-2 text-sm underline" style={{ color: 'var(--green)' }}>
+              Expand video
+            </button>
+          )}
+          {!isOpen && hasMark && (
+            <div className="flex items-center gap-2 mt-2" style={{ color: 'var(--green)', fontSize: 12 }}>
+              <span>Resume {formatVideoTime(mark.seconds)}</span>
+              {mark.fraction !== null && (
+                <span className="flex-1 h-[3px]" style={{ background: 'var(--border)' }} aria-hidden>
+                  <span className="block h-full" style={{ width: `${Math.round(mark.fraction * 100)}%`, background: 'var(--green)' }} />
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {!directTap && isOpen && (
         <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
@@ -385,67 +576,7 @@ export default function VideoPlayer({
           aria-modal="true"
           onClick={close}
         >
-          <button
-            ref={closeRef}
-            className="absolute top-4 right-4 z-10 text-white/80 hover:text-white transition-colors"
-            onClick={close}
-            aria-label="Close video"
-          >
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-
-          {/* Say out loud that it picked up where you left off — otherwise a
-              video starting three minutes in just looks broken. */}
-          {resumedFrom > 0 && noteVisible && (
-            <div
-              className="absolute z-10 flex items-center gap-3"
-              style={{
-                top: 20,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                padding: '7px 14px',
-                borderRadius: 999,
-                background: 'rgba(251,248,241,0.94)',
-                color: '#1f1b16',
-                fontFamily: '"DM Sans", system-ui, sans-serif',
-                fontSize: 13,
-                boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
-                animation: 'fadeIn 0.2s ease',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <span>Picking up at {formatVideoTime(resumedFrom)}</span>
-              <button
-                onClick={startOver}
-                style={{
-                  font: 'inherit',
-                  fontWeight: 600,
-                  color: 'var(--green-solid)',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                }}
-              >
-                Start over
-              </button>
-            </div>
-          )}
-
-          <div
-            className="w-full max-w-5xl mx-4"
-            style={{ aspectRatio: '16/9', maxHeight: '80vh' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              ref={hostRef}
-              className="w-full h-full rounded-lg overflow-hidden"
-              style={{ background: '#000' }}
-            />
-          </div>
+          {playerContent}
         </div>
         </ModalPortal>
       )}

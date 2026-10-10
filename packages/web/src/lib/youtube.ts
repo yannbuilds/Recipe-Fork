@@ -1,23 +1,25 @@
 /*
- * The YouTube IFrame Player API, loaded once and only when a video is actually
- * opened.
+ * The YouTube IFrame Player API, loaded once for the paused inline iOS player
+ * or when a video is opened on other browsers.
  *
  * A plain embed can be *told* where to start (`start=`), but it can't be *asked*
  * where it got to — and asking is the whole point here, since the player is
  * destroyed on close and has to hand its position over before it goes. That
- * needs the real API, so this loads the script on first play and caches the
- * promise. If it never arrives (offline, a blocker), callers fall back to a
- * plain iframe: still resumes from the last known mark, just can't record a
- * new one.
+ * needs the real API, so this loads the script and caches the promise. If it
+ * never arrives (offline, a blocker), the embed can still play from the last
+ * known mark but cannot record a new one.
  */
 
-/* The API's surface is far bigger than the five calls we make, and it isn't
+/* The API's surface is far bigger than the calls we make, and it isn't
    typed for us. Keeping the shape we rely on here documents the contract. */
 export interface YouTubePlayer {
   getCurrentTime(): number;
   getDuration(): number;
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   playVideo(): void;
+  pauseVideo(): void;
+  cueVideoById(options: { videoId: string; startSeconds: number }): void;
+  getPlayerState(): number;
   destroy(): void;
   getIframe(): HTMLIFrameElement;
 }
@@ -51,6 +53,12 @@ const API_SRC = 'https://www.youtube.com/iframe_api';
 const API_TIMEOUT_MS = 8000;
 
 let pending: Promise<YouTubeApi> | null = null;
+
+/** iOS needs the first sound-on tap inside YouTube's cross-origin frame. */
+export function needsDirectYouTubeTap(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
 
 export function loadYouTubeApi(): Promise<YouTubeApi> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'));

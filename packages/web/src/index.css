@@ -1123,3 +1123,6 @@ input[type="checkbox"] { accent-color: var(--green); }
 }
 .rf-photo-pill:hover { background: rgba(24, 20, 16, 0.78); }
 .rf-photo-pill-icon { padding: 8px 10px; }
+
+/* iPhone promotes its already-playing inline video without moving the iframe. */
+.rf-direct-video::backdrop { background: transparent; }
