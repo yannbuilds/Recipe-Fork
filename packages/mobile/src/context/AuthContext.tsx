@@ -11,7 +11,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, readStoredSession } from '@/lib/supabase';
 
 export interface Profile {
   display_name: string;
@@ -66,15 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Failed to load profile:', error);
+      if (activeUserId.current !== userId) return;
       setProfile(null);
       return;
     }
 
     if (data) {
+      if (activeUserId.current !== userId) return;
       setProfile(data as Profile);
       return;
     }
     if (!authUser) {
+      if (activeUserId.current !== userId) return;
       setProfile(null);
       return;
     }
@@ -97,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (inserted) {
+      if (activeUserId.current !== userId) return;
       setProfile(inserted as Profile);
       return;
     }
@@ -111,11 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (retryError) console.error('Failed to load concurrently created profile:', retryError);
+      if (activeUserId.current !== userId) return;
       setProfile((existing as Profile) ?? null);
       return;
     }
 
     if (insertError) console.error('Failed to create missing profile:', insertError);
+    if (activeUserId.current !== userId) return;
     setProfile(null);
   }, []);
 
@@ -127,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (!membership) {
+      if (activeUserId.current !== userId) return;
       setFamilyGroup(null);
       setFamilyMembers([]);
       setFamilyInvitations([]);
@@ -138,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', membership.group_id)
       .single();
+    if (activeUserId.current !== userId) return;
     setFamilyGroup((group as FamilyGroup) ?? null);
 
     const { data: members } = await supabase
@@ -154,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : { data: [] };
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+    if (activeUserId.current !== userId) return;
     setFamilyMembers(
       memberList.map((m) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as FamilyMember[],
     );
@@ -165,8 +174,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('group_id', membership.group_id)
         .eq('status', 'pending');
+      if (activeUserId.current !== userId) return;
       setFamilyInvitations((invites as FamilyInvitation[]) ?? []);
     } else {
+      if (activeUserId.current !== userId) return;
       setFamilyInvitations([]);
     }
   }, []);
@@ -185,7 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   useEffect(() => {
+    let disposed = false;
+    let sawAuthEvent = false;
     const hydrate = (s: Session | null) => {
+      if (disposed) return;
       const nextUserId = s?.user.id ?? null;
       const identityChanged = activeUserId.current !== null && activeUserId.current !== nextUserId;
       activeUserId.current = nextUserId;
@@ -203,9 +217,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        Promise.all([fetchProfile(s.user.id, s.user), fetchFamily(s.user.id)]).finally(() =>
-          setLoading(false),
-        );
+        setLoading(false);
+        setTimeout(() => {
+          if (activeUserId.current === s.user.id) {
+            void Promise.all([fetchProfile(s.user.id, s.user), fetchFamily(s.user.id)]);
+          }
+        }, 0);
       } else {
         setProfile(null);
         setFamilyGroup(null);
@@ -219,19 +236,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // secure storage/session hydration unexpectedly fails.
     const bootTimeout = setTimeout(() => setLoading(false), 10_000);
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => hydrate(data.session))
-      .catch(() => hydrate(null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => hydrate(s));
+    // Read local credentials before getSession can wait for token refresh.
+    void readStoredSession().then(stored => {
+      if (disposed) return;
+      if (stored && !sawAuthEvent) hydrate(stored);
+      return supabase.auth.getSession().then(({ data, error }) => {
+        if (!disposed && !sawAuthEvent && !error) hydrate(data.session);
+        if (!disposed && error) setLoading(false);
+      });
+    }).catch(() => { if (!disposed) setLoading(false); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { sawAuthEvent = true; hydrate(s); });
     return () => {
+      disposed = true;
       clearTimeout(bootTimeout);
       sub.subscription.unsubscribe();
     };
   }, [clearPrivateCache, fetchProfile, fetchFamily]);
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
     await clearPrivateCache();
     if (error) throw error;
   };

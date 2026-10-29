@@ -1,3 +1,5 @@
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh';
+import useOfflineState from '../hooks/useOfflineState';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
 import { supabase } from '@recipe-aggregator/shared';
@@ -43,11 +45,13 @@ interface RecipeImageRow {
 const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 export default function CookbooksView({ authLoading }: CookbooksViewProps) {
-  const { profile } = useAuth();
-  const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
-  const [imagesByCookbook, setImagesByCookbook] = useState<Record<string, string[]>>({});
-  const [countsByCookbook, setCountsByCookbook] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const refreshRevision = useBackgroundRefresh();
+  const { profile, user } = useAuth();
+  const [cookbooks, setCookbooks] = useOfflineState<Cookbook[]>('cookbooks', []);
+  const [imagesByCookbook, setImagesByCookbook] = useOfflineState<Record<string, string[]>>('cookbook-images', {});
+  const [countsByCookbook, setCountsByCookbook] = useOfflineState<Record<string, number>>('cookbook-counts', {});
+  const [pending, setLoading] = useState(cookbooks.length === 0);
+  const loading = pending && !(cookbooks.length > 0);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showSuggest, setShowSuggest] = useState(false);
@@ -56,7 +60,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     if (authLoading) return;
     let cancelled = false;
     async function load() {
-      setLoading(true);
+      setLoading(cookbooks.length === 0);
       const cbResult = await supabase
         .from('cookbooks')
         .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
@@ -66,11 +70,12 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
       if (cancelled) return;
 
       if (cbResult.error) {
-        setError(cbResult.error.message);
+        if (!cookbooks.length) setError(cbResult.error.message);
         setLoading(false);
         return;
       }
 
+      setError(null);
       const cbList = (cbResult.data ?? []) as Cookbook[];
       setCookbooks(cbList);
 
@@ -89,6 +94,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
 
       if (cancelled) return;
 
+      if (crResult.error) { setLoading(false); return; }
       const counts: Record<string, number> = {};
       const imagesAccum: Record<string, { url: string; created_at: string }[]> = {};
       const imageByRecipe: Record<string, string> = {};
@@ -128,7 +134,7 @@ export default function CookbooksView({ authLoading }: CookbooksViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [authLoading]);
+  }, [authLoading, user?.id, refreshRevision]);
 
   // Either sensor picks the card up from anywhere on it — there is no handle.
   // Desktop: a small drag distance activates (plain clicks still open a

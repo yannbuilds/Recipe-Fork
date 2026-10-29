@@ -1,3 +1,5 @@
+import useOfflineState from '../hooks/useOfflineState';
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   ShoppingCart,
@@ -143,12 +145,14 @@ function weekRangeLabel(sunday: Date): string {
 
 export default function MealPlan() {
   const { user } = useAuth();
+  const refreshRevision = useBackgroundRefresh();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState(() => getDefaultWeekStart());
-  const [plan, setPlan] = useState<MealPlanType | null>(null);
-  const [entries, setEntries] = useState<MealPlanEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useOfflineState<MealPlanType | null>(`plan:${formatWeekStart(weekStart)}`, null);
+  const [entries, setEntries] = useOfflineState<MealPlanEntry[]>(`plan-entries:${formatWeekStart(weekStart)}`, []);
+  const [pending, setLoading] = useState(true);
+  const loading = pending && !plan;
   const [tab, setTab] = useState<Tab>(() => searchParams.get('tab') === 'shopping' ? 'shopping' : 'meals');
 
   useEffect(() => {
@@ -173,7 +177,7 @@ export default function MealPlan() {
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Recipes used as an ingredient of something in the week, and the recipe
   // waiting on a "making it or buying it?" answer before it gets added.
-  const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
+  const [subRecipes, setSubRecipes] = useOfflineState<SubRecipeMap>(`plan-subs:${formatWeekStart(weekStart)}`, {});
   const [pendingAdd, setPendingAdd] = useState<{ recipe: Recipe; dayIndex: number | null } | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
@@ -244,18 +248,28 @@ export default function MealPlan() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [weekMenuOpen]);
 
+  useEffect(() => {
+    setCheckedItems(new Set(plan?.checked_items ?? []));
+    setCategoryMap(plan?.shopping_categories ?? {});
+    setCustomItems(plan?.custom_items ?? []);
+  }, [plan?.id]);
+
+  const loadVersion = useRef(0);
   const loadPlan = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
+    const version = ++loadVersion.current;
+    setLoading(!plan);
     const weekStr = formatWeekStart(weekStart);
 
     // Get or create meal plan for this week (RLS returns own + family plans)
-    const { data: existingList } = await supabase
+    const { data: existingList, error: planError } = await supabase
       .from('meal_plans')
       .select('*')
       .eq('week_start', weekStr)
       .order('created_at', { ascending: true });
 
+    if (version !== loadVersion.current) return;
+    if (planError) { setLoading(false); return; }
     let existing = existingList?.[0] ?? null;
 
     if (!existing) {
@@ -267,6 +281,7 @@ export default function MealPlan() {
       existing = created;
     }
 
+    if (version !== loadVersion.current) return;
     if (!existing) {
       setLoading(false);
       return;
@@ -278,16 +293,18 @@ export default function MealPlan() {
     setCategoryMap(planData.shopping_categories || {});
     setCustomItems(planData.custom_items || []);
 
-    const { data: mprData } = await supabase
+    const { data: mprData, error: entriesError } = await supabase
       .from('meal_plan_recipes')
       .select('*, recipe:recipes(*)')
       .eq('meal_plan_id', existing.id);
 
+    if (version !== loadVersion.current) return;
+    if (entriesError) { setLoading(false); return; }
     const loaded = (mprData as MealPlanEntry[]) || [];
     setEntries(loaded);
     await loadSubRecipes(loaded);
     setLoading(false);
-  }, [user, weekStart]);
+  }, [user, weekStart, refreshRevision]);
 
   // Recipes used as an ingredient of something in the week. The shopping list
   // needs their own ingredients to swap in; anything that doesn't come back
@@ -300,7 +317,8 @@ export default function MealPlan() {
       setSubRecipes({});
       return;
     }
-    const { data } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', ids);
+    const { data, error } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', ids);
+    if (error) return;
     setSubRecipes(
       data ? Object.fromEntries((data as SubRecipe[]).map((r) => [r.id, r])) : {},
     );
@@ -308,6 +326,7 @@ export default function MealPlan() {
 
   useEffect(() => {
     loadPlan();
+    return () => { loadVersion.current++; };
   }, [loadPlan]);
 
   // ── Derived ─────────────────────────────────────────

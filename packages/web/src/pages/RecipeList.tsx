@@ -1,3 +1,5 @@
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh';
+import useOfflineState from '../hooks/useOfflineState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -17,7 +19,7 @@ const INITIAL_COUNT = window.innerWidth < 1024 ? 4 : 8;
 const PAGE_SIZE = 8;
 
 const RECIPE_SELECT =
-  'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
+  '*';
 
 function getGreeting(): { text: string; punctuation: string } {
   const now = new Date();
@@ -62,6 +64,7 @@ type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 type ListView = 'all' | 'cookbooks';
 
 export default function RecipeList() {
+  const refreshRevision = useBackgroundRefresh();
   const { user, profile, familyMembers, loading: authLoading } = useAuth();
   // View is driven entirely by the URL: `/` shows all recipes, `/?view=cookbooks`
   // (reached via the Cookbook nav tab) shows cookbooks. No persistence — Home
@@ -70,14 +73,15 @@ export default function RecipeList() {
   const view: ListView = searchParams.get('view') === 'cookbooks' ? 'cookbooks' : 'all';
 
   // All recipes fetched so far (grows as pages load)
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
+  const [recipes, setRecipes] = useOfflineState<Recipe[]>('recipes', []);
+  const [tags, setTags] = useOfflineState<Tag[]>('tags', []);
+  const [recipeTags, setRecipeTags] = useOfflineState<RecipeTagRow[]>('recipe-tags', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [pending, setLoading] = useState(recipes.length === 0);
+  const loading = pending && !(recipes.length > 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,7 +94,7 @@ export default function RecipeList() {
   const filterRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Track how many recipes we've fetched so far for range queries
-  const fetchedCountRef = useRef(0);
+  const fetchedCountRef = useRef(recipes.length);
 
   const filters = useRecipeFilters({
     recipes: showFavouritesOnly ? recipes.filter((r) => r.is_favourite) : recipes,
@@ -133,9 +137,9 @@ export default function RecipeList() {
   useEffect(() => {
     if (authLoading) return;
     if (view !== 'all') return;
-    if (recipes.length > 0) return; // already loaded once
+    let cancelled = false;
     async function fetchData() {
-      const to = INITIAL_COUNT - 1;
+      const to = Math.max(INITIAL_COUNT, recipes.length) - 1;
       const [recipesResult, tagsResult, recipeTagsResult, countResult] = await Promise.all([
         supabase
           .from('recipes')
@@ -148,9 +152,11 @@ export default function RecipeList() {
         supabase.from('recipes').select('id', { count: 'exact', head: true }),
       ]);
 
+      if (cancelled) return;
       if (recipesResult.error) {
-        setError(recipesResult.error.message);
+        if (!recipes.length) setError(recipesResult.error.message);
       } else {
+        setError(null);
         const fetched = recipesResult.data as Recipe[];
         setRecipes(fetched);
         fetchedCountRef.current = fetched.length;
@@ -159,7 +165,7 @@ export default function RecipeList() {
         setTotalCount(total);
         const exhausted = total === null || fetched.length >= total;
         setHasMore(!exhausted);
-        if (exhausted) setAllLoaded(true);
+        setAllLoaded(exhausted);
       }
 
       if (!tagsResult.error && tagsResult.data) {
@@ -174,7 +180,13 @@ export default function RecipeList() {
     }
 
     fetchData();
-  }, [authLoading, view, recipes.length]);
+    return () => { cancelled = true; };
+  }, [authLoading, view, user?.id, refreshRevision]);
+
+  // Warm the rest of the library in the background for offline search and cooking.
+  useEffect(() => {
+    if (!loading && !authLoading && view === 'all' && navigator.onLine && !allLoaded) void fetchAllRemaining();
+  }, [loading, authLoading, view, allLoaded, fetchAllRemaining]);
 
   // Fetch next page of recipes
   const loadMore = useCallback(async () => {

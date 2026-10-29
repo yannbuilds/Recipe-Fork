@@ -22,3 +22,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
 });
+
+export async function readStoredSession() {
+  try {
+    const key = `sb-${new URL(supabaseUrl!).hostname.split('.')[0]}-auth-token`;
+    const session = JSON.parse(await AsyncStorage.getItem(key) ?? 'null');
+    return session?.user?.id && session?.access_token && session?.refresh_token
+      ? session as import('@supabase/supabase-js').Session : null;
+  } catch { return null; }
+}

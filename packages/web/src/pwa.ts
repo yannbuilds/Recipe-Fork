@@ -14,3 +14,6 @@ if ('serviceWorker' in navigator) {
     },
   });
 }
+
+// Remove the legacy URL-only API cache, which was shared between accounts.
+if ('caches' in window) void caches.delete('supabase-api');

@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { supabase } from '@recipe-aggregator/shared';
+import { clearOfflineData } from '../lib/offlineStorage';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import { supabase, readStoredSession } from '@recipe-aggregator/shared';
 import type { User, Session } from '@supabase/supabase-js';
 import type { FamilyGroup, FamilyMember, FamilyInvitation } from '@recipe-aggregator/shared';
 
@@ -24,10 +25,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [storedSession] = useState(readStoredSession);
+  const activeUserId = useRef(storedSession?.user.id ?? null);
+  const [user, setUser] = useState<User | null>(storedSession?.user ?? null);
+  const [session, setSession] = useState<Session | null>(storedSession);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!storedSession);
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyInvitations, setFamilyInvitations] = useState<FamilyInvitation[]>([]);
@@ -41,16 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Failed to load profile:', error);
+      if (activeUserId.current !== userId) return;
       setProfile(null);
       return;
     }
 
     if (data) {
+      if (activeUserId.current !== userId) return;
       setProfile(data);
       return;
     }
 
     if (!authUser) {
+      if (activeUserId.current !== userId) return;
       setProfile(null);
       return;
     }
@@ -77,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (inserted) {
+      if (activeUserId.current !== userId) return;
       setProfile(inserted);
       return;
     }
@@ -91,11 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (retryError) console.error('Failed to load concurrently created profile:', retryError);
+      if (activeUserId.current !== userId) return;
       setProfile(existing ?? null);
       return;
     }
 
     if (insertError) console.error('Failed to create missing profile:', insertError);
+    if (activeUserId.current !== userId) return;
     setProfile(null);
   }, []);
 
@@ -108,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (!membership) {
+      if (activeUserId.current !== userId) return;
       setFamilyGroup(null);
       setFamilyMembers([]);
       setFamilyInvitations([]);
@@ -121,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', membership.group_id)
       .single();
 
+    if (activeUserId.current !== userId) return;
     setFamilyGroup(group ?? null);
 
     // Fetch all members then look up profiles separately
@@ -142,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
 
+    if (activeUserId.current !== userId) return;
     setFamilyMembers(
       memberList.map((m) => ({
         ...m,
@@ -157,8 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('group_id', membership.group_id)
         .eq('status', 'pending');
 
+      if (activeUserId.current !== userId) return;
       setFamilyInvitations(invites ?? []);
     } else {
+      if (activeUserId.current !== userId) return;
       setFamilyInvitations([]);
     }
   }, []);
@@ -174,51 +188,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 10_000);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        Promise.all([
-          fetchProfile(session.user.id, session.user),
-          fetchFamily(session.user.id),
-        ]).finally(() => {
-          clearTimeout(timeout);
-          setLoading(false);
-        });
-      } else {
-        clearTimeout(timeout);
-        setLoading(false);
-      }
-    }).catch(() => {
-      clearTimeout(timeout);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        Promise.all([
-          fetchProfile(session.user.id, session.user),
-          fetchFamily(session.user.id),
-        ]).finally(() => setLoading(false));
-      } else {
+    let disposed = false;
+    const hydrate = (next: Session | null) => {
+      if (disposed) return;
+      const nextId = next?.user.id ?? null;
+      if (activeUserId.current !== nextId) {
+        clearOfflineData();
         setProfile(null);
         setFamilyGroup(null);
         setFamilyMembers([]);
         setFamilyInvitations([]);
-        setLoading(false);
       }
+      activeUserId.current = nextId;
+      setSession(next);
+      setUser(next?.user ?? null);
+      clearTimeout(timeout);
+      setLoading(false);
+      // Auth callbacks must return before starting further Supabase requests.
+      if (next) setTimeout(() => {
+        if (!disposed && activeUserId.current === nextId) {
+          void Promise.all([fetchProfile(nextId!, next.user), fetchFamily(nextId!)]);
+        }
+      }, 0);
+    };
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!error) hydrate(data.session);
+      else setLoading(false);
+    }).catch(() => {
+      clearTimeout(timeout);
+      setLoading(false);
     });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => hydrate(next));
 
     return () => {
+      disposed = true;
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [fetchProfile, fetchFamily]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    clearOfflineData();
   };
 
   return (

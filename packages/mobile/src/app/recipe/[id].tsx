@@ -268,6 +268,14 @@ export default function RecipeDetailScreen() {
   const { data, isPending, error } = useQuery({
     queryKey: ['recipe', id],
     queryFn: () => fetchRecipe(id),
+    initialData: () => {
+      const list = queryClient.getQueryData<{ recipes: Recipe[]; tags: Tag[]; recipeTags: { recipe_id: string; tag_id: string }[] }>(['recipes']);
+      const recipe = list?.recipes.find(r => r.id === id);
+      if (!recipe?.steps) return undefined;
+      const tagIds = new Set(list?.recipeTags.filter(row => row.recipe_id === id).map(row => row.tag_id));
+      return { recipe, tags: list?.tags.filter(tag => tagIds.has(tag.id)) ?? [], cooks: { count: 0, last: null }, subRecipes: {} };
+    },
+    initialDataUpdatedAt: 0,
     enabled: !!session && !!id,
   });
 
@@ -443,7 +451,7 @@ export default function RecipeDetailScreen() {
     );
   }
 
-  if (error || !recipe) {
+  if (!recipe) {
     return (
       <View
         style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}

@@ -5,7 +5,7 @@
  * (`@recipe-aggregator/shared/ingredients`, `/scaling`, `/recipeSource`) —
  * type-only imports from here are fine, they're erased before bundling.
  */
-export { supabase } from './supabase.js';
+export { supabase, readStoredSession } from './supabase.js';
 export {
   dedupeRecipesBySource,
   findRecipeWithSameSource,

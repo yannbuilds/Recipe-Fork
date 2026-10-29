@@ -45,6 +45,10 @@
     "./types": {
       "import": "./dist/types.js",
       "types": "./dist/types.d.ts"
+    },
+    "./accountCache": {
+      "import": "./dist/accountCache.js",
+      "types": "./dist/accountCache.d.ts"
     }
   },
   "scripts": {

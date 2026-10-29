@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -133,3 +133,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
   },
 });
+
+/** Local credentials permit offline browsing; Supabase still validates every server request. */
+export function readStoredSession(): Session | null {
+  try {
+    const key = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
+    const session = JSON.parse(cookieStorage.getItem(key) ?? 'null');
+    return session?.user?.id && session?.access_token && session?.refresh_token ? session : null;
+  } catch { return null; }
+}

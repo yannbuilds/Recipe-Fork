@@ -1,3 +1,5 @@
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh';
+import useOfflineState, { readOfflineData } from '../hooks/useOfflineState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { annotateStepIngredients, stepTextParts } from '@recipe-aggregator/shared/stepIngredients';
 import { Check, ChevronDown, Minus, Plus, Clock, Flame, Users, Globe, FileText, Pencil, Trash2 } from 'lucide-react';
@@ -299,6 +301,7 @@ function MoonIcon() {
 /* ------------------------------------------------------------------ */
 
 export default function RecipeDetail() {
+  const refreshRevision = useBackgroundRefresh();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -329,19 +332,20 @@ export default function RecipeDetail() {
   // With a second pot going the bar is on screen here too, and these are
   // fixed to the viewport rather than laid out above it.
   const cookBarOffset = useCookBarOffset();
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [recipe, setRecipe] = useOfflineState<Recipe | null>(`recipe:${id}`, readOfflineData<Recipe[]>(user?.id, 'recipes')?.find(r => r.id === id) ?? null);
   // Derive from current content so every import path and edit gets highlighting,
   // including recipes without the metadata saved by the original backfill.
   const sortedSteps = useMemo(
     () => recipe ? annotateStepIngredients(recipe.steps, recipe.ingredients).sort((a, b) => a.order - b.order) : [],
     [recipe],
   );
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tags, setTags] = useOfflineState<Tag[]>(`recipe-tags:${id}`, []);
+  const [pending, setLoading] = useState(!recipe);
+  const loading = pending && !(!!recipe);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showWeekPicker, setShowWeekPicker] = useState(false);
-  const [currentServings, setCurrentServings] = useState<number>(1);
+  const [currentServings, setCurrentServings] = useState<number>(recipe?.custom_servings ?? recipe?.servings ?? 1);
   // Check-offs live in the cooking session while this recipe is on the stove,
   // so they survive switching to the other pot. Browsing a recipe that isn't
   // cooking still ticks — that state is just local and disposable.
@@ -383,7 +387,7 @@ export default function RecipeDetail() {
   }
   // Recipes used as an ingredient of this one, and which of those rows are
   // expanded to show their ingredients inline.
-  const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
+  const [subRecipes, setSubRecipes] = useOfflineState<SubRecipeMap>(`sub-recipes:${id}`, {});
   const [browseExpandedSubs, setBrowseExpandedSubs] = useState<Set<string>>(new Set());
   const [browseMobileTab, setBrowseMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
   const expandedSubs = useMemo(
@@ -396,7 +400,7 @@ export default function RecipeDetail() {
   const [showMyNotes, setShowMyNotes] = useState(false);
   const [showAddToCookbook, setShowAddToCookbook] = useState(false);
   const [myNotesSaveStatus, setMyNotesSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [savedServings, setSavedServings] = useState<number>(1);
+  const [savedServings, setSavedServings] = useState<number>(recipe?.custom_servings ?? recipe?.servings ?? 1);
   const saveNotesRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -479,7 +483,12 @@ export default function RecipeDetail() {
     // Without this the old recipe stays on screen wearing the *new* one's
     // check-offs until the fetch lands — briefly showing ticks against the
     // wrong ingredients, which is exactly what you can't afford mid-cook.
-    setLoading(true);
+    let cancelled = false;
+    setError(null);
+    setLoading(!recipe);
+    const cachedServings = recipe?.custom_servings ?? recipe?.servings ?? 1;
+    setCurrentServings(cachedServings);
+    setSavedServings(cachedServings);
     // Same reason, for the not-cooking case: this screen is reused across
     // recipes, so casual browse ticks have to be dropped with the recipe they
     // belonged to. (A cook's ticks live in the session and are keyed by recipe,
@@ -497,6 +506,7 @@ export default function RecipeDetail() {
           .order('cooked_at', { ascending: false }),
       ]);
 
+      if (cancelled) return;
       if (!cooksResult.error && cooksResult.data) {
         setCookHistory({
           count: cooksResult.data.length,
@@ -505,8 +515,13 @@ export default function RecipeDetail() {
       }
 
       if (recipeResult.error) {
-        setError(recipeResult.error.message);
+        if (recipeResult.error.code === 'PGRST116') {
+          setRecipe(null);
+          setError('Recipe no longer available');
+        }
+        if (!recipe) setError(recipeResult.error.message);
       } else {
+        setError(null);
         const data = recipeResult.data as Recipe;
         setRecipe(data);
         const initialServings = data.custom_servings ?? data.servings ?? 1;
@@ -521,6 +536,7 @@ export default function RecipeDetail() {
             .from('recipes')
             .select(SUB_RECIPE_SELECT)
             .in('id', subIds);
+          if (cancelled) return;
           if (subs) {
             setSubRecipes(
               Object.fromEntries((subs as SubRecipe[]).map((r) => [r.id, r])),
@@ -540,7 +556,8 @@ export default function RecipeDetail() {
     }
 
     fetchRecipe();
-  }, [id]);
+    return () => { cancelled = true; };
+  }, [id, user?.id, refreshRevision]);
 
   // Looking at a pot makes it the active one, so the bar and the screen agree.
   useEffect(() => {

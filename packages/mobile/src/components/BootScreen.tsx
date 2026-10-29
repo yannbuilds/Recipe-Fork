@@ -58,18 +58,17 @@ export default function BootScreen({ ready }: Props) {
     return () => loop.stop();
   }, [fade, rise, pulse]);
 
-  // Cross-fade out once the app is ready. Small floor delay so the mark is
-  // seen even on a warm start rather than flickering past.
+  // Reveal local content as soon as startup is ready.
   useEffect(() => {
     if (!ready) return;
     const timer = setTimeout(() => {
       Animated.timing(cover, {
         toValue: 0,
-        duration: 420,
+        duration: 120,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }).start(() => setGone(true));
-    }, 350);
+    }, 0);
     return () => clearTimeout(timer);
   }, [ready, cover]);
 

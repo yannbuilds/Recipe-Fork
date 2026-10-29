@@ -1,3 +1,6 @@
+import Connectivity from '@/components/Connectivity';
+import { accountScopedStorage } from '@recipe-aggregator/shared/accountCache';
+import { readStoredSession } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { QueryClient } from '@tanstack/react-query';
@@ -34,7 +37,7 @@ const queryClient = new QueryClient({
 });
 
 const persister = createAsyncStoragePersister({
-  storage: AsyncStorage,
+  storage: accountScopedStorage(AsyncStorage, async () => (await readStoredSession())?.user.id ?? null),
   key: 'recipe-fork-query-cache',
 });
 
@@ -75,11 +78,12 @@ function RootLayoutInner() {
   return (
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister, maxAge: ONE_WEEK }}
+      persistOptions={{ persister, maxAge: ONE_WEEK, buster: 'offline-v2' }}
     >
       <AuthProvider>
         <CookSessionProvider>
           <StatusBar style={isDark ? 'light' : 'dark'} />
+          <Connectivity />
           {fontsReady ? <Navigator /> : null}
           {/* Above the navigator so a live cook is one tap away from any
               screen, and survives every push and tab switch. Draws nothing

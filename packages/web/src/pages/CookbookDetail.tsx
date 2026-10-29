@@ -1,3 +1,5 @@
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh';
+import useOfflineState from '../hooks/useOfflineState';
 import { useEffect, useState } from 'react';
 import { BookOpen, Sparkles, Inbox } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -28,13 +30,15 @@ function coverStoragePath(url: string | null | undefined): string | null {
 }
 
 export default function CookbookDetail() {
+  const refreshRevision = useBackgroundRefresh();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, familyMembers, loading: authLoading } = useAuth();
 
-  const [cookbook, setCookbook] = useState<Cookbook | null>(null);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cookbook, setCookbook] = useOfflineState<Cookbook | null>(`cookbook:${id}`, null);
+  const [recipes, setRecipes] = useOfflineState<Recipe[]>(`cookbook-recipes:${id}`, []);
+  const [pending, setLoading] = useState(!cookbook);
+  const loading = pending && !(!!cookbook);
   const [error, setError] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -46,7 +50,7 @@ export default function CookbookDetail() {
     if (authLoading || !id) return;
     let cancelled = false;
     async function load() {
-      setLoading(true);
+      setLoading(!cookbook);
       const cbResult = await supabase
         .from('cookbooks')
         .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
@@ -54,7 +58,7 @@ export default function CookbookDetail() {
         .maybeSingle();
       if (cancelled) return;
       if (cbResult.error || !cbResult.data) {
-        setError(cbResult.error?.message ?? 'Cookbook not found');
+        if (!cookbook) setError(cbResult.error?.message ?? 'Cookbook not found');
         setLoading(false);
         return;
       }
@@ -68,7 +72,7 @@ export default function CookbookDetail() {
       if (cancelled) return;
 
       if (crResult.error) {
-        setError(crResult.error.message);
+        if (!recipes.length) setError(crResult.error.message);
       } else {
         const rows = ((crResult.data ?? []) as unknown) as { recipes: Recipe | Recipe[] | null }[];
         const list = rows
@@ -83,7 +87,7 @@ export default function CookbookDetail() {
     return () => {
       cancelled = true;
     };
-  }, [id, authLoading]);
+  }, [id, authLoading, user?.id, refreshRevision]);
 
   function handleToggleFavourite(recipeId: string, newValue: boolean) {
     setRecipes((prev) =>

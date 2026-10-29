@@ -1,3 +1,4 @@
+import useOfflineState from './useOfflineState';
 import { dedupeRecipesBySource } from '@recipe-aggregator/shared/recipeSource';
 import type { Cookbook, Recipe, Tag } from '@recipe-aggregator/shared';
 import { useEffect, useMemo, useState } from 'react';
@@ -30,19 +31,30 @@ export interface RecipeBrowserData {
  */
 export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
   const { user } = useAuth();
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [recipeTags, setRecipeTags] = useState<RecipeTagRow[]>([]);
-  const [lastCooked, setLastCooked] = useState<Record<string, string>>({});
-  const [cookbooks, setCookbooks] = useState<Cookbook[]>([]);
-  const [cookbookRecipes, setCookbookRecipes] = useState<Record<string, Set<string>>>({});
+  const [recipes, setRecipes] = useOfflineState<Recipe[]>('browser-recipes', []);
+  const [tags, setTags] = useOfflineState<Tag[]>('tags', []);
+  const [recipeTags, setRecipeTags] = useOfflineState<RecipeTagRow[]>('recipe-tags', []);
+  const [lastCooked, setLastCooked] = useOfflineState<Record<string, string>>('last-cooked', {});
+  const [cookbooks, setCookbooks] = useOfflineState<Cookbook[]>('cookbooks', []);
+  const [cookbookRecipeIds, setCookbookRecipeIds] = useOfflineState<Record<string, string[]>>('cookbook-members', {});
+  const cookbookRecipes = useMemo(() => Object.fromEntries(Object.entries(cookbookRecipeIds).map(([id, ids]) => [id, new Set(ids)])), [cookbookRecipeIds]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !user) return;
     let cancelled = false;
-    setLoading(true);
+    setLoading(recipes.length === 0);
     (async () => {
+      const results = await Promise.all([
+        supabase.from('recipes').select('*').order('title'),
+        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
+        supabase.from('cookbooks').select('*').order('sort_order').order('created_at', { ascending: false }),
+        supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
+        supabase.from('tags').select('*').order('name'),
+        supabase.from('recipe_tags').select('recipe_id, tag_id'),
+      ]);
+      if (cancelled) return;
+      if (results.some(result => result.error)) { setLoading(false); return; }
       const [
         { data: recipeData },
         { data: cookData },
@@ -50,18 +62,7 @@ export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
         { data: cbRecipeData },
         { data: tagData },
         { data: recipeTagData },
-      ] = await Promise.all([
-        supabase.from('recipes').select('*').order('title'),
-        supabase.from('recipe_cooks').select('recipe_id, cooked_at'),
-        supabase
-          .from('cookbooks')
-          .select('id, user_id, name, description, emoji, cover_recipe_id, cover_image_url, sort_order, created_at, updated_at')
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: false }),
-        supabase.from('cookbook_recipes').select('cookbook_id, recipe_id'),
-        supabase.from('tags').select('*').order('name'),
-        supabase.from('recipe_tags').select('recipe_id, tag_id'),
-      ]);
+      ] = results;
       if (cancelled) return;
       setRecipes((recipeData as Recipe[]) ?? []);
       const map: Record<string, string> = {};
@@ -76,7 +77,7 @@ export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
       for (const row of (cbRecipeData as { cookbook_id: string; recipe_id: string }[]) ?? []) {
         (members[row.cookbook_id] ??= new Set()).add(row.recipe_id);
       }
-      setCookbookRecipes(members);
+      setCookbookRecipeIds(Object.fromEntries(Object.entries(members).map(([id, ids]) => [id, [...ids]])));
       setTags((tagData as Tag[]) ?? []);
       setRecipeTags((recipeTagData as RecipeTagRow[]) ?? []);
       setLoading(false);
@@ -84,7 +85,7 @@ export default function useRecipeBrowserData(open: boolean): RecipeBrowserData {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, user?.id]);
 
   // Importing the same page with a trailing slash or a tracking link creates a
   // handful of distinct rows. They are one recipe as far as picking goes.

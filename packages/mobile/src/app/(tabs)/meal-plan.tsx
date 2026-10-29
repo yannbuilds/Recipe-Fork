@@ -1,3 +1,6 @@
+import useBackgroundRefresh from '@/lib/useBackgroundRefresh';
+import { useIsRestoring } from '@tanstack/react-query';
+import useOfflineState from '@/lib/useOfflineState';
 import { Ionicons } from '@expo/vector-icons';
 import {
   SUB_RECIPE_SELECT,
@@ -121,15 +124,18 @@ export default function MealPlanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const restoring = useIsRestoring();
+  const refreshRevision = useBackgroundRefresh();
   // What's already on the stove — turns each meal's Cook button into "Add"
   // (start a second pot) or "Open" (one you're already cooking).
   const { cookFor, isCooking, startCook } = useCookSession();
   // Keep the last meal clear of the cooking bar when something's on the stove.
   const cookBarOffset = useCookBarOffset();
   const [weekStart, setWeekStart] = useState(() => getDefaultWeekStart());
-  const [plan, setPlan] = useState<MealPlan | null>(null);
-  const [entries, setEntries] = useState<MealPlanEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useOfflineState<MealPlan | null>(`plan:${formatWeekStart(weekStart)}`, null);
+  const [entries, setEntries] = useOfflineState<MealPlanEntry[]>(`plan-entries:${formatWeekStart(weekStart)}`, []);
+  const [pending, setLoading] = useState(true);
+  const loading = pending && !plan;
   const [tab, setTab] = useState<Tab>('meals');
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
@@ -163,7 +169,7 @@ export default function MealPlanScreen() {
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   // Recipes used as an ingredient of something in the week, and the recipe
   // waiting on a "making it or buying it?" answer before it gets added.
-  const [subRecipes, setSubRecipes] = useState<SubRecipeMap>({});
+  const [subRecipes, setSubRecipes] = useOfflineState<SubRecipeMap>(`plan-subs:${formatWeekStart(weekStart)}`, {});
   const [pendingAdd, setPendingAdd] = useState<{ recipe: PickedRecipe; dayIndex: number | null } | null>(null);
   // Post-cook rating popup: set when marking a meal cooked logs a recipe_cooks row.
   const [rateCook, setRateCook] = useState<{ cookId: string; recipeId: string; title?: string } | null>(null);
@@ -238,15 +244,25 @@ export default function MealPlanScreen() {
     })();
   }, [user]);
 
+  useEffect(() => {
+    setCheckedItems(new Set(plan?.checked_items ?? []));
+    setCategoryMap(plan?.shopping_categories ?? {});
+    setCustomItems(plan?.custom_items ?? []);
+  }, [plan?.id]);
+
+  const loadVersion = useRef(0);
   const loadPlan = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
+    if (!user || restoring) return;
+    const version = ++loadVersion.current;
+    setLoading(!plan);
     const weekStr = formatWeekStart(weekStart);
-    const { data: existingList } = await supabase
+    const { data: existingList, error: planError } = await supabase
       .from('meal_plans')
       .select('*')
       .eq('week_start', weekStr)
       .order('created_at', { ascending: true });
+    if (version !== loadVersion.current) return;
+    if (planError) { setLoading(false); return; }
     let existing = existingList?.[0] ?? null;
     if (!existing) {
       const { data: created } = await supabase
@@ -256,6 +272,7 @@ export default function MealPlanScreen() {
         .single();
       existing = created;
     }
+    if (version !== loadVersion.current) return;
     if (!existing) {
       setLoading(false);
       return;
@@ -265,15 +282,17 @@ export default function MealPlanScreen() {
     setCheckedItems(new Set(planData.checked_items || []));
     setCategoryMap(planData.shopping_categories || {});
     setCustomItems(planData.custom_items || []);
-    const { data: mpr } = await supabase
+    const { data: mpr, error: entriesError } = await supabase
       .from('meal_plan_recipes')
       .select('*, recipe:recipes(*)')
       .eq('meal_plan_id', existing.id);
+    if (version !== loadVersion.current) return;
+    if (entriesError) { setLoading(false); return; }
     const loaded = (mpr as MealPlanEntry[]) || [];
     setEntries(loaded);
     await loadSubRecipes(loaded);
     setLoading(false);
-  }, [user, weekStart]);
+  }, [user, weekStart, restoring, refreshRevision]);
 
   // Recipes used as an ingredient of something in the week. The shopping list
   // needs their own ingredients to swap in; anything that doesn't come back
@@ -284,7 +303,8 @@ export default function MealPlanScreen() {
       setSubRecipes({});
       return;
     }
-    const { data } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', ids);
+    const { data, error } = await supabase.from('recipes').select(SUB_RECIPE_SELECT).in('id', ids);
+    if (error) return;
     setSubRecipes(
       data ? Object.fromEntries((data as unknown as SubRecipe[]).map((r) => [r.id, r])) : {},
     );
@@ -292,6 +312,7 @@ export default function MealPlanScreen() {
 
   useEffect(() => {
     loadPlan();
+    return () => { loadVersion.current++; };
   }, [loadPlan]);
 
   // The Plan tab stays mounted while you're on a recipe screen, so servings saved there

@@ -23,7 +23,7 @@ import { font, useTheme } from '@/lib/theme';
 import useRecipeFilters from '@/lib/useRecipeFilters';
 
 const RECIPE_SELECT =
-  'id, user_id, title, image_url, prep_time, cook_time, servings, is_favourite, created_at, ingredients';
+  '*';
 
 type SortOption = 'newest' | 'oldest' | 'a-z' | 'z-a';
 

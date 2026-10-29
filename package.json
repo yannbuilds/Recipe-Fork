@@ -13,6 +13,7 @@
     "dev:mobile": "npm run start -w packages/mobile",
     "build:extension": "npm run build -w packages/extension",
     "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json",
+    "test:offline-cache": "node --import tsx scripts/test-offline-cache.ts",
     "test:recipe-extraction": "tsx scripts/test-recipe-schema.ts",
     "test:ingredient-aggregation": "tsx scripts/test-ingredient-aggregation.ts",
     "test:recipe-source": "tsx scripts/test-recipe-source.ts",
